@@ -14,6 +14,7 @@ import (
 	envoy_config_endpoint "github.com/cilium/proxy/go/envoy/config/endpoint/v3"
 	envoy_config_listener "github.com/cilium/proxy/go/envoy/config/listener/v3"
 	envoy_config_route "github.com/cilium/proxy/go/envoy/config/route/v3"
+	envoy_extensions_filters_http_router_v3 "github.com/cilium/proxy/go/envoy/extensions/filters/http/router/v3"
 	envoy_config_http "github.com/cilium/proxy/go/envoy/extensions/filters/network/http_connection_manager/v3"
 	envoy_config_tcp "github.com/cilium/proxy/go/envoy/extensions/filters/network/tcp_proxy/v3"
 	envoy_config_tls "github.com/cilium/proxy/go/envoy/extensions/transport_sockets/tls/v3"
@@ -249,6 +250,23 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 						}
 
 						if listener.GetAddress() == nil {
+							foundEnvoyRouterFilter := false
+							for _, hf := range hcmConfig.HttpFilters {
+								if hf.Name == "envoy.filters.http.router" {
+									foundEnvoyRouterFilter = true
+									break
+								}
+							}
+
+							if !foundEnvoyRouterFilter {
+								hcmConfig.HttpFilters = append(hcmConfig.HttpFilters, &envoy_config_http.HttpFilter{
+									Name: "envoy.filters.http.router",
+									ConfigType: &envoy_config_http.HttpFilter_TypedConfig{
+										TypedConfig: toAny(&envoy_extensions_filters_http_router_v3.Router{}),
+									},
+								})
+							}
+
 							foundCiliumL7Filter := false
 						loop:
 							for j, httpFilter := range hcmConfig.HttpFilters {
