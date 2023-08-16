@@ -18,6 +18,7 @@ import (
 	envoy_config_tcp "github.com/cilium/proxy/go/envoy/extensions/filters/network/tcp_proxy/v3"
 	envoy_config_tls "github.com/cilium/proxy/go/envoy/extensions/transport_sockets/tls/v3"
 	"golang.org/x/sys/unix"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -169,6 +170,33 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 				if !found {
 					listener.SocketOptions = append(listener.SocketOptions, getListenerSocketMarkOption(false /* egress */))
 				}
+			}
+
+			// Clone Listener and create a TLS version of it if TLS Inspector is present and only 1 non TLS listener exists
+			tlsInspectorFound := false
+			for _, lf := range listener.ListenerFilters {
+				if lf.GetName() == "envoy.filters.listener.tls_inspector" {
+					tlsInspectorFound = true
+					break
+				}
+			}
+
+			if tlsInspectorFound &&
+				len(listener.FilterChains) == 1 &&
+				listener.FilterChains[0].GetFilterChainMatch() == nil &&
+				listener.FilterChains[0].GetTransportSocket() == nil {
+
+				tlsListenerClone := proto.Clone(listener.FilterChains[0]).(*envoy_config_listener.FilterChain)
+				tlsListenerClone.FilterChainMatch = &envoy_config_listener.FilterChainMatch{
+					TransportProtocol: "tls",
+				}
+				tlsListenerClone.TransportSocket = &envoy_config_core.TransportSocket{
+					Name: "cilium.tls_wrapper",
+					ConfigType: &envoy_config_core.TransportSocket_TypedConfig{
+						TypedConfig: toAny(&cilium.DownstreamTlsWrapperContext{}),
+					},
+				}
+				listener.FilterChains = append(listener.FilterChains, tlsListenerClone)
 			}
 
 			// Fill in SDS & RDS config source if unset
