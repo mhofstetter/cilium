@@ -18,6 +18,7 @@ import (
 	envoy_config_http "github.com/cilium/proxy/go/envoy/extensions/filters/network/http_connection_manager/v3"
 	envoy_config_tcp "github.com/cilium/proxy/go/envoy/extensions/filters/network/tcp_proxy/v3"
 	envoy_config_tls "github.com/cilium/proxy/go/envoy/extensions/transport_sockets/tls/v3"
+	"github.com/golang/protobuf/ptypes/duration"
 	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -247,6 +248,31 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 							}
 
 							hcmConfig.RouteSpecifier = getDefaultRouteConfig(clusterName)
+						}
+
+						if hcmConfig.GetStatPrefix() == "" {
+							hcmConfig.StatPrefix = listener.GetName()
+						}
+
+						if hcmConfig.GetUseRemoteAddress() == nil {
+							hcmConfig.UseRemoteAddress = &wrapperspb.BoolValue{Value: true}
+						}
+						if hcmConfig.GetStreamIdleTimeout() == nil {
+							hcmConfig.StreamIdleTimeout = &duration.Duration{
+								Seconds: 0,
+								Nanos:   0,
+							}
+						}
+
+						hcmConfig.SkipXffAppend = true
+
+						if hcmConfig.GetNormalizePath() == nil {
+							hcmConfig.NormalizePath = &wrapperspb.BoolValue{Value: true}
+						}
+
+						hcmConfig.MergeSlashes = true
+						if hcmConfig.GetPathWithEscapedSlashesAction() == envoy_config_http.HttpConnectionManager_IMPLEMENTATION_SPECIFIC_DEFAULT {
+							hcmConfig.PathWithEscapedSlashesAction = envoy_config_http.HttpConnectionManager_UNESCAPE_AND_REDIRECT
 						}
 
 						if listener.GetAddress() == nil {
