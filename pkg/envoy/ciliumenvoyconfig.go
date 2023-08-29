@@ -155,7 +155,7 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 					}
 				}
 				if !found {
-					listener.ListenerFilters = append(listener.ListenerFilters, getListenerFilter(false /* egress */, useOriginalSourceAddr, isL7LB))
+					listener.ListenerFilters = append(listener.ListenerFilters, getListenerFilter(autoConfigurationIngress(autoConfigurationType), useOriginalSourceAddr, isL7LB))
 				}
 			}
 
@@ -170,7 +170,7 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 				}
 
 				if !found {
-					listener.SocketOptions = append(listener.SocketOptions, getListenerSocketMarkOption(false /* egress */))
+					listener.SocketOptions = append(listener.SocketOptions, getListenerSocketMarkOption(autoConfigurationIngress(autoConfigurationType)))
 				}
 			}
 
@@ -519,8 +519,13 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 	return resources, nil
 }
 
+func autoConfigurationIngress(autoConfigurationType *cilium_v2.AutoConfigurationType) bool {
+	return autoConfigurationType != nil && *autoConfigurationType == cilium_v2.AutoConfigurationTypeIngress
+}
+
 func autoConfigurationEnabled(autoConfigurationType *cilium_v2.AutoConfigurationType) bool {
-	return autoConfigurationType != nil && *autoConfigurationType == cilium_v2.AutoConfigurationTypeEnabled
+	return autoConfigurationType != nil &&
+		(*autoConfigurationType == cilium_v2.AutoConfigurationTypeEgress || *autoConfigurationType == cilium_v2.AutoConfigurationTypeIngress)
 }
 
 func (s *xdsServer) UpsertEnvoyResources(ctx context.Context, resources Resources, portAllocator PortAllocator) error {

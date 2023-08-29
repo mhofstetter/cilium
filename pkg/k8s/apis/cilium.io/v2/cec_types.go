@@ -78,14 +78,16 @@ type CiliumEnvoyConfigSpec struct {
 	// Envoy xDS resources, a list of the following Envoy resource types:
 	//
 	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=disabled;egress;ingress
 	AutoConfiguration *AutoConfigurationType `json:"autoConfiguration,omitempty"`
 }
 
 type AutoConfigurationType string
 
 const (
-	AutoConfigurationTypeOff     = "off"
-	AutoConfigurationTypeEnabled = "enabled"
+	AutoConfigurationTypeDisabled = "disabled"
+	AutoConfigurationTypeEgress   = "egress"
+	AutoConfigurationTypeIngress  = "ingress"
 )
 
 type Service struct {

@@ -45,6 +45,10 @@ spec:
               autoConfiguration:
                 description: 'Envoy xDS resources, a list of the following Envoy resource
                   types:'
+                enum:
+                - disabled
+                - egress
+                - ingress
                 type: string
               backendServices:
                 description: BackendServices specifies Kubernetes services whose backends
