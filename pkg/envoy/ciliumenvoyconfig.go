@@ -110,7 +110,7 @@ func qualifyRouteConfigurationResourceNames(namespace, name string, routeConfig 
 // ParseResources parses all supported Envoy resource types from CiliumEnvoyConfig CRD to Resources
 // type cecNamespace and cecName parameters, if not empty, will be prepended to the Envoy resource
 // names.
-func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XDSResource, validate bool, portAllocator PortAllocator, isL7LB bool, useOriginalSourceAddr bool) (Resources, error) {
+func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XDSResource, validate bool, portAllocator PortAllocator, isL7LB bool, useOriginalSourceAddr bool, autoConfigurationType *cilium_v2.AutoConfigurationType) (Resources, error) {
 	resources := Resources{}
 	for _, r := range anySlice {
 		// Skip empty TypeURLs, which are left behind when Unmarshaling resource JSON fails
@@ -183,7 +183,8 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 				}
 			}
 
-			if tlsInspectorFound &&
+			if autoConfigurationEnabled(autoConfigurationType) &&
+				tlsInspectorFound &&
 				len(listener.FilterChains) == 1 &&
 				listener.FilterChains[0].GetFilterChainMatch() == nil &&
 				listener.FilterChains[0].GetTransportSocket() == nil {
@@ -241,7 +242,7 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 						}
 
 						// Use default cilium routes if whether routes, scopedRoutes nor RDS is defined
-						if hcmConfig.GetRouteConfig() == nil && hcmConfig.GetRds() == nil && hcmConfig.GetScopedRoutes() == nil {
+						if autoConfigurationEnabled(autoConfigurationType) && hcmConfig.GetRouteConfig() == nil && hcmConfig.GetRds() == nil && hcmConfig.GetScopedRoutes() == nil {
 							clusterName := egressClusterName
 							if fc.GetFilterChainMatch() != nil && fc.GetFilterChainMatch().GetTransportProtocol() == "tls" {
 								clusterName = egressTLSClusterName
@@ -250,29 +251,31 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 							hcmConfig.RouteSpecifier = getDefaultRouteConfig(clusterName)
 						}
 
-						if hcmConfig.GetStatPrefix() == "" {
-							hcmConfig.StatPrefix = listener.GetName()
-						}
-
-						if hcmConfig.GetUseRemoteAddress() == nil {
-							hcmConfig.UseRemoteAddress = &wrapperspb.BoolValue{Value: true}
-						}
-						if hcmConfig.GetStreamIdleTimeout() == nil {
-							hcmConfig.StreamIdleTimeout = &duration.Duration{
-								Seconds: 0,
-								Nanos:   0,
+						if autoConfigurationEnabled(autoConfigurationType) {
+							if hcmConfig.GetStatPrefix() == "" {
+								hcmConfig.StatPrefix = listener.GetName()
 							}
-						}
 
-						hcmConfig.SkipXffAppend = true
+							if hcmConfig.GetUseRemoteAddress() == nil {
+								hcmConfig.UseRemoteAddress = &wrapperspb.BoolValue{Value: true}
+							}
+							if hcmConfig.GetStreamIdleTimeout() == nil {
+								hcmConfig.StreamIdleTimeout = &duration.Duration{
+									Seconds: 0,
+									Nanos:   0,
+								}
+							}
 
-						if hcmConfig.GetNormalizePath() == nil {
-							hcmConfig.NormalizePath = &wrapperspb.BoolValue{Value: true}
-						}
+							hcmConfig.SkipXffAppend = true
 
-						hcmConfig.MergeSlashes = true
-						if hcmConfig.GetPathWithEscapedSlashesAction() == envoy_config_http.HttpConnectionManager_IMPLEMENTATION_SPECIFIC_DEFAULT {
-							hcmConfig.PathWithEscapedSlashesAction = envoy_config_http.HttpConnectionManager_UNESCAPE_AND_REDIRECT
+							if hcmConfig.GetNormalizePath() == nil {
+								hcmConfig.NormalizePath = &wrapperspb.BoolValue{Value: true}
+							}
+
+							hcmConfig.MergeSlashes = true
+							if hcmConfig.GetPathWithEscapedSlashesAction() == envoy_config_http.HttpConnectionManager_IMPLEMENTATION_SPECIFIC_DEFAULT {
+								hcmConfig.PathWithEscapedSlashesAction = envoy_config_http.HttpConnectionManager_UNESCAPE_AND_REDIRECT
+							}
 						}
 
 						if listener.GetAddress() == nil {
@@ -284,7 +287,7 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 								}
 							}
 
-							if !foundEnvoyRouterFilter {
+							if autoConfigurationEnabled(autoConfigurationType) && !foundEnvoyRouterFilter {
 								hcmConfig.HttpFilters = append(hcmConfig.HttpFilters, &envoy_config_http.HttpFilter{
 									Name: "envoy.filters.http.router",
 									ConfigType: &envoy_config_http.HttpFilter_TypedConfig{
@@ -514,6 +517,10 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 	}
 
 	return resources, nil
+}
+
+func autoConfigurationEnabled(autoConfigurationType *cilium_v2.AutoConfigurationType) bool {
+	return autoConfigurationType != nil && *autoConfigurationType == cilium_v2.AutoConfigurationTypeEnabled
 }
 
 func (s *xdsServer) UpsertEnvoyResources(ctx context.Context, resources Resources, portAllocator PortAllocator) error {

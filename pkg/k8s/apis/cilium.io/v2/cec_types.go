@@ -74,7 +74,19 @@ type CiliumEnvoyConfigSpec struct {
 	//
 	// +kubebuilder:validation:Required
 	Resources []XDSResource `json:"resources,omitempty"`
+
+	// Envoy xDS resources, a list of the following Envoy resource types:
+	//
+	// +kubebuilder:validation:Optional
+	AutoConfiguration *AutoConfigurationType `json:"autoConfiguration,omitempty"`
 }
+
+type AutoConfigurationType string
+
+const (
+	AutoConfigurationTypeOff     = "off"
+	AutoConfigurationTypeEnabled = "enabled"
+)
 
 type Service struct {
 	// Name is the name of a destination Kubernetes service that identifies traffic

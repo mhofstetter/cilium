@@ -42,6 +42,10 @@ spec:
             type: object
           spec:
             properties:
+              autoConfiguration:
+                description: 'Envoy xDS resources, a list of the following Envoy resource
+                  types:'
+                type: string
               backendServices:
                 description: BackendServices specifies Kubernetes services whose backends
                   are automatically synced to Envoy using EDS.  Traffic for these

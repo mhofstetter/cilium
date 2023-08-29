@@ -277,6 +277,14 @@ func (in *CiliumEnvoyConfigSpec) DeepEqual(other *CiliumEnvoyConfigSpec) bool {
 		}
 	}
 
+	if (in.AutoConfiguration == nil) != (other.AutoConfiguration == nil) {
+		return false
+	} else if in.AutoConfiguration != nil {
+		if *in.AutoConfiguration != *other.AutoConfiguration {
+			return false
+		}
+	}
+
 	return true
 }
 

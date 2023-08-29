@@ -401,6 +401,11 @@ func (in *CiliumEnvoyConfigSpec) DeepCopyInto(out *CiliumEnvoyConfigSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.AutoConfiguration != nil {
+		in, out := &in.AutoConfiguration, &out.AutoConfiguration
+		*out = new(AutoConfigurationType)
+		**out = **in
+	}
 	return
 }
 
