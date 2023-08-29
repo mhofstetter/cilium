@@ -248,6 +248,13 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 								clusterName = egressTLSClusterName
 							}
 
+							if autoConfigurationIngress(autoConfigurationType) {
+								clusterName = ingressClusterName
+								if fc.GetFilterChainMatch() != nil && fc.GetFilterChainMatch().GetTransportProtocol() == "tls" {
+									clusterName = ingressTLSClusterName
+								}
+							}
+
 							hcmConfig.RouteSpecifier = getDefaultRouteConfig(clusterName)
 						}
 
