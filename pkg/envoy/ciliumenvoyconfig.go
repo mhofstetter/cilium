@@ -111,6 +111,10 @@ func qualifyRouteConfigurationResourceNames(namespace, name string, routeConfig 
 // type cecNamespace and cecName parameters, if not empty, will be prepended to the Envoy resource
 // names.
 func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XDSResource, validate bool, portAllocator PortAllocator, isL7LB bool, useOriginalSourceAddr bool, autoConfigurationType *cilium_v2.AutoConfigurationType) (Resources, error) {
+	if autoConfigurationIngress(autoConfigurationType) {
+		useOriginalSourceAddr = false
+	}
+
 	resources := Resources{}
 	for _, r := range anySlice {
 		// Skip empty TypeURLs, which are left behind when Unmarshaling resource JSON fails
