@@ -111,7 +111,7 @@ jobs:
     timeout-minutes: 45
     env:
       job_name: "Installation and Connectivity Test"
-      preemptible: ${{ github.event_name != 'schedule' && '--preemptible' || '' }}
+      preemptible: ${{ github.event_name == 'schedule' && '--preemptible' || '' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate-matrix.outputs.matrix)}}
