@@ -121,6 +121,8 @@ jobs:
             echo "systemd-resolved status:"
             systemctl status systemd-resolved
 
+            curl "https://golang.org/dl/go1.21.4?go-get=1"
+
             git config --global --add safe.directory /host
             uname -a
             # The LVH image might ship with an arbitrary Go toolchain version,
