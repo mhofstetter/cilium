@@ -110,18 +110,7 @@ jobs:
           cpu: 4
           install-dependencies: 'true'
           cmd: |
-            for ((i = 0 ; i < 10; i++)); do
-                if systemctl status systemd-resolved > /dev/null 2>&1; then
-                    break
-                fi
-                sleep 5s
-                echo "Waiting for systemd-resolved to come up..."
-            done
-
-            echo "systemd-resolved status:"
-            systemctl status systemd-resolved
-
-            curl "https://golang.org/dl/go1.21.4?go-get=1"
+            until host golang.org; do sleep 1; done
 
             git config --global --add safe.directory /host
             uname -a
