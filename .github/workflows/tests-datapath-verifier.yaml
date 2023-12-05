@@ -110,6 +110,17 @@ jobs:
           cpu: 4
           install-dependencies: 'true'
           cmd: |
+            for ((i = 0 ; i < 10; i++)); do
+                if systemctl status systemd-resolved > /dev/null 2>&1; then
+                    break
+                fi
+                sleep 5s
+                echo "Waiting for systemd-resolved to come up..."
+            done
+
+            echo "systemd-resolved status:"
+            systemctl status systemd-resolved
+
             git config --global --add safe.directory /host
             uname -a
             # The LVH image might ship with an arbitrary Go toolchain version,
