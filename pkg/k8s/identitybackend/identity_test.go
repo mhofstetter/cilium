@@ -95,17 +95,22 @@ func (s *K8sIdentityBackendSuite) TestSanitizeK8sLabels(c *C) {
 
 type FakeHandler struct{}
 
-func (f FakeHandler) OnListDone()                                       {}
-func (f FakeHandler) OnAdd(id idpool.ID, key allocator.AllocatorKey)    {}
+func (f FakeHandler) OnListDone() {}
+
+func (f FakeHandler) OnAdd(id idpool.ID, key allocator.AllocatorKey) {}
+
 func (f FakeHandler) OnModify(id idpool.ID, key allocator.AllocatorKey) {}
+
 func (f FakeHandler) OnDelete(id idpool.ID, key allocator.AllocatorKey) {}
 
 func getLabelsKey(rawMap map[string]string) allocator.AllocatorKey {
 	return &key.GlobalIdentity{LabelArray: labels.Map2Labels(rawMap, labels.LabelSourceK8s).LabelArray()}
 }
+
 func getLabelsMap(rawMap map[string]string) map[string]string {
 	return getLabelsKey(rawMap).GetAsMap()
 }
+
 func createCiliumIdentity(id int, labels map[string]string) v2.CiliumIdentity {
 	return v2.CiliumIdentity{
 		ObjectMeta: v1.ObjectMeta{
@@ -185,7 +190,7 @@ func TestGetIdentity(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
 			_, client := k8sClient.NewFakeClientset()
-			backend, err := NewCRDBackend(CRDBackendConfiguration{
+			backend := NewCRDBackend(CRDBackendConfiguration{
 				Store:   nil,
 				Client:  client,
 				KeyFunc: (&key.GlobalIdentity{}).PutKeyFromMap,
@@ -196,13 +201,9 @@ func TestGetIdentity(t *testing.T) {
 				stopChan <- struct{}{}
 			}()
 			go backend.ListAndWatch(ctx, FakeHandler{}, stopChan)
-			if err != nil {
-				t.Fatalf("Can't create CRD Backend: %s", err)
-			}
 
 			for _, identity := range tc.identities {
-				_, err = client.CiliumV2().CiliumIdentities().Create(ctx, &identity, v1.CreateOptions{})
-				if err != nil {
+				if _, err := client.CiliumV2().CiliumIdentities().Create(ctx, &identity, v1.CreateOptions{}); err != nil {
 					t.Fatalf("Can't create identity %s: %s", identity.Name, err)
 				}
 			}

@@ -183,14 +183,11 @@ func (m *CachingIdentityAllocator) InitIdentityAllocator(client clientset.Interf
 
 		case option.IdentityAllocationModeCRD:
 			log.Debug("Identity allocation backed by CRD")
-			backend, err = identitybackend.NewCRDBackend(identitybackend.CRDBackendConfiguration{
+			backend = identitybackend.NewCRDBackend(identitybackend.CRDBackendConfiguration{
 				Store:   nil,
 				Client:  client,
 				KeyFunc: (&key.GlobalIdentity{}).PutKeyFromMap,
 			})
-			if err != nil {
-				log.WithError(err).Fatal("Unable to initialize Kubernetes CRD backend for identity allocation")
-			}
 
 		default:
 			log.Fatalf("Unsupported identity allocation mode %s", option.Config.IdentityAllocationMode)

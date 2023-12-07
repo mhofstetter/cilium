@@ -46,8 +46,8 @@ const (
 	byKeyIndex = "by-key-index"
 )
 
-func NewCRDBackend(c CRDBackendConfiguration) (allocator.Backend, error) {
-	return &crdBackend{CRDBackendConfiguration: c}, nil
+func NewCRDBackend(c CRDBackendConfiguration) allocator.Backend {
+	return &crdBackend{CRDBackendConfiguration: c}
 }
 
 type CRDBackendConfiguration struct {

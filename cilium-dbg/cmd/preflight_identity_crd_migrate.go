@@ -205,7 +205,7 @@ func migrateIdentities(ctx hive.HookContext, clientset k8sClient.Clientset, reso
 
 // initK8s connects to k8s with a allocator.Backend and an initialized
 // allocator.Allocator, using the k8s config passed into the command.
-func initK8s(ctx context.Context, clientset k8sClient.Clientset, resources agentK8s.LocalNodeResources) (crdBackend allocator.Backend, crdAllocator *allocator.Allocator) {
+func initK8s(ctx context.Context, clientset k8sClient.Clientset, resources agentK8s.LocalNodeResources) (allocator.Backend, *allocator.Allocator) {
 	log.Info("Setting up kubernetes client")
 
 	if err := agentK8s.WaitForNodeInformation(ctx, log, resources.LocalNode, resources.LocalCiliumNode); err != nil {
@@ -216,14 +216,11 @@ func initK8s(ctx context.Context, clientset k8sClient.Clientset, resources agent
 	ciliumClient.RegisterCRDs(clientset)
 
 	// Create a CRD Backend
-	crdBackend, err := identitybackend.NewCRDBackend(identitybackend.CRDBackendConfiguration{
+	crdBackend := identitybackend.NewCRDBackend(identitybackend.CRDBackendConfiguration{
 		Store:   nil,
 		Client:  clientset,
 		KeyFunc: (&cacheKey.GlobalIdentity{}).PutKeyFromMap,
 	})
-	if err != nil {
-		log.WithError(err).Fatal("Cannot create CRD identity backend")
-	}
 
 	// Create a real allocator with CRD as the backend. This mimics the setup in
 	// pkg/allocator/cache
@@ -232,7 +229,7 @@ func initK8s(ctx context.Context, clientset k8sClient.Clientset, resources agent
 	//    allocator.WithPrefixMask(idpool.ID(option.Config.ClusterID<<identity.ClusterIDShift)))
 	minID := idpool.ID(identity.GetMinimalAllocationIdentity())
 	maxID := idpool.ID(identity.GetMaximumAllocationIdentity())
-	crdAllocator, err = allocator.NewAllocator(&cacheKey.GlobalIdentity{}, crdBackend,
+	crdAllocator, err := allocator.NewAllocator(&cacheKey.GlobalIdentity{}, crdBackend,
 		allocator.WithMax(maxID), allocator.WithMin(minID))
 	if err != nil {
 		log.WithError(err).Fatal("Unable to initialize Identity Allocator with CRD backend to allocate identities with already allocated IDs")
