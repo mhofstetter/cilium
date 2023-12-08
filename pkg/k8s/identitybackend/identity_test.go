@@ -93,9 +93,15 @@ func (s *K8sIdentityBackendSuite) TestSanitizeK8sLabels(c *C) {
 	}
 }
 
-type FakeHandler struct{}
+type FakeHandler struct {
+	onListDoneChan chan struct{}
+}
 
-func (f FakeHandler) OnListDone() {}
+func (f FakeHandler) OnListDone() {
+	if f.onListDoneChan != nil {
+		close(f.onListDoneChan)
+	}
+}
 
 func (f FakeHandler) OnAdd(id idpool.ID, key allocator.AllocatorKey) {}
 
@@ -197,16 +203,24 @@ func TestGetIdentity(t *testing.T) {
 			})
 			ctx := context.Background()
 			stopChan := make(chan struct{}, 1)
+			listenerReadyChan := make(chan struct{}, 1)
 			defer func() {
 				stopChan <- struct{}{}
 			}()
-			go backend.ListAndWatch(ctx, FakeHandler{}, stopChan)
+			go backend.ListAndWatch(ctx, FakeHandler{onListDoneChan: listenerReadyChan}, stopChan)
+
+			select {
+			case <-listenerReadyChan:
+			case <-time.After(5 * time.Second):
+				t.Fatalf("Failed to listen for identities within 5 seconds")
+			}
 
 			for _, identity := range tc.identities {
 				if _, err := client.CiliumV2().CiliumIdentities().Create(ctx, &identity, v1.CreateOptions{}); err != nil {
 					t.Fatalf("Can't create identity %s: %s", identity.Name, err)
 				}
 			}
+
 			// Wait for watcher to process the identities in the background
 			for i := 0; i < 10; i++ {
 				id, err := backend.Get(ctx, tc.requestedKey)
