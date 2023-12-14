@@ -39,8 +39,8 @@ type Resources struct {
 	Clusters  []*envoy_config_cluster.Cluster
 	Endpoints []*envoy_config_endpoint.ClusterLoadAssignment
 
-	// Listeners for which a proxy port was allocated
-	portAllocations map[string]uint16
+	// Callback functions that are called if the corresponding Listener change was successfully acked by Envoy
+	portAllocationCallbacks map[string]func(context.Context) error
 }
 
 type PortAllocator interface {
@@ -114,8 +114,7 @@ func qualifyRouteConfigurationResourceNames(namespace, name string, routeConfig 
 		for _, rt := range vhost.Routes {
 			if action := rt.GetRoute(); action != nil {
 				if clusterName := action.GetCluster(); clusterName != "" {
-					action.GetClusterSpecifier().(*envoy_config_route.RouteAction_Cluster).Cluster, nameUpdated =
-						api.ResourceQualifiedName(namespace, name, clusterName)
+					action.GetClusterSpecifier().(*envoy_config_route.RouteAction_Cluster).Cluster, nameUpdated = api.ResourceQualifiedName(namespace, name, clusterName)
 					if nameUpdated {
 						updated = true
 					}
@@ -145,7 +144,7 @@ func qualifyRouteConfigurationResourceNames(namespace, name string, routeConfig 
 // ParseResources parses all supported Envoy resource types from CiliumEnvoyConfig CRD to Resources
 // type cecNamespace and cecName parameters, if not empty, will be prepended to the Envoy resource
 // names.
-func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XDSResource, validate bool, portAllocator PortAllocator, isL7LB bool, useOriginalSourceAddr bool) (Resources, error) {
+func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XDSResource, validate bool, portAllocator PortAllocator, isL7LB bool, useOriginalSourceAddr bool, existingResources bool) (Resources, error) {
 	resources := Resources{}
 	for _, r := range anySlice {
 		// Skip empty TypeURLs, which are left behind when Unmarshaling resource JSON fails
@@ -446,15 +445,21 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 		isInternalListener := listener.GetInternalListener() != nil
 
 		if listener.GetAddress() == nil && !isInternalListener {
-			port, err := portAllocator.AllocateProxyPort(listener.Name, false, true)
+			listenerName := listener.Name
+			port, err := portAllocator.AllocateProxyPort(listenerName, false, true)
 			if err != nil || port == 0 {
-				return Resources{}, fmt.Errorf("Listener port allocation for %q failed: %s", listener.Name, err)
+				return Resources{}, fmt.Errorf("listener port allocation for %q failed: %s", listenerName, err)
 			}
+			if resources.portAllocationCallbacks == nil {
+				resources.portAllocationCallbacks = make(map[string]func(context.Context) error)
+			}
+			if existingResources {
+				resources.portAllocationCallbacks[listenerName] = func(_ context.Context) error { return portAllocator.ReleaseProxyPort(listenerName) }
+			} else {
+				resources.portAllocationCallbacks[listenerName] = func(ctx context.Context) error { return portAllocator.AckProxyPort(ctx, listenerName) }
+			}
+
 			listener.Address, listener.AdditionalAddresses = getLocalListenerAddresses(port, option.Config.IPv4Enabled(), option.Config.IPv6Enabled())
-			if resources.portAllocations == nil {
-				resources.portAllocations = make(map[string]uint16)
-			}
-			resources.portAllocations[listener.Name] = port
 		}
 		if validate {
 			if err := listener.Validate(); err != nil {
@@ -466,7 +471,7 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 	return resources, nil
 }
 
-func (s *xdsServer) UpsertEnvoyResources(ctx context.Context, resources Resources, portAllocator PortAllocator) error {
+func (s *xdsServer) UpsertEnvoyResources(ctx context.Context, resources Resources) error {
 	if option.Config.Debug {
 		msg := ""
 		sep := ""
@@ -551,10 +556,9 @@ func (s *xdsServer) UpsertEnvoyResources(ctx context.Context, resources Resource
 		revertFuncs = append(revertFuncs, s.upsertListener(r.Name, r, wg,
 			// this callback is not called if there is no change
 			func(err error) {
-				if err == nil {
-					// Ack the proxy port, if any
-					if port, exists := resources.portAllocations[listenerName]; exists && port != 0 {
-						portAllocator.AckProxyPort(ctx, listenerName)
+				if err == nil && resources.portAllocationCallbacks[listenerName] != nil {
+					if callbackErr := resources.portAllocationCallbacks[listenerName](ctx); callbackErr != nil {
+						log.WithError(callbackErr).Warn("Failure in port allocation callback")
 					}
 				}
 			}))
@@ -575,7 +579,7 @@ func (s *xdsServer) UpsertEnvoyResources(ctx context.Context, resources Resource
 	return nil
 }
 
-func (s *xdsServer) UpdateEnvoyResources(ctx context.Context, old, new Resources, portAllocator PortAllocator) error {
+func (s *xdsServer) UpdateEnvoyResources(ctx context.Context, old, new Resources) error {
 	waitForDelete := false
 	var wg *completion.WaitGroup
 	var revertFuncs xds.AckingResourceMutatorRevertFuncList
@@ -599,7 +603,7 @@ func (s *xdsServer) UpdateEnvoyResources(ctx context.Context, old, new Resources
 					waitForDelete = true
 				} else {
 					// port is not changing, remove from new.PortAllocations to prevent acking an already acked port.
-					delete(new.portAllocations, newListener.Name)
+					delete(new.portAllocationCallbacks, newListener.Name)
 					found = true
 				}
 				break
@@ -614,10 +618,9 @@ func (s *xdsServer) UpdateEnvoyResources(ctx context.Context, old, new Resources
 		listenerName := listener.Name
 		revertFuncs = append(revertFuncs, s.deleteListener(listener.Name, wg,
 			func(err error) {
-				if err == nil {
-					// Release the proxy port, if any
-					if port, exists := old.portAllocations[listenerName]; exists && port != 0 {
-						portAllocator.ReleaseProxyPort(listenerName)
+				if err == nil && old.portAllocationCallbacks[listenerName] != nil {
+					if callbackErr := old.portAllocationCallbacks[listenerName](ctx); callbackErr != nil {
+						log.WithError(callbackErr).Warn("Failure in port allocation callback")
 					}
 				}
 			}))
@@ -749,10 +752,9 @@ func (s *xdsServer) UpdateEnvoyResources(ctx context.Context, old, new Resources
 		revertFuncs = append(revertFuncs, s.upsertListener(r.Name, r, wg,
 			// this callback is not called if there is no change
 			func(err error) {
-				if err == nil {
-					// Ack the proxy port, if any, but only if the listener's port was new
-					if port, exists := new.portAllocations[listenerName]; exists && port != 0 {
-						portAllocator.AckProxyPort(ctx, listenerName)
+				if err == nil && new.portAllocationCallbacks[listenerName] != nil {
+					if callbackErr := new.portAllocationCallbacks[listenerName](ctx); callbackErr != nil {
+						log.WithError(callbackErr).Warn("Failure in port allocation callback")
 					}
 				}
 			}))
@@ -774,7 +776,7 @@ func (s *xdsServer) UpdateEnvoyResources(ctx context.Context, old, new Resources
 	return nil
 }
 
-func (s *xdsServer) DeleteEnvoyResources(ctx context.Context, resources Resources, portAllocator PortAllocator) error {
+func (s *xdsServer) DeleteEnvoyResources(ctx context.Context, resources Resources) error {
 	log.Debugf("DeleteEnvoyResources: Deleting %d listeners, %d routes, %d clusters, %d endpoints, and %d secrets...",
 		len(resources.Listeners), len(resources.Routes), len(resources.Clusters), len(resources.Endpoints), len(resources.Secrets))
 	var wg *completion.WaitGroup
@@ -788,14 +790,14 @@ func (s *xdsServer) DeleteEnvoyResources(ctx context.Context, resources Resource
 		listenerName := r.Name
 		revertFuncs = append(revertFuncs, s.deleteListener(r.Name, wg,
 			func(err error) {
-				if err == nil {
-					// Release the proxy port, if any
-					if port, exists := resources.portAllocations[listenerName]; exists && port != 0 {
-						portAllocator.ReleaseProxyPort(listenerName)
+				if err == nil && resources.portAllocationCallbacks[listenerName] != nil {
+					if callbackErr := resources.portAllocationCallbacks[listenerName](ctx); callbackErr != nil {
+						log.WithError(callbackErr).Warn("Failure in port allocation callback")
 					}
 				}
 			}))
 	}
+
 	// Do not wait for the deletion of routes, clusters, or endpoints, as
 	// there are no guarantees that these deletions will be acked. For
 	// example, if the listener referring to was already deleted earlier,
@@ -839,7 +841,7 @@ func (s *xdsServer) UpsertEnvoyEndpoints(serviceName lb.ServiceName, backendMap 
 
 	// Using context.TODO() is fine as we do not upsert listener resources here - the
 	// context ends up being used only if listener(s) are included in 'resources'.
-	return s.UpsertEnvoyResources(context.TODO(), resources, nil)
+	return s.UpsertEnvoyResources(context.TODO(), resources)
 }
 
 func getEndpointsForLBBackends(serviceName lb.ServiceName, backendMap map[string][]*lb.Backend) []*envoy_config_endpoint.ClusterLoadAssignment {
