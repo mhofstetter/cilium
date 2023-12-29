@@ -44,7 +44,7 @@ type Resources struct {
 }
 
 type PortAllocator interface {
-	AllocateProxyPort(name string, ingress, localOnly bool) (uint16, error)
+	AllocateProxyPort(name string, ingress bool) (uint16, error)
 	AckProxyPort(ctx context.Context, name string) error
 	ReleaseProxyPort(name string) error
 }
@@ -446,7 +446,7 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 
 		if listener.GetAddress() == nil && !isInternalListener {
 			listenerName := listener.Name
-			port, err := portAllocator.AllocateProxyPort(listenerName, false, true)
+			port, err := portAllocator.AllocateProxyPort(listenerName, false)
 			if err != nil || port == 0 {
 				return Resources{}, fmt.Errorf("listener port allocation for %q failed: %s", listenerName, err)
 			}

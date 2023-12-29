@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"testing"
 
+	. "github.com/cilium/checkmate"
 	cilium "github.com/cilium/proxy/go/cilium/api"
 	envoy_config_cluster "github.com/cilium/proxy/go/envoy/config/cluster/v3"
 	envoy_config_core "github.com/cilium/proxy/go/envoy/config/core/v3"
@@ -27,8 +28,6 @@ import (
 	cilium_v2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/node"
-
-	. "github.com/cilium/checkmate"
 )
 
 type JSONSuite struct{}
@@ -50,7 +49,7 @@ func NewMockPortAllocator() *MockPortAllocator {
 	}
 }
 
-func (m *MockPortAllocator) AllocateProxyPort(name string, ingress, localOnly bool) (uint16, error) {
+func (m *MockPortAllocator) AllocateProxyPort(name string, ingress bool) (uint16, error) {
 	if mp, exists := m.ports[name]; exists {
 		return mp.port, nil
 	}

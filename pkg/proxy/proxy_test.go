@@ -44,7 +44,7 @@ func (s *ProxySuite) TestPortAllocator(c *C) {
 
 	p := createProxy(10000, 20000, 0, mockDatapathUpdater, nil, nil)
 
-	port, err := p.AllocateProxyPort("listener1", false, true)
+	port, err := p.AllocateProxyPort("listener1", false)
 	c.Assert(err, IsNil)
 	c.Assert(port, Not(Equals), 0)
 
@@ -53,7 +53,7 @@ func (s *ProxySuite) TestPortAllocator(c *C) {
 	c.Assert(port1, Equals, port)
 
 	// Another allocation for the same name gets the same port
-	port1a, err := p.AllocateProxyPort("listener1", false, true)
+	port1a, err := p.AllocateProxyPort("listener1", false)
 	c.Assert(err, IsNil)
 	c.Assert(port1a, Equals, port1)
 
@@ -62,7 +62,6 @@ func (s *ProxySuite) TestPortAllocator(c *C) {
 	c.Assert(pp.proxyType, Equals, types.ProxyTypeCRD)
 	c.Assert(pp.proxyPort, Equals, port)
 	c.Assert(pp.ingress, Equals, false)
-	c.Assert(pp.localOnly, Equals, true)
 	c.Assert(pp.configured, Equals, true)
 	c.Assert(pp.isStatic, Equals, false)
 	c.Assert(pp.nRedirects, Equals, 0)
@@ -83,12 +82,11 @@ func (s *ProxySuite) TestPortAllocator(c *C) {
 	c.Assert(pp.rulesPort, Equals, uint16(0))
 
 	// Allocates a different port (due to port was never acked)
-	port2, err := p.AllocateProxyPort("listener1", true, false)
+	port2, err := p.AllocateProxyPort("listener1", true)
 	c.Assert(err, IsNil)
 	c.Assert(port2, Not(Equals), port)
 	c.Assert(pp.proxyType, Equals, types.ProxyTypeCRD)
 	c.Assert(pp.ingress, Equals, false)
-	c.Assert(pp.localOnly, Equals, true)
 	c.Assert(pp.proxyPort, Equals, port2)
 	c.Assert(pp.configured, Equals, true)
 	c.Assert(pp.isStatic, Equals, false)
@@ -134,14 +132,13 @@ func (s *ProxySuite) TestPortAllocator(c *C) {
 	p.allocatedPorts[port2] = true
 
 	// Allocate again, this time a different port is allocated
-	port3, err := p.AllocateProxyPort("listener1", true, true)
+	port3, err := p.AllocateProxyPort("listener1", true)
 	c.Assert(err, IsNil)
 	c.Assert(port3, Not(Equals), uint16(0))
 	c.Assert(port3, Not(Equals), port2)
 	c.Assert(port3, Not(Equals), port1)
 	c.Assert(pp.proxyType, Equals, types.ProxyTypeCRD)
 	c.Assert(pp.ingress, Equals, false)
-	c.Assert(pp.localOnly, Equals, true)
 	c.Assert(pp.proxyPort, Equals, port3)
 	c.Assert(pp.configured, Equals, true)
 	c.Assert(pp.isStatic, Equals, false)
@@ -167,12 +164,11 @@ func (s *ProxySuite) TestPortAllocator(c *C) {
 	c.Assert(inuse, Equals, false)
 
 	// No-one used the port so next allocation gets the same port again
-	port4, err := p.AllocateProxyPort("listener1", true, true)
+	port4, err := p.AllocateProxyPort("listener1", true)
 	c.Assert(err, IsNil)
 	c.Assert(port4, Equals, port3)
 	c.Assert(pp.proxyType, Equals, types.ProxyTypeCRD)
 	c.Assert(pp.ingress, Equals, false)
-	c.Assert(pp.localOnly, Equals, true)
 	c.Assert(pp.proxyPort, Equals, port4)
 	c.Assert(pp.configured, Equals, true)
 	c.Assert(pp.isStatic, Equals, false)
