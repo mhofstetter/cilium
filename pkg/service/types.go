@@ -50,11 +50,9 @@ type ServiceManager interface {
 	// RemoveL7LBService removes a Service from being forwarded to a L7 LB.
 	RemoveL7LBService(serviceName lb.ServiceName, resourceName L7LBResourceName) error
 
-	// RegisterL7LBServiceBackendSync registers a backend sync registration for the service.
-	RegisterL7LBServiceBackendSync(serviceName lb.ServiceName, backendSyncRegistration BackendSync) error
-
-	// RemoveL7LBServiceBackendSync removes a backend sync registration for the service.
-	RemoveL7LBServiceBackendSync(serviceName lb.ServiceName, backendSyncRegistration BackendSync) error
+	// RegisterL7LBServiceBackendSync registers a backend sync registration that gets informed when the backends
+	// of a Service change.
+	RegisterL7LBServiceBackendSync(backendSyncRegistration BackendSync)
 
 	// RestoreServices restores services from BPF maps.
 	RestoreServices() error

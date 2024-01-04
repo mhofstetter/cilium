@@ -214,11 +214,6 @@ func (k *K8sWatcher) addK8sServiceRedirects(resourceName service.L7LBResourceNam
 
 		// Register service usage in Envoy backend sync
 		k.envoyServiceBackendSync.RegisterServiceUsageInCEC(serviceName, resourceName, svc.Ports)
-
-		// Register Envoy Backend Sync for the specific service in the service manager
-		if err := k.svcManager.RegisterL7LBServiceBackendSync(serviceName, k.envoyServiceBackendSync); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -337,11 +332,6 @@ func (k *K8sWatcher) removeK8sServiceRedirects(resourceName service.L7LBResource
 
 		// Deregister usage of Service from Envoy Backend Sync
 		k.envoyServiceBackendSync.DeregisterServiceUsageInCEC(serviceName, resourceName)
-
-		// Tell service manager to remove backend sync for this service
-		if err := k.svcManager.RemoveL7LBServiceBackendSync(serviceName, k.envoyServiceBackendSync); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -404,11 +394,6 @@ func (k *K8sWatcher) deleteK8sServiceRedirects(resourceName service.L7LBResource
 
 		// Deregister usage of Service from Envoy Backend Sync
 		k.envoyServiceBackendSync.DeregisterServiceUsageInCEC(serviceName, resourceName)
-
-		// Tell service manager to remove backend sync for this service
-		if err := k.svcManager.RemoveL7LBServiceBackendSync(serviceName, k.envoyServiceBackendSync); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -416,10 +401,10 @@ func (k *K8sWatcher) deleteK8sServiceRedirects(resourceName service.L7LBResource
 
 // EnvoyServiceBackendSync syncs the backends of a Service as Endpoints to Envoy L7 proxy.
 type EnvoyServiceBackendSync struct {
-	envoyXdsServer envoy.XDSServer
+	EnvoyXdsServer envoy.XDSServer
 
 	l7lbSvcsMutex lock.RWMutex
-	l7lbSvcs      map[loadbalancer.ServiceName]*L7LBInfo
+	L7lbSvcs      map[loadbalancer.ServiceName]*L7LBInfo
 }
 
 var _ service.BackendSync = &EnvoyServiceBackendSync{}
@@ -428,7 +413,7 @@ func (r *EnvoyServiceBackendSync) BackendChanged(ctx context.Context, svc *loadb
 	r.l7lbSvcsMutex.RLock()
 	defer r.l7lbSvcsMutex.RUnlock()
 
-	l7lbInfo, exists := r.l7lbSvcs[svc.Name]
+	l7lbInfo, exists := r.L7lbSvcs[svc.Name]
 
 	if !exists {
 		return nil
@@ -450,7 +435,7 @@ func (r *EnvoyServiceBackendSync) RegisterServiceUsageInCEC(svcName loadbalancer
 	r.l7lbSvcsMutex.Lock()
 	defer r.l7lbSvcsMutex.Unlock()
 
-	l7lbInfo, exists := r.l7lbSvcs[svcName]
+	l7lbInfo, exists := r.L7lbSvcs[svcName]
 
 	if !exists {
 		l7lbInfo = &L7LBInfo{}
@@ -463,7 +448,7 @@ func (r *EnvoyServiceBackendSync) RegisterServiceUsageInCEC(svcName loadbalancer
 	}
 	l7lbInfo.backendRefs[resourceName] = struct{}{}
 
-	r.l7lbSvcs[svcName] = l7lbInfo
+	r.L7lbSvcs[svcName] = l7lbInfo
 }
 
 func (r *EnvoyServiceBackendSync) upsertEnvoyEndpoints(serviceName loadbalancer.ServiceName, backendMap map[string][]*loadbalancer.Backend) error {
@@ -473,7 +458,7 @@ func (r *EnvoyServiceBackendSync) upsertEnvoyEndpoints(serviceName loadbalancer.
 
 	// Using context.TODO() is fine as we do not upsert listener resources here - the
 	// context ends up being used only if listener(s) are included in 'resources'.
-	return r.envoyXdsServer.UpsertEnvoyResources(context.TODO(), resources)
+	return r.EnvoyXdsServer.UpsertEnvoyResources(context.TODO(), resources)
 }
 
 func getEndpointsForLBBackends(serviceName loadbalancer.ServiceName, backendMap map[string][]*loadbalancer.Backend) []*envoy_config_endpoint.ClusterLoadAssignment {
@@ -536,7 +521,7 @@ func (r *EnvoyServiceBackendSync) DeregisterServiceUsageInCEC(svcName loadbalanc
 	r.l7lbSvcsMutex.Lock()
 	defer r.l7lbSvcsMutex.Unlock()
 
-	l7lbInfo, exists := r.l7lbSvcs[svcName]
+	l7lbInfo, exists := r.L7lbSvcs[svcName]
 
 	if !exists {
 		return
@@ -549,11 +534,11 @@ func (r *EnvoyServiceBackendSync) DeregisterServiceUsageInCEC(svcName loadbalanc
 	// Cleanup service if it's no longer used by any CEC
 	if len(l7lbInfo.backendRefs) == 0 {
 		l7lbInfo.frontendPorts = nil
-		delete(r.l7lbSvcs, svcName)
+		delete(r.L7lbSvcs, svcName)
 		return
 	}
 
-	r.l7lbSvcs[svcName] = l7lbInfo
+	r.L7lbSvcs[svcName] = l7lbInfo
 }
 
 // filterServiceBackends returns the list of backends based on given front end ports.

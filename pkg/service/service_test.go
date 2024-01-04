@@ -1469,8 +1469,7 @@ func (m *ManagerTestSuite) TestL7LoadBalancerServiceOverride(c *C) {
 	// registering without redirecting
 	echoOtherNode := lb.ServiceName{Name: "echo-other-node", Namespace: "cilium-test"}
 	resource1 := L7LBResourceName{Name: "testOwner1", Namespace: "cilium-test"}
-	err = m.svc.RegisterL7LBServiceBackendSync(echoOtherNode, &FakeBackendSyncer{})
-	c.Assert(err, IsNil)
+	m.svc.RegisterL7LBServiceBackendSync(&FakeBackendSyncer{})
 
 	svc, ok = m.svc.svcByID[id]
 	c.Assert(len(svc.backends), Equals, len(allBackends))

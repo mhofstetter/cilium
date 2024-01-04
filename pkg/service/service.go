@@ -191,10 +191,6 @@ func (svc *svcInfo) useMaglev() bool {
 }
 
 type L7LBInfo struct {
-	// Backend Sync registrations that are interested in Service backend changes
-	// to reflect this in a L7 loadbalancer (e.g. Envoy)
-	backendSyncRegistrations map[BackendSync]struct{}
-
 	// Name of the L7 LB resource (e.g. CEC) that needs this service to be forwarded to an
 	// L7 Loadbalancer specified in that resource.
 	// Only one resource may do this for any given service.
@@ -240,6 +236,10 @@ type Service struct {
 	lastUpdatedTs atomic.Value
 
 	l7lbSvcs map[lb.ServiceName]*L7LBInfo
+
+	// Backend Sync registrations that are interested in Service backend changes
+	// to reflect this in an external system (e.g. Envoy L7 loadbalancer)
+	backendSyncRegistrations []BackendSync
 
 	backendConnectionHandler sockets.SocketDestroyer
 }
@@ -320,51 +320,19 @@ func (s *Service) registerL7LBService(serviceName lb.ServiceName, resourceName L
 }
 
 // RegisterL7LBServiceBackendSync registers a BackendSync to be informed when the backends of a Service change.
-func (s *Service) RegisterL7LBServiceBackendSync(serviceName lb.ServiceName, backendSyncRegistration BackendSync) error {
+func (s *Service) RegisterL7LBServiceBackendSync(backendSyncRegistration BackendSync) {
 	if backendSyncRegistration == nil {
-		return nil
+		return
 	}
 
 	s.Lock()
-	s.registerL7LBServiceBackendSync(serviceName, backendSyncRegistration)
-	s.Unlock()
+	defer s.Unlock()
 
-	if logging.CanLogAt(log.Logger, logrus.DebugLevel) {
-		log.WithFields(logrus.Fields{
-			logfields.ServiceName:      serviceName.Name,
-			logfields.ServiceNamespace: serviceName.Namespace,
-		}).Debug("Registering service backend sync for L7 load balancing")
-	}
-
-	svcs := s.GetDeepCopyServicesByName(serviceName.Name, serviceName.Namespace)
-	for _, svc := range svcs {
-		// Upsert the existing service again after updating 'l7lbSvcs'
-		// map so that the registered BackendSync are informed about the current
-		// Service Backends (e.g. Envoy)
-		if _, _, err := s.UpsertService(svc); err != nil {
-			return fmt.Errorf("error while updating service: %s", err)
-		}
-	}
-	return nil
+	s.backendSyncRegistrations = append(s.backendSyncRegistrations, backendSyncRegistration)
 }
 
 type BackendSync interface {
 	BackendChanged(ctx context.Context, svc *lb.SVC) error
-}
-
-// 's' must be locked
-func (s *Service) registerL7LBServiceBackendSync(serviceName lb.ServiceName, backendSyncRegistration BackendSync) {
-	info := s.l7lbSvcs[serviceName]
-	if info == nil {
-		info = &L7LBInfo{}
-	}
-
-	if info.backendSyncRegistrations == nil {
-		info.backendSyncRegistrations = make(map[BackendSync]struct{}, 1)
-	}
-	info.backendSyncRegistrations[backendSyncRegistration] = struct{}{}
-
-	s.l7lbSvcs[serviceName] = info
 }
 
 func (s *Service) RemoveL7LBService(serviceName lb.ServiceName, resourceName L7LBResourceName) error {
@@ -396,65 +364,11 @@ func (s *Service) removeL7LBService(serviceName lb.ServiceName, resourceName L7L
 		return false
 	}
 
-	empty := L7LBResourceName{}
-
-	if info.ownerRef == resourceName {
-		info.ownerRef = empty
-		info.proxyPort = 0
-	}
-
-	if len(info.backendSyncRegistrations) == 0 && info.ownerRef == empty {
-		delete(s.l7lbSvcs, serviceName)
-	}
-
-	return true
-}
-
-func (s *Service) RemoveL7LBServiceBackendSync(serviceName lb.ServiceName, backendSyncRegistration BackendSync) error {
-	if backendSyncRegistration == nil {
-		return nil
-	}
-
-	s.Lock()
-	changed := s.removeL7LBServiceBackendSync(serviceName, backendSyncRegistration)
-	s.Unlock()
-
-	if !changed {
-		return nil
-	}
-
-	log.WithFields(logrus.Fields{
-		logfields.ServiceName:      serviceName.Name,
-		logfields.ServiceNamespace: serviceName.Namespace,
-	}).Debug("Removing service from L7 load balancing")
-
-	svcs := s.GetDeepCopyServicesByName(serviceName.Name, serviceName.Namespace)
-	for _, svc := range svcs {
-		if _, _, err := s.UpsertService(svc); err != nil {
-			return fmt.Errorf("Error while removing service from LB map: %s", err)
-		}
-	}
-	return nil
-}
-
-func (s *Service) removeL7LBServiceBackendSync(serviceName lb.ServiceName, backendSyncRegistration BackendSync) bool {
-	info, found := s.l7lbSvcs[serviceName]
-	if !found {
+	if info.ownerRef != resourceName {
 		return false
 	}
 
-	empty := L7LBResourceName{}
-
-	if info.backendSyncRegistrations != nil {
-		delete(info.backendSyncRegistrations, backendSyncRegistration)
-		if len(info.backendSyncRegistrations) == 0 {
-			info.backendSyncRegistrations = nil
-		}
-	}
-
-	if len(info.backendSyncRegistrations) == 0 && info.ownerRef == empty {
-		delete(s.l7lbSvcs, serviceName)
-	}
+	delete(s.l7lbSvcs, serviceName)
 	return true
 }
 
@@ -759,11 +673,10 @@ func (s *Service) upsertService(params *lb.SVC) (bool, lb.ID, error) {
 		return false, lb.ID(0), err
 	}
 
-	if l7lbInfo != nil && l7lbInfo.backendSyncRegistrations != nil {
-		for bs := range l7lbInfo.backendSyncRegistrations {
-			svcCopy := svc.deepCopyToLBSVC()
-			bs.BackendChanged(context.Background(), svcCopy)
-		}
+	// Inform registered backend syncs (e.g. Envoy L7 LB)
+	for _, bs := range s.backendSyncRegistrations {
+		svcCopy := svc.deepCopyToLBSVC()
+		bs.BackendChanged(context.Background(), svcCopy)
 	}
 
 	// Update lbmaps (BPF service maps)

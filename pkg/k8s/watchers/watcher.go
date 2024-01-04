@@ -159,8 +159,7 @@ type svcManager interface {
 	UpsertService(*loadbalancer.SVC) (bool, loadbalancer.ID, error)
 	RegisterL7LBService(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName, proxyPort uint16) error
 	RemoveL7LBService(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName) error
-	RegisterL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, backendSyncRegistration service.BackendSync) error
-	RemoveL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, backendSyncRegistration service.BackendSync) error
+	RegisterL7LBServiceBackendSync(backendSyncRegistration service.BackendSync)
 }
 
 type redirectPolicyManager interface {
@@ -280,6 +279,7 @@ func NewK8sWatcher(
 	bgpSpeakerManager bgpSpeakerManager,
 	proxyPortAllocator envoy.PortAllocator,
 	envoyXdsServer envoy.XDSServer,
+	envoyServiceBackendSync *EnvoyServiceBackendSync,
 	cfg WatcherConfiguration,
 	ipcache ipcacheManager,
 	cgroupManager cgroupManager,
@@ -307,12 +307,9 @@ func NewK8sWatcher(
 		bandwidthManager:        bandwidthManager,
 		proxyPortAllocator:      proxyPortAllocator,
 		envoyXdsServer:          envoyXdsServer,
-		envoyServiceBackendSync: &EnvoyServiceBackendSync{
-			envoyXdsServer: envoyXdsServer,
-			l7lbSvcs:       map[loadbalancer.ServiceName]*L7LBInfo{},
-		},
-		cfg:       cfg,
-		resources: resources,
+		envoyServiceBackendSync: envoyServiceBackendSync,
+		cfg:                     cfg,
+		resources:               resources,
 	}
 }
 

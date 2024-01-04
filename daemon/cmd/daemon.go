@@ -65,6 +65,7 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/watchers"
 	"github.com/cilium/cilium/pkg/l2announcer"
 	"github.com/cilium/cilium/pkg/labels"
+	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -501,6 +502,14 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 	d.cgroupManager = manager.NewCgroupManager()
 
+	envoyServiceBackendSync := &watchers.EnvoyServiceBackendSync{
+		EnvoyXdsServer: d.envoyXdsServer,
+		L7lbSvcs:       map[loadbalancer.ServiceName]*watchers.L7LBInfo{},
+	}
+
+	// Register Envoy Backend Sync in the service manager
+	d.svc.RegisterL7LBServiceBackendSync(envoyServiceBackendSync)
+
 	d.k8sWatcher = watchers.NewK8sWatcher(
 		params.Clientset,
 		d.endpointManager,
@@ -513,6 +522,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		d.bgpSpeaker,
 		d.l7Proxy,
 		d.envoyXdsServer,
+		envoyServiceBackendSync,
 		option.Config,
 		d.ipcache,
 		d.cgroupManager,
@@ -520,6 +530,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		params.ServiceCache,
 		d.bwManager,
 	)
+
 	nd.RegisterK8sGetters(d.k8sWatcher)
 
 	if option.Config.BGPAnnounceLBIP || option.Config.BGPAnnouncePodCIDR {
@@ -993,7 +1004,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// controller is to ensure that endpoints and host IPs entries are
 	// reinserted to the bpf maps if they are ever removed from them.
 	syncErrs := make(chan error, 1)
-	var syncHostIPsControllerGroup = controller.NewGroup("sync-host-ips")
+	syncHostIPsControllerGroup := controller.NewGroup("sync-host-ips")
 	d.controllers.UpdateController(
 		syncHostIPsController,
 		controller.ControllerParams{
