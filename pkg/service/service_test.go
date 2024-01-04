@@ -4,6 +4,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/netip"
@@ -1468,7 +1469,7 @@ func (m *ManagerTestSuite) TestL7LoadBalancerServiceOverride(c *C) {
 	// registering without redirecting
 	echoOtherNode := lb.ServiceName{Name: "echo-other-node", Namespace: "cilium-test"}
 	resource1 := L7LBResourceName{Name: "testOwner1", Namespace: "cilium-test"}
-	err = m.svc.RegisterL7LBServiceBackendSync(echoOtherNode, resource1, nil)
+	err = m.svc.RegisterL7LBServiceBackendSync(echoOtherNode, &FakeBackendSyncer{})
 	c.Assert(err, IsNil)
 
 	svc, ok = m.svc.svcByID[id]
@@ -1786,187 +1787,6 @@ func (m *ManagerTestSuite) TestUpdateBackendsStateWithBackendSharedAcrossService
 	c.Assert(m.svc.svcByHash[svcHash2].backendByHash[hash1].State, Equals, lb.BackendStateMaintenance)
 }
 
-func Test_filterServiceBackends(t *testing.T) {
-	t.Run("filter by port number", func(t *testing.T) {
-		svc := &svcInfo{
-			frontend: lb.L3n4AddrID{
-				L3n4Addr: lb.L3n4Addr{
-					L4Addr: lb.L4Addr{
-						Port: 8080,
-					},
-				},
-			},
-			backends: []*lb.Backend{
-				{
-					FEPortName: "http",
-					L3n4Addr: lb.L3n4Addr{
-						L4Addr: lb.L4Addr{
-							Port: 3000,
-						},
-					},
-				},
-			},
-		}
-
-		t.Run("all ports are allowed", func(t *testing.T) {
-			backends := filterServiceBackends(svc, nil)
-			assert.Len(t, backends, 1)
-			assert.Len(t, backends[anyPort], 1)
-		})
-		t.Run("only http port", func(t *testing.T) {
-			backends := filterServiceBackends(svc, []string{"8080"})
-			assert.Len(t, backends, 1)
-			assert.Len(t, backends["8080"], 1)
-		})
-		t.Run("no match", func(t *testing.T) {
-			backends := filterServiceBackends(svc, []string{"8000"})
-			assert.Len(t, backends, 0)
-		})
-	})
-
-	t.Run("filter by port named", func(t *testing.T) {
-		svc := &svcInfo{
-			frontend: lb.L3n4AddrID{
-				L3n4Addr: lb.L3n4Addr{
-					L4Addr: lb.L4Addr{
-						Port: 8000,
-					},
-				},
-			},
-			backends: []*lb.Backend{
-				{
-					FEPortName: "http",
-					L3n4Addr: lb.L3n4Addr{
-						L4Addr: lb.L4Addr{
-							Port: 8080,
-						},
-					},
-				},
-				{
-					FEPortName: "https",
-					L3n4Addr: lb.L3n4Addr{
-						L4Addr: lb.L4Addr{
-							Port: 8443,
-						},
-					},
-				},
-				{
-					FEPortName: "metrics",
-					L3n4Addr: lb.L3n4Addr{
-						L4Addr: lb.L4Addr{
-							Port: 8081,
-						},
-					},
-				},
-			},
-		}
-
-		t.Run("all ports are allowed", func(t *testing.T) {
-			backends := filterServiceBackends(svc, nil)
-			assert.Len(t, backends, 1)
-			assert.Len(t, backends[anyPort], 3)
-		})
-		t.Run("only http named port", func(t *testing.T) {
-			backends := filterServiceBackends(svc, []string{"http"})
-			assert.Len(t, backends, 1)
-			assert.Len(t, backends["http"], 1)
-		})
-		t.Run("multiple named ports", func(t *testing.T) {
-			backends := filterServiceBackends(svc, []string{"http", "metrics"})
-			assert.Len(t, backends, 2)
-
-			assert.Len(t, backends["http"], 1)
-			assert.Equal(t, (int)(backends["http"][0].Port), 8080)
-
-			assert.Len(t, backends["metrics"], 1)
-			assert.Equal(t, (int)(backends["metrics"][0].Port), 8081)
-		})
-	})
-
-	t.Run("filter with preferred backend", func(t *testing.T) {
-		svc := &svcInfo{
-			frontend: lb.L3n4AddrID{
-				L3n4Addr: lb.L3n4Addr{
-					L4Addr: lb.L4Addr{
-						Port: 8000,
-					},
-				},
-			},
-			backends: []*lb.Backend{
-				{
-					FEPortName: "http",
-					L3n4Addr: lb.L3n4Addr{
-						L4Addr: lb.L4Addr{
-							Port: 8080,
-						},
-					},
-					Preferred: lb.Preferred(true),
-				},
-				{
-					FEPortName: "http",
-					L3n4Addr: lb.L3n4Addr{
-						L4Addr: lb.L4Addr{
-							Port: 8081,
-						},
-					},
-				},
-				{
-					FEPortName: "https",
-					L3n4Addr: lb.L3n4Addr{
-						L4Addr: lb.L4Addr{
-							Port: 443,
-						},
-					},
-				},
-				{
-					FEPortName: "80",
-					L3n4Addr: lb.L3n4Addr{
-						L4Addr: lb.L4Addr{
-							Port: 8080,
-						},
-					},
-					Preferred: lb.Preferred(true),
-				},
-				{
-					FEPortName: "80",
-					L3n4Addr: lb.L3n4Addr{
-						L4Addr: lb.L4Addr{
-							Port: 8081,
-						},
-					},
-				},
-			},
-		}
-
-		t.Run("all ports are allowed", func(t *testing.T) {
-			backends := filterServiceBackends(svc, nil)
-			assert.Len(t, backends, 1)
-			assert.Len(t, backends[anyPort], 2)
-		})
-
-		t.Run("only named ports", func(t *testing.T) {
-			backends := filterServiceBackends(svc, []string{"http"})
-			assert.Len(t, backends, 1)
-			assert.Len(t, backends["http"], 1)
-		})
-		t.Run("multiple named ports", func(t *testing.T) {
-			backends := filterServiceBackends(svc, []string{"http", "https"})
-			assert.Len(t, backends, 1)
-
-			assert.Len(t, backends["http"], 1)
-			assert.Equal(t, (int)(backends["http"][0].Port), 8080)
-		})
-
-		t.Run("only port number", func(t *testing.T) {
-			backends := filterServiceBackends(svc, []string{"80"})
-			assert.Len(t, backends, 1)
-
-			assert.Len(t, backends["80"], 1)
-			assert.Equal(t, (int)(backends["80"][0].Port), 8080)
-		})
-	})
-}
-
 type mockNodeAddressingFamily struct {
 	ips []net.IP
 }
@@ -2274,4 +2094,12 @@ func (m *ManagerTestSuite) TestUpsertServiceWithDeletedBackends(c *C) {
 			c.Assert(socket.Destroyed, Equals, false)
 		}
 	}
+}
+
+type FakeBackendSyncer struct{}
+
+var _ BackendSync = &FakeBackendSyncer{}
+
+func (*FakeBackendSyncer) BackendChanged(ctx context.Context, svc *lb.SVC) error {
+	return nil
 }

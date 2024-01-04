@@ -125,11 +125,15 @@ func (f *fakeSvcManager) RegisterL7LBService(serviceName loadbalancer.ServiceNam
 	return nil
 }
 
-func (f *fakeSvcManager) RegisterL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName, ports []string) error {
+func (f *fakeSvcManager) RemoveL7LBService(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName) error {
 	return nil
 }
 
-func (f *fakeSvcManager) RemoveL7LBService(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName) error {
+func (f *fakeSvcManager) RegisterL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, backendSyncRegistration service.BackendSync) error {
+	return nil
+}
+
+func (f *fakeSvcManager) RemoveL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, backendSyncRegistration service.BackendSync) error {
 	return nil
 }
 

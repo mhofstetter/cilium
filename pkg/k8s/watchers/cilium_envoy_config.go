@@ -22,6 +22,7 @@ import (
 	"github.com/cilium/cilium/pkg/k8s/informer"
 	"github.com/cilium/cilium/pkg/k8s/watchers/resources"
 	"github.com/cilium/cilium/pkg/loadbalancer"
+	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy/api"
@@ -205,10 +206,13 @@ func (k *K8sWatcher) addK8sServiceRedirects(resourceName service.L7LBResourceNam
 	}
 	// Register services for Envoy backend sync
 	for _, svc := range spec.BackendServices {
-		// Tell service manager to sync backends for this service
 		serviceName := getServiceName(resourceName, svc.Name, svc.Namespace, false)
-		err := k.svcManager.RegisterL7LBServiceBackendSync(serviceName, resourceName, svc.Ports)
-		if err != nil {
+
+		// Register service usage in Envoy backend sync
+		k.envoyServiceBackendSync.RegisterServiceUsageInCEC(serviceName, resourceName, svc.Ports)
+
+		// Register Envoy Backend Sync for the specific service in the service manager
+		if err := k.svcManager.RegisterL7LBServiceBackendSync(serviceName, k.envoyServiceBackendSync); err != nil {
 			return err
 		}
 	}
@@ -254,7 +258,7 @@ func (k *K8sWatcher) updateCiliumEnvoyConfig(oldCEC *cilium_v2.CiliumEnvoyConfig
 	}
 
 	name := service.L7LBResourceName{Name: oldCEC.ObjectMeta.Name, Namespace: oldCEC.ObjectMeta.Namespace}
-	if err = k.removeK8sServiceRedirects(name, &oldCEC.Spec, &newCEC.Spec, oldResources, newResources); err != nil {
+	if err := k.removeK8sServiceRedirects(name, &oldCEC.Spec, &newCEC.Spec, oldResources, newResources); err != nil {
 		scopedLog.WithError(err).Warn("Failed to update K8s service redirections")
 		return err
 	}
@@ -307,8 +311,7 @@ func (k *K8sWatcher) removeK8sServiceRedirects(resourceName service.L7LBResource
 	for _, oldSvc := range removedServices {
 		// Tell service manager to remove old service registration
 		serviceName := getServiceName(resourceName, oldSvc.Name, oldSvc.Namespace, true)
-		err := k.svcManager.RemoveL7LBService(serviceName, resourceName)
-		if err != nil {
+		if err := k.svcManager.RemoveL7LBService(serviceName, resourceName); err != nil {
 			return err
 		}
 	}
@@ -326,10 +329,13 @@ func (k *K8sWatcher) removeK8sServiceRedirects(resourceName service.L7LBResource
 		}
 	}
 	for _, oldSvc := range removedBackendServices {
-		// Tell service manager to remove old service registration
 		serviceName := getServiceName(resourceName, oldSvc.Name, oldSvc.Namespace, false)
-		err := k.svcManager.RemoveL7LBService(serviceName, resourceName)
-		if err != nil {
+
+		// Deregister usage of Service from Envoy Backend Sync
+		k.envoyServiceBackendSync.DeregisterServiceUsageInCEC(serviceName, resourceName)
+
+		// Tell service manager to remove backend sync for this service
+		if err := k.svcManager.RemoveL7LBServiceBackendSync(serviceName, k.envoyServiceBackendSync); err != nil {
 			return err
 		}
 	}
@@ -361,7 +367,7 @@ func (k *K8sWatcher) deleteCiliumEnvoyConfig(cec *cilium_v2.CiliumEnvoyConfig) e
 	}
 
 	name := service.L7LBResourceName{Name: cec.ObjectMeta.Name, Namespace: cec.ObjectMeta.Namespace}
-	if err = k.deleteK8sServiceRedirects(name, &cec.Spec); err != nil {
+	if err := k.deleteK8sServiceRedirects(name, &cec.Spec); err != nil {
 		scopedLog.WithError(err).Warn("Failed to delete K8s service redirections")
 		return err
 	}
@@ -385,19 +391,153 @@ func (k *K8sWatcher) deleteK8sServiceRedirects(resourceName service.L7LBResource
 	for _, svc := range spec.Services {
 		// Tell service manager to remove old service redirection
 		serviceName := getServiceName(resourceName, svc.Name, svc.Namespace, true)
-		err := k.svcManager.RemoveL7LBService(serviceName, resourceName)
-		if err != nil {
+		if err := k.svcManager.RemoveL7LBService(serviceName, resourceName); err != nil {
 			return err
 		}
 	}
 	for _, svc := range spec.BackendServices {
-		// Tell service manager to remove old service redirection
 		serviceName := getServiceName(resourceName, svc.Name, svc.Namespace, false)
-		err := k.svcManager.RemoveL7LBService(serviceName, resourceName)
-		if err != nil {
+
+		// Deregister usage of Service from Envoy Backend Sync
+		k.envoyServiceBackendSync.DeregisterServiceUsageInCEC(serviceName, resourceName)
+
+		// Tell service manager to remove backend sync for this service
+		if err := k.svcManager.RemoveL7LBServiceBackendSync(serviceName, k.envoyServiceBackendSync); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+// EnvoyServiceBackendSync syncs the backends of a Service as Endpoints to Envoy L7 proxy.
+type EnvoyServiceBackendSync struct {
+	envoyXdsServer envoy.XDSServer
+
+	l7lbSvcsMutex lock.RWMutex
+	l7lbSvcs      map[loadbalancer.ServiceName]*L7LBInfo
+}
+
+var _ service.BackendSync = &EnvoyServiceBackendSync{}
+
+func (r *EnvoyServiceBackendSync) BackendChanged(ctx context.Context, svc *loadbalancer.SVC) error {
+	r.l7lbSvcsMutex.RLock()
+	defer r.l7lbSvcsMutex.RUnlock()
+
+	l7lbInfo, exists := r.l7lbSvcs[svc.Name]
+
+	if !exists {
+		return nil
+	}
+
+	// Filter backend based on list of port numbers, then upsert backends
+	// as Envoy endpoints
+	be := filterServiceBackends(svc, l7lbInfo.frontendPorts)
+
+	log.WithField("filteredBackends", be).Debug("Upsert envoy endpoints")
+	if err := r.envoyXdsServer.UpsertEnvoyEndpoints(svc.Name, be); err != nil {
+		return fmt.Errorf("failed to update backends in Envoy: %w", err)
+	}
+
+	return nil
+}
+
+func (r *EnvoyServiceBackendSync) RegisterServiceUsageInCEC(svcName loadbalancer.ServiceName, resourceName service.L7LBResourceName, frontendPorts []string) {
+	r.l7lbSvcsMutex.Lock()
+	defer r.l7lbSvcsMutex.Unlock()
+
+	l7lbInfo, exists := r.l7lbSvcs[svcName]
+
+	if !exists {
+		l7lbInfo = &L7LBInfo{}
+	}
+
+	l7lbInfo.frontendPorts = frontendPorts
+
+	if l7lbInfo.backendRefs == nil {
+		l7lbInfo.backendRefs = make(map[service.L7LBResourceName]struct{}, 1)
+	}
+	l7lbInfo.backendRefs[resourceName] = struct{}{}
+
+	r.l7lbSvcs[svcName] = l7lbInfo
+}
+
+func (r *EnvoyServiceBackendSync) DeregisterServiceUsageInCEC(svcName loadbalancer.ServiceName, resourceName service.L7LBResourceName) {
+	r.l7lbSvcsMutex.Lock()
+	defer r.l7lbSvcsMutex.Unlock()
+
+	l7lbInfo, exists := r.l7lbSvcs[svcName]
+
+	if !exists {
+		return
+	}
+
+	if l7lbInfo.backendRefs != nil {
+		delete(l7lbInfo.backendRefs, resourceName)
+	}
+
+	// Cleanup service if it's no longer used by any CEC
+	if len(l7lbInfo.backendRefs) == 0 {
+		l7lbInfo.frontendPorts = nil
+		delete(r.l7lbSvcs, svcName)
+		return
+	}
+
+	r.l7lbSvcs[svcName] = l7lbInfo
+}
+
+// filterServiceBackends returns the list of backends based on given front end ports.
+// The returned map will have key as port name/number, and value as list of respective backends.
+func filterServiceBackends(svc *loadbalancer.SVC, onlyPorts []string) map[string][]*loadbalancer.Backend {
+	if len(onlyPorts) == 0 {
+		return map[string][]*loadbalancer.Backend{
+			"*": filterPreferredBackends(svc.Backends),
+		}
+	}
+
+	res := map[string][]*loadbalancer.Backend{}
+	for _, port := range onlyPorts {
+		// check for port number
+		if port == strconv.Itoa(int(svc.Frontend.Port)) {
+			return map[string][]*loadbalancer.Backend{
+				port: filterPreferredBackends(svc.Backends),
+			}
+		}
+		// check for either named port
+		for _, backend := range filterPreferredBackends(svc.Backends) {
+			if port == backend.FEPortName {
+				res[port] = append(res[port], backend)
+			}
+		}
+	}
+
+	return res
+}
+
+// filterPreferredBackends returns the slice of backends which are preferred for the given service.
+// If there is no preferred backend, it returns the slice of all backends.
+func filterPreferredBackends(backends []*loadbalancer.Backend) []*loadbalancer.Backend {
+	res := []*loadbalancer.Backend{}
+	for _, backend := range backends {
+		if backend.Preferred == loadbalancer.Preferred(true) {
+			res = append(res, backend)
+		}
+	}
+	if len(res) > 0 {
+		return res
+	}
+
+	return backends
+}
+
+type L7LBInfo struct {
+	// Names of the L7 LB resources (e.g. CEC) that need this service's backends to be
+	// synced to to an L7 Loadbalancer.
+	backendRefs map[service.L7LBResourceName]struct{}
+
+	// List of front-end ports of upstream service/cluster, which will be used for
+	// filtering applicable endpoints.
+	//
+	// If nil, all the available backends will be used.
+	frontendPorts []string
 }

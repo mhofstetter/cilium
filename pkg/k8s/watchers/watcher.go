@@ -158,8 +158,9 @@ type svcManager interface {
 	GetDeepCopyServiceByFrontend(frontend loadbalancer.L3n4Addr) (*loadbalancer.SVC, bool)
 	UpsertService(*loadbalancer.SVC) (bool, loadbalancer.ID, error)
 	RegisterL7LBService(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName, proxyPort uint16) error
-	RegisterL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName, ports []string) error
 	RemoveL7LBService(serviceName loadbalancer.ServiceName, resourceName service.L7LBResourceName) error
+	RegisterL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, backendSyncRegistration service.BackendSync) error
+	RemoveL7LBServiceBackendSync(serviceName loadbalancer.ServiceName, backendSyncRegistration service.BackendSync) error
 }
 
 type redirectPolicyManager interface {
@@ -216,16 +217,17 @@ type K8sWatcher struct {
 
 	endpointManager endpointManager
 
-	nodeDiscoverManager   nodeDiscoverManager
-	policyManager         policyManager
-	policyRepository      policyRepository
-	svcManager            svcManager
-	redirectPolicyManager redirectPolicyManager
-	bgpSpeakerManager     bgpSpeakerManager
-	ipcache               ipcacheManager
-	proxyPortAllocator    envoy.PortAllocator
-	envoyXdsServer        envoy.XDSServer
-	cgroupManager         cgroupManager
+	nodeDiscoverManager     nodeDiscoverManager
+	policyManager           policyManager
+	policyRepository        policyRepository
+	svcManager              svcManager
+	redirectPolicyManager   redirectPolicyManager
+	bgpSpeakerManager       bgpSpeakerManager
+	ipcache                 ipcacheManager
+	proxyPortAllocator      envoy.PortAllocator
+	envoyXdsServer          envoy.XDSServer
+	envoyServiceBackendSync *EnvoyServiceBackendSync
+	cgroupManager           cgroupManager
 
 	bandwidthManager bandwidth.Manager
 
@@ -305,8 +307,12 @@ func NewK8sWatcher(
 		bandwidthManager:        bandwidthManager,
 		proxyPortAllocator:      proxyPortAllocator,
 		envoyXdsServer:          envoyXdsServer,
-		cfg:                     cfg,
-		resources:               resources,
+		envoyServiceBackendSync: &EnvoyServiceBackendSync{
+			envoyXdsServer: envoyXdsServer,
+			l7lbSvcs:       map[loadbalancer.ServiceName]*L7LBInfo{},
+		},
+		cfg:       cfg,
+		resources: resources,
 	}
 }
 
