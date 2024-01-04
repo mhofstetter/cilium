@@ -258,7 +258,6 @@ type Service struct {
 
 // NewService creates a new instance of the service handler.
 func NewService(monitorAgent monitorAgent.Agent, envoyCache envoyCache, lbmap datapathTypes.LBMap) *Service {
-
 	var localHealthServer healthServer
 	if option.Config.EnableHealthCheckNodePort {
 		localHealthServer = healthserver.New()
@@ -283,9 +282,9 @@ func NewService(monitorAgent monitorAgent.Agent, envoyCache envoyCache, lbmap da
 
 // RegisterL7LBService makes the given service to be locally forwarded to the
 // given proxy port.
-func (s *Service) RegisterL7LBService(serviceName, resourceName lb.ServiceName, ports []string, proxyPort uint16) error {
+func (s *Service) RegisterL7LBService(serviceName, resourceName lb.ServiceName, proxyPort uint16) error {
 	s.Lock()
-	err := s.registerL7LBService(serviceName, resourceName, ports, proxyPort)
+	err := s.registerL7LBService(serviceName, resourceName, proxyPort)
 	s.Unlock()
 	if err != nil {
 		return err
@@ -293,19 +292,17 @@ func (s *Service) RegisterL7LBService(serviceName, resourceName lb.ServiceName, 
 
 	if logging.CanLogAt(log.Logger, logrus.DebugLevel) {
 		log.WithFields(logrus.Fields{
-			logfields.ServiceName:       serviceName.Name,
-			logfields.ServiceNamespace:  serviceName.Namespace,
-			logfields.L7LBFrontendPorts: ports,
-			logfields.L7LBProxyPort:     proxyPort,
-		}).Debug("Registering service for L7 load balancing")
+			logfields.ServiceName:      serviceName.Name,
+			logfields.ServiceNamespace: serviceName.Namespace,
+			logfields.L7LBProxyPort:    proxyPort,
+		}).Debug("Registering service for L7 proxy port forwarding")
 	}
 
 	svcs := s.GetDeepCopyServicesByName(serviceName.Name, serviceName.Namespace)
 	for _, svc := range svcs {
 		// Upsert the existing service again after updating 'l7lbSvcs'
 		// map so that the service will get the l7 flag set in bpf
-		// datapath and Envoy endpoint resources are created for
-		// registered services.
+		// datapath.
 		if _, _, err := s.UpsertService(svc); err != nil {
 			return fmt.Errorf("error while updating service in LB map: %s", err)
 		}
@@ -314,7 +311,7 @@ func (s *Service) RegisterL7LBService(serviceName, resourceName lb.ServiceName, 
 }
 
 // 's' must be locked
-func (s *Service) registerL7LBService(serviceName, resourceName lb.ServiceName, frontendPorts []string, proxyPort uint16) error {
+func (s *Service) registerL7LBService(serviceName, resourceName lb.ServiceName, proxyPort uint16) error {
 	info := s.l7lbSvcs[serviceName]
 	if info == nil {
 		info = &L7LBInfo{}
@@ -330,7 +327,45 @@ func (s *Service) registerL7LBService(serviceName, resourceName lb.ServiceName, 
 		info.proxyPort = proxyPort
 	}
 
-	// Register for sync of backends to Envoy
+	s.l7lbSvcs[serviceName] = info
+
+	return nil
+}
+
+// RegisterL7LBServiceBackendSync synchronizes the backends of a service to Envoy.
+func (s *Service) RegisterL7LBServiceBackendSync(serviceName, resourceName lb.ServiceName, ports []string) error {
+	s.Lock()
+	s.registerL7LBServiceBackendSync(serviceName, resourceName, ports)
+	s.Unlock()
+
+	if logging.CanLogAt(log.Logger, logrus.DebugLevel) {
+		log.WithFields(logrus.Fields{
+			logfields.ServiceName:       serviceName.Name,
+			logfields.ServiceNamespace:  serviceName.Namespace,
+			logfields.L7LBFrontendPorts: ports,
+		}).Debug("Registering service backend sync for L7 load balancing")
+	}
+
+	svcs := s.GetDeepCopyServicesByName(serviceName.Name, serviceName.Namespace)
+	for _, svc := range svcs {
+		// Upsert the existing service again after updating 'l7lbSvcs'
+		// map so that the service backend will get synced to the L7 proxy
+		// and Envoy endpoint resources are created for registered services.
+
+		if _, _, err := s.UpsertService(svc); err != nil {
+			return fmt.Errorf("error while updating service: %s", err)
+		}
+	}
+	return nil
+}
+
+// 's' must be locked
+func (s *Service) registerL7LBServiceBackendSync(serviceName lb.ServiceName, resourceName lb.ServiceName, frontendPorts []string) {
+	info := s.l7lbSvcs[serviceName]
+	if info == nil {
+		info = &L7LBInfo{}
+	}
+
 	if info.envoyBackendRefs == nil {
 		info.envoyBackendRefs = make(map[lb.ServiceName]struct{}, 1)
 	}
@@ -338,12 +373,6 @@ func (s *Service) registerL7LBService(serviceName, resourceName lb.ServiceName, 
 	info.frontendPorts = frontendPorts
 
 	s.l7lbSvcs[serviceName] = info
-	return nil
-}
-
-// RegisterL7LBServiceBackendSync synchronizes the backends of a service to Envoy.
-func (s *Service) RegisterL7LBServiceBackendSync(serviceName, resourceName lb.ServiceName, ports []string) error {
-	return s.RegisterL7LBService(serviceName, resourceName, ports, 0)
 }
 
 func (s *Service) RemoveL7LBService(serviceName, resourceName lb.ServiceName) error {
@@ -663,8 +692,7 @@ func (s *Service) upsertService(params *lb.SVC) (bool, lb.ID, error) {
 	}
 
 	// If needed, create svcInfo and allocate service ID
-	svc, new, prevSessionAffinity, prevLoadBalancerSourceRanges, err :=
-		s.createSVCInfoIfNotExist(params)
+	svc, new, prevSessionAffinity, prevLoadBalancerSourceRanges, err := s.createSVCInfoIfNotExist(params)
 	if err != nil {
 		return false, lb.ID(0), err
 	}
@@ -696,8 +724,7 @@ func (s *Service) upsertService(params *lb.SVC) (bool, lb.ID, error) {
 	// defer filtering the backends list (thereby defer redirecting traffic)
 	// in such cases. GH #12859
 	// Update backends cache and allocate/release backend IDs
-	newBackends, obsoleteBackends, obsoleteSVCBackendIDs, err :=
-		s.updateBackendsCacheLocked(svc, backendsCopy)
+	newBackends, obsoleteBackends, obsoleteSVCBackendIDs, err := s.updateBackendsCacheLocked(svc, backendsCopy)
 	if err != nil {
 		return false, lb.ID(0), err
 	}
@@ -718,7 +745,6 @@ func (s *Service) upsertService(params *lb.SVC) (bool, lb.ID, error) {
 	if err = s.upsertServiceIntoLBMaps(svc, svc.isExtLocal(), svc.isIntLocal(), prevBackendCount,
 		newBackends, obsoleteBackends, prevSessionAffinity, prevLoadBalancerSourceRanges,
 		obsoleteSVCBackendIDs, getScopedLog, debugLogsEnabled); err != nil {
-
 		return false, lb.ID(0), err
 	}
 
@@ -1241,7 +1267,8 @@ func (s *Service) SyncWithK8sFinished(localOnly bool, localServices sets.Set[k8s
 		if svc.restoredFromDatapath {
 			log.WithFields(logrus.Fields{
 				logfields.ServiceID: svc.frontend.ID,
-				logfields.L3n4Addr:  logfields.Repr(svc.frontend.L3n4Addr)}).
+				logfields.L3n4Addr:  logfields.Repr(svc.frontend.L3n4Addr),
+			}).
 				Warn("Deleting no longer present service")
 
 			if err := s.deleteServiceLocked(svc); err != nil {
@@ -1277,15 +1304,14 @@ func (s *Service) SyncWithK8sFinished(localOnly bool, localServices sets.Set[k8s
 	// Remove obsolete backends and release their IDs
 	if err := s.deleteOrphanBackends(); err != nil {
 		log.WithError(err).Warn("Failed to remove orphan backends")
-
 	}
 
 	return stale, nil
 }
 
 func (s *Service) createSVCInfoIfNotExist(p *lb.SVC) (*svcInfo, bool, bool,
-	[]*cidr.CIDR, error) {
-
+	[]*cidr.CIDR, error,
+) {
 	prevSessionAffinity := false
 	prevLoadBalancerSourceRanges := []*cidr.CIDR{}
 
@@ -1412,7 +1438,6 @@ func (s *Service) upsertServiceIntoLBMaps(svc *svcInfo, isExtLocal, isIntLocal b
 	obsoleteSVCBackendIDs []lb.BackendID, getScopedLog func() *logrus.Entry,
 	debugLogsEnabled bool,
 ) error {
-
 	v6FE := svc.frontend.IsIPv6()
 
 	var (
@@ -1455,7 +1480,6 @@ func (s *Service) upsertServiceIntoLBMaps(svc *svcInfo, isExtLocal, isIntLocal b
 		if err := s.lbmap.UpdateSourceRanges(uint16(svc.frontend.ID),
 			prevLoadBalancerSourceRanges, svc.loadBalancerSourceRanges,
 			v6FE); err != nil {
-
 			return err
 		}
 	}
@@ -1834,8 +1858,8 @@ func (s *Service) deleteServiceLocked(svc *svcInfo) error {
 }
 
 func (s *Service) updateBackendsCacheLocked(svc *svcInfo, backends []*lb.Backend) (
-	[]*lb.Backend, []*lb.Backend, []lb.BackendID, error) {
-
+	[]*lb.Backend, []*lb.Backend, []lb.BackendID, error,
+) {
 	obsoleteBackends := []*lb.Backend{}       // not used by any svc
 	obsoleteSVCBackendIDs := []lb.BackendID{} // removed from the svc, but might be used by other svc
 	newBackends := []*lb.Backend{}            // previously not used by any svc
@@ -1934,7 +1958,8 @@ func (s *Service) deleteBackendsFromCacheLocked(svc *svcInfo) []lb.BackendID {
 }
 
 func (s *Service) notifyMonitorServiceUpsert(frontend lb.L3n4AddrID, backends []*lb.Backend,
-	svcType lb.SVCType, svcExtTrafficPolicy, svcIntTrafficPolicy lb.SVCTrafficPolicy, svcName, svcNamespace string) {
+	svcType lb.SVCType, svcExtTrafficPolicy, svcIntTrafficPolicy lb.SVCTrafficPolicy, svcName, svcNamespace string,
+) {
 	if s.monitorAgent == nil {
 		return
 	}
@@ -1991,7 +2016,8 @@ func isWildcardAddr(frontend lb.L3n4AddrID) bool {
 // added to the lbmaps. If EnableK8sTerminatingEndpoint and there are no active backends,
 // segregateBackends will return all terminating backends as active.
 func segregateBackends(backends []*lb.Backend) (preferredBackends map[string]*lb.Backend,
-	activeBackends map[string]*lb.Backend, nonActiveBackends []lb.BackendID) {
+	activeBackends map[string]*lb.Backend, nonActiveBackends []lb.BackendID,
+) {
 	preferredBackends = make(map[string]*lb.Backend)
 	activeBackends = make(map[string]*lb.Backend, len(backends))
 

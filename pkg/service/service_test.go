@@ -984,7 +984,6 @@ func (m *ManagerTestSuite) TestHealthCheckLoadBalancerIP(c *C) {
 	c.Assert(err, IsNil)
 
 	option.Config.EnableHealthCheckLoadBalancerIP = false
-
 }
 
 func (m *ManagerTestSuite) TestHealthCheckNodePortDisabled(c *C) {
@@ -1479,7 +1478,7 @@ func (m *ManagerTestSuite) TestL7LoadBalancerServiceOverride(c *C) {
 
 	// registering with redirection stores the proxy port
 	resource2 := lb.ServiceName{Name: "testOwner2", Namespace: "cilium-test"}
-	err = m.svc.RegisterL7LBService(echoOtherNode, resource2, nil, uint16(9090))
+	err = m.svc.RegisterL7LBService(echoOtherNode, resource2, uint16(9090))
 	c.Assert(err, IsNil)
 
 	svc, ok = m.svc.svcByID[id]
@@ -1972,13 +1971,18 @@ type mockNodeAddressingFamily struct {
 	ips []net.IP
 }
 
-func (n *mockNodeAddressingFamily) Router() net.IP                    { panic("Not implemented") }
-func (n *mockNodeAddressingFamily) PrimaryExternal() net.IP           { panic("Not implemented") }
-func (n *mockNodeAddressingFamily) AllocationCIDR() *cidr.CIDR        { panic("Not implemented") }
+func (n *mockNodeAddressingFamily) Router() net.IP { panic("Not implemented") }
+
+func (n *mockNodeAddressingFamily) PrimaryExternal() net.IP { panic("Not implemented") }
+
+func (n *mockNodeAddressingFamily) AllocationCIDR() *cidr.CIDR { panic("Not implemented") }
+
 func (n *mockNodeAddressingFamily) LocalAddresses() ([]net.IP, error) { panic("Not implemented") }
+
 func (n *mockNodeAddressingFamily) LoadBalancerNodeAddresses() []net.IP {
 	return n.ips
 }
+
 func (n *mockNodeAddressingFamily) DirectRouting() (int, net.IP, bool) {
 	return -1, nil, false
 }
@@ -1991,6 +1995,7 @@ type mockNodeAddressing struct {
 func (na *mockNodeAddressing) IPv4() datapathTypes.NodeAddressingFamily {
 	return na.ip4
 }
+
 func (na *mockNodeAddressing) IPv6() datapathTypes.NodeAddressingFamily {
 	return na.ip6
 }
@@ -2045,7 +2050,6 @@ func (m *ManagerTestSuite) TestSyncServices(c *C) {
 	c.Assert(found, Equals, true)
 	_, _, found = m.svc.GetServiceNameByAddr(frontend3.L3n4Addr)
 	c.Assert(found, Equals, true)
-
 }
 
 func (m *ManagerTestSuite) TestTrafficPolicy(c *C) {
