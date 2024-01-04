@@ -71,11 +71,6 @@ type healthServer interface {
 	DeleteService(svcID lb.ID)
 }
 
-// envoyCache is used to sync Envoy resources to Envoy proxy
-type envoyCache interface {
-	UpsertEnvoyEndpoints(lb.ServiceName, map[string][]*lb.Backend) error
-}
-
 type svcInfo struct {
 	hash     string
 	frontend lb.L3n4AddrID
@@ -240,7 +235,6 @@ type Service struct {
 
 	healthServer healthServer
 	monitorAgent monitorAgent.Agent
-	envoyCache   envoyCache
 
 	lbmap         datapathTypes.LBMap
 	lastUpdatedTs atomic.Value
@@ -251,7 +245,7 @@ type Service struct {
 }
 
 // NewService creates a new instance of the service handler.
-func NewService(monitorAgent monitorAgent.Agent, envoyCache envoyCache, lbmap datapathTypes.LBMap) *Service {
+func NewService(monitorAgent monitorAgent.Agent, lbmap datapathTypes.LBMap) *Service {
 	var localHealthServer healthServer
 	if option.Config.EnableHealthCheckNodePort {
 		localHealthServer = healthserver.New()
@@ -263,7 +257,6 @@ func NewService(monitorAgent monitorAgent.Agent, envoyCache envoyCache, lbmap da
 		backendRefCount:          counter.StringCounter{},
 		backendByHash:            map[string]*lb.Backend{},
 		monitorAgent:             monitorAgent,
-		envoyCache:               envoyCache,
 		healthServer:             localHealthServer,
 		lbmap:                    lbmap,
 		l7lbSvcs:                 map[lb.ServiceName]*L7LBInfo{},
