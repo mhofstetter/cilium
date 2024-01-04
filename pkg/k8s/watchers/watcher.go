@@ -46,6 +46,7 @@ import (
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/metrics"
+	"github.com/cilium/cilium/pkg/node"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
@@ -228,6 +229,7 @@ type K8sWatcher struct {
 	endpointManager endpointManager
 
 	nodeDiscoverManager   nodeDiscoverManager
+	localNodeStore        *node.LocalNodeStore
 	policyManager         policyManager
 	policyRepository      policyRepository
 	svcManager            svcManager
@@ -267,7 +269,7 @@ type K8sWatcher struct {
 	// networkPoliciesInitOnce is used to guarantee only one call to NetworkPoliciesInit is
 	// executed.
 	networkPoliciesInitOnce sync.Once
-	//networkPoliciesStoreSet is closed once the networkpolicyStore is set.
+	// networkPoliciesStoreSet is closed once the networkpolicyStore is set.
 	networkPoliciesStoreSet chan struct{}
 	networkpolicyStore      cache.Store
 
@@ -280,6 +282,7 @@ func NewK8sWatcher(
 	clientset client.Clientset,
 	endpointManager endpointManager,
 	nodeDiscoverManager nodeDiscoverManager,
+	localNodeStore *node.LocalNodeStore,
 	policyManager policyManager,
 	policyRepository policyRepository,
 	svcManager svcManager,
@@ -299,6 +302,7 @@ func NewK8sWatcher(
 		K8sSvcCache:             serviceCache,
 		endpointManager:         endpointManager,
 		nodeDiscoverManager:     nodeDiscoverManager,
+		localNodeStore:          localNodeStore,
 		policyManager:           policyManager,
 		policyRepository:        policyRepository,
 		svcManager:              svcManager,

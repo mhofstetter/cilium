@@ -25,11 +25,13 @@ import (
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy/api"
+	"github.com/cilium/cilium/pkg/stream"
+	"github.com/cilium/cilium/pkg/time"
 )
 
 func (k *K8sWatcher) ciliumEnvoyConfigInit(ctx context.Context, ciliumNPClient client.Clientset) {
 	apiGroup := k8sAPIGroupCiliumEnvoyConfigV2
-	_, cecController := informer.NewInformer(
+	cacheStore, cecController := informer.NewInformer(
 		cache.NewListWatchFromClient(ciliumNPClient.CiliumV2().RESTClient(),
 			cilium_v2.CECPluralName, v1.NamespaceAll, fields.Everything()),
 		&cilium_v2.CiliumEnvoyConfig{},
@@ -83,6 +85,18 @@ func (k *K8sWatcher) ciliumEnvoyConfigInit(ctx context.Context, ciliumNPClient c
 	)
 
 	go cecController.Run(ctx.Done())
+
+	localNodeStoreChannel := stream.ToChannel(context.Background(),
+		// Coalescence events that are emitted almost at the same time, to prevent
+		// consecutive updates from triggering multiple CiliumNode/kvstore updates.
+		stream.Debounce(k.localNodeStore, 250*time.Millisecond))
+
+	go func() {
+		for n := range localNodeStoreChannel {
+			log.Printf(">>> change: %s - %s", n.ToCiliumNode().GetLabels(), cacheStore.ListKeys())
+		}
+	}()
+
 	k.k8sAPIGroups.AddAPI(k8sAPIGroupCiliumEnvoyConfigV2)
 }
 
@@ -97,6 +111,18 @@ func useOriginalSourceAddress(meta *meta_v1.ObjectMeta) bool {
 
 	if meta.GetLabels() != nil {
 		if v, ok := meta.GetLabels()[k8s.UseOriginalSourceAddressLabel]; ok {
+			if boolValue, err := strconv.ParseBool(v); err == nil {
+				return boolValue
+			}
+		}
+	}
+
+	return true
+}
+
+func injectCiliumFilters(meta *meta_v1.ObjectMeta) bool {
+	if meta.GetLabels() != nil {
+		if v, ok := meta.GetLabels()[k8s.InjectCiliumFiltersLabel]; ok {
 			if boolValue, err := strconv.ParseBool(v); err == nil {
 				return boolValue
 			}
@@ -122,6 +148,7 @@ func (k *K8sWatcher) addCiliumEnvoyConfig(cec *cilium_v2.CiliumEnvoyConfig) erro
 		k.envoyConfigManager,
 		len(cec.Spec.Services) > 0,
 		useOriginalSourceAddress(&cec.ObjectMeta),
+		injectCiliumFilters(&cec.ObjectMeta),
 	)
 	if err != nil {
 		scopedLog.WithError(err).Warn("Failed to add CiliumEnvoyConfig: malformed Envoy config")
@@ -231,6 +258,7 @@ func (k *K8sWatcher) updateCiliumEnvoyConfig(oldCEC *cilium_v2.CiliumEnvoyConfig
 		k.envoyConfigManager,
 		len(oldCEC.Spec.Services) > 0,
 		useOriginalSourceAddress(&oldCEC.ObjectMeta),
+		injectCiliumFilters(&oldCEC.ObjectMeta),
 	)
 	if err != nil {
 		scopedLog.WithError(err).Warn("Failed to update CiliumEnvoyConfig: malformed old Envoy config")
@@ -244,6 +272,7 @@ func (k *K8sWatcher) updateCiliumEnvoyConfig(oldCEC *cilium_v2.CiliumEnvoyConfig
 		k.envoyConfigManager,
 		len(newCEC.Spec.Services) > 0,
 		useOriginalSourceAddress(&newCEC.ObjectMeta),
+		injectCiliumFilters(&newCEC.ObjectMeta),
 	)
 	if err != nil {
 		scopedLog.WithError(err).Warn("Failed to update CiliumEnvoyConfig: malformed new Envoy config")
@@ -350,6 +379,7 @@ func (k *K8sWatcher) deleteCiliumEnvoyConfig(cec *cilium_v2.CiliumEnvoyConfig) e
 		k.envoyConfigManager,
 		len(cec.Spec.Services) > 0,
 		useOriginalSourceAddress(&cec.ObjectMeta),
+		injectCiliumFilters(&cec.ObjectMeta),
 	)
 	if err != nil {
 		scopedLog.WithError(err).Warn("Failed to delete CiliumEnvoyConfig: parsing rersource names failed")

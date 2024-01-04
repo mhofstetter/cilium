@@ -114,8 +114,7 @@ func qualifyRouteConfigurationResourceNames(namespace, name string, routeConfig 
 		for _, rt := range vhost.Routes {
 			if action := rt.GetRoute(); action != nil {
 				if clusterName := action.GetCluster(); clusterName != "" {
-					action.GetClusterSpecifier().(*envoy_config_route.RouteAction_Cluster).Cluster, nameUpdated =
-						api.ResourceQualifiedName(namespace, name, clusterName)
+					action.GetClusterSpecifier().(*envoy_config_route.RouteAction_Cluster).Cluster, nameUpdated = api.ResourceQualifiedName(namespace, name, clusterName)
 					if nameUpdated {
 						updated = true
 					}
@@ -145,9 +144,9 @@ func qualifyRouteConfigurationResourceNames(namespace, name string, routeConfig 
 // ParseResources parses all supported Envoy resource types from CiliumEnvoyConfig CRD to Resources
 // type cecNamespace and cecName parameters, if not empty, will be prepended to the Envoy resource
 // names.
-func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XDSResource, validate bool, portAllocator PortAllocator, isL7LB bool, useOriginalSourceAddr bool) (Resources, error) {
+func ParseResources(cecNamespace string, cecName string, xdsResources []cilium_v2.XDSResource, validate bool, portAllocator PortAllocator, isL7LB bool, useOriginalSourceAddr bool, injectCiliumFilters bool) (Resources, error) {
 	resources := Resources{}
-	for _, r := range anySlice {
+	for _, r := range xdsResources {
 		// Skip empty TypeURLs, which are left behind when Unmarshaling resource JSON fails
 		if r.TypeUrl == "" {
 			continue
@@ -161,15 +160,15 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 		case ListenerTypeURL:
 			listener, ok := message.(*envoy_config_listener.Listener)
 			if !ok {
-				return Resources{}, fmt.Errorf("Invalid type for Listener: %T", message)
+				return Resources{}, fmt.Errorf("invalid type for Listener: %T", message)
 			}
 			// Check that a listener name is provided and that it is unique within this CEC
 			if listener.Name == "" {
-				return Resources{}, fmt.Errorf("'Listener name not provided")
+				return Resources{}, fmt.Errorf("listener name not provided")
 			}
 			for i := range resources.Listeners {
 				if listener.Name == resources.Listeners[i].Name {
-					return Resources{}, fmt.Errorf("Duplicate Listener name %q", listener.Name)
+					return Resources{}, fmt.Errorf("duplicate Listener name %q", listener.Name)
 				}
 			}
 
@@ -183,9 +182,6 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 			// Figure out if this is an internal listener
 			isInternalListener := listener.GetInternalListener() != nil
 
-			// Only inject Cilium filters if Cilium allocates listener address
-			injectCiliumFilters := listener.GetAddress() == nil && !isInternalListener
-
 			// Inject Cilium bpf metadata listener filter, if not already present.
 			if !isInternalListener {
 				found := false
@@ -196,7 +192,7 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 					}
 				}
 				if !found {
-					listener.ListenerFilters = append(listener.ListenerFilters, getListenerFilter(false /* egress */, useOriginalSourceAddr, isL7LB))
+					listener.ListenerFilters = append(listener.ListenerFilters, getCiliumBPFMetadataListenerFilter(false /* egress */, useOriginalSourceAddr, isL7LB))
 				}
 			}
 
@@ -239,7 +235,7 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 								updated = true
 							}
 						}
-						if injectCiliumFilters {
+						if injectCiliumFilters && !isInternalListener {
 							foundCiliumL7Filter := false
 						loop:
 							for j, httpFilter := range hcmConfig.HttpFilters {
@@ -280,16 +276,14 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 					default:
 						continue
 					}
-					if injectCiliumFilters {
-						if !foundCiliumNetworkFilter {
-							// Inject Cilium network filter just before the HTTP Connection Manager or TCPProxy filter
-							fc.Filters = append(fc.Filters[:i+1], fc.Filters[i:]...)
-							fc.Filters[i] = &envoy_config_listener.Filter{
-								Name: "cilium.network",
-								ConfigType: &envoy_config_listener.Filter_TypedConfig{
-									TypedConfig: toAny(&cilium.NetworkFilter{}),
-								},
-							}
+					if injectCiliumFilters && !isInternalListener && !foundCiliumNetworkFilter {
+						// Inject Cilium network filter just before the HTTP Connection Manager or TCPProxy filter
+						fc.Filters = append(fc.Filters[:i+1], fc.Filters[i:]...)
+						fc.Filters[i] = &envoy_config_listener.Filter{
+							Name: "cilium.network",
+							ConfigType: &envoy_config_listener.Filter_TypedConfig{
+								TypedConfig: toAny(&cilium.NetworkFilter{}),
+							},
 						}
 					}
 					break // Done with this filter chain
@@ -311,7 +305,7 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 		case RouteTypeURL:
 			route, ok := message.(*envoy_config_route.RouteConfiguration)
 			if !ok {
-				return Resources{}, fmt.Errorf("Invalid type for Route: %T", message)
+				return Resources{}, fmt.Errorf("invalid type for Route: %T", message)
 			}
 			// Check that a Route name is provided and that it is unique within this CEC
 			if route.Name == "" {
@@ -319,7 +313,7 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 			}
 			for i := range resources.Routes {
 				if route.Name == resources.Routes[i].Name {
-					return Resources{}, fmt.Errorf("Duplicate Route name %q", route.Name)
+					return Resources{}, fmt.Errorf("duplicate Route name %q", route.Name)
 				}
 			}
 
@@ -340,15 +334,15 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 		case ClusterTypeURL:
 			cluster, ok := message.(*envoy_config_cluster.Cluster)
 			if !ok {
-				return Resources{}, fmt.Errorf("Invalid type for Route: %T", message)
+				return Resources{}, fmt.Errorf("invalid type for Route: %T", message)
 			}
 			// Check that a Cluster name is provided and that it is unique within this CEC
 			if cluster.Name == "" {
-				return Resources{}, fmt.Errorf("Cluster name not provided")
+				return Resources{}, fmt.Errorf("cluster name not provided")
 			}
 			for i := range resources.Clusters {
 				if cluster.Name == resources.Clusters[i].Name {
-					return Resources{}, fmt.Errorf("Duplicate Cluster name %q", cluster.Name)
+					return Resources{}, fmt.Errorf("duplicate Cluster name %q", cluster.Name)
 				}
 			}
 
@@ -383,7 +377,7 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 		case EndpointTypeURL:
 			endpoints, ok := message.(*envoy_config_endpoint.ClusterLoadAssignment)
 			if !ok {
-				return Resources{}, fmt.Errorf("Invalid type for Route: %T", message)
+				return Resources{}, fmt.Errorf("invalid type for Route: %T", message)
 			}
 			// Check that a Cluster name is provided and that it is unique within this CEC
 			if endpoints.ClusterName == "" {
@@ -391,7 +385,7 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 			}
 			for i := range resources.Endpoints {
 				if endpoints.ClusterName == resources.Endpoints[i].ClusterName {
-					return Resources{}, fmt.Errorf("Duplicate cluster_name %q", endpoints.ClusterName)
+					return Resources{}, fmt.Errorf("duplicate cluster_name %q", endpoints.ClusterName)
 				}
 			}
 
@@ -410,15 +404,15 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 		case SecretTypeURL:
 			secret, ok := message.(*envoy_config_tls.Secret)
 			if !ok {
-				return Resources{}, fmt.Errorf("Invalid type for Secret: %T", message)
+				return Resources{}, fmt.Errorf("invalid type for Secret: %T", message)
 			}
 			// Check that a Secret name is provided and that it is unique within this CEC
 			if secret.Name == "" {
-				return Resources{}, fmt.Errorf("Secret name not provided")
+				return Resources{}, fmt.Errorf("secret name not provided")
 			}
 			for i := range resources.Secrets {
 				if secret.Name == resources.Secrets[i].Name {
-					return Resources{}, fmt.Errorf("Duplicate Secret name %q", secret.Name)
+					return Resources{}, fmt.Errorf("duplicate Secret name %q", secret.Name)
 				}
 			}
 
@@ -435,17 +429,14 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 			log.Debugf("ParseResources: Parsed secret: %s", name)
 
 		default:
-			return Resources{}, fmt.Errorf("Unsupported type: %s", typeURL)
+			return Resources{}, fmt.Errorf("unsupported type: %s", typeURL)
 		}
 	}
 
 	// Allocate TPROXY ports for listeners without address.
 	// Do this only after all other possible error cases.
 	for _, listener := range resources.Listeners {
-		// Figure out if this is an internal listener
-		isInternalListener := listener.GetInternalListener() != nil
-
-		if listener.GetAddress() == nil && !isInternalListener {
+		if listener.GetAddress() == nil && listener.GetInternalListener() == nil {
 			port, err := portAllocator.AllocateProxyPort(listener.Name, false, true)
 			if err != nil || port == 0 {
 				return Resources{}, fmt.Errorf("Listener port allocation for %q failed: %s", listener.Name, err)
@@ -859,9 +850,9 @@ func getEndpointsForLBBackends(serviceName lb.ServiceName, backendMap map[string
 						Address: &envoy_config_core.Address{
 							Address: &envoy_config_core.Address_SocketAddress{
 								SocketAddress: &envoy_config_core.SocketAddress{
-									Address: be.L3n4Addr.AddrCluster.String(),
+									Address: be.AddrCluster.String(),
 									PortSpecifier: &envoy_config_core.SocketAddress_PortValue{
-										PortValue: uint32(be.L3n4Addr.L4Addr.Port),
+										PortValue: uint32(be.Port),
 									},
 								},
 							},

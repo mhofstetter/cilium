@@ -16,10 +16,14 @@ import (
 	"github.com/cilium/cilium/pkg/option"
 )
 
-// UseOriginalSourceAddressLabel is the k8s label that can be added to a
-// `CiliumEnvoyConfig`. This way the Cilium BPF Metadata listener filter is configured
-// to use the original source address when extracting the metadata for a request.
-const UseOriginalSourceAddressLabel = "cilium.io/use-original-source-address"
+const (
+	// UseOriginalSourceAddressLabel is the k8s label that can be added to a
+	// `CiliumEnvoyConfig`. This way the Cilium BPF Metadata listener filter is configured
+	// to use the original source address when extracting the metadata for a request.
+	UseOriginalSourceAddressLabel = "cilium.io/use-original-source-address"
+
+	InjectCiliumFiltersLabel = "cilium.io/inject-cilium-filters"
+)
 
 const (
 	// AnnotationIstioSidecarStatus is the annotation added by Istio into a pod

@@ -189,6 +189,7 @@ func (s *K8sWatcherSuite) TestUpdateToServiceEndpointsGH9525(c *C) {
 		nil,
 		nil,
 		nil,
+		nil,
 		policyManager,
 		policyRepository,
 		nil,
@@ -514,6 +515,7 @@ func (s *K8sWatcherSuite) Test_addK8sSVCs_ClusterIP(c *C) {
 		nil,
 		nil,
 		nil,
+		nil,
 		policyManager,
 		policyRepository,
 		svcManager,
@@ -665,6 +667,7 @@ func (s *K8sWatcherSuite) TestChangeSVCPort(c *C) {
 
 	dp := fakeDatapath.NewDatapath()
 	w := NewK8sWatcher(
+		nil,
 		nil,
 		nil,
 		nil,
@@ -1151,6 +1154,7 @@ func (s *K8sWatcherSuite) Test_addK8sSVCs_NodePort(c *C) {
 		nil,
 		nil,
 		nil,
+		nil,
 		policyManager,
 		policyRepository,
 		svcManager,
@@ -1468,6 +1472,7 @@ func (s *K8sWatcherSuite) Test_addK8sSVCs_GH9576_1(c *C) {
 		nil,
 		nil,
 		nil,
+		nil,
 		policyManager,
 		policyRepository,
 		svcManager,
@@ -1775,6 +1780,7 @@ func (s *K8sWatcherSuite) Test_addK8sSVCs_GH9576_2(c *C) {
 
 	dp := fakeDatapath.NewDatapath()
 	w := NewK8sWatcher(
+		nil,
 		nil,
 		nil,
 		nil,
@@ -2699,6 +2705,7 @@ func (s *K8sWatcherSuite) Test_addK8sSVCs_ExternalIPs(c *C) {
 
 	dp := fakeDatapath.NewDatapath()
 	w := NewK8sWatcher(
+		nil,
 		nil,
 		nil,
 		nil,

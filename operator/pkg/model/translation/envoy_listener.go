@@ -55,6 +55,24 @@ func WithProxyProtocol() ListenerMutator {
 	}
 }
 
+func WithHostPortAddress(port uint32) ListenerMutator {
+	return func(listener *envoy_config_listener.Listener) *envoy_config_listener.Listener {
+		listener.Address = &envoy_config_core_v3.Address{
+			Address: &envoy_config_core_v3.Address_SocketAddress{
+				SocketAddress: &envoy_config_core_v3.SocketAddress{
+					Address: "0.0.0.0",
+					PortSpecifier: &envoy_config_core_v3.SocketAddress_PortValue{
+						// Port preferrably outside of k8s node port range (30000-32767)
+						PortValue: port,
+					},
+				},
+			},
+		}
+
+		return listener
+	}
+}
+
 func WithSocketOption(tcpKeepAlive, tcpKeepIdleInSeconds, tcpKeepAliveProbeIntervalInSeconds, tcpKeepAliveMaxFailures int64) ListenerMutator {
 	return func(listener *envoy_config_listener.Listener) *envoy_config_listener.Listener {
 		listener.SocketOptions = []*envoy_config_core_v3.SocketOption{

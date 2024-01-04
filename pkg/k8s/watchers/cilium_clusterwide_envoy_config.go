@@ -95,6 +95,7 @@ func (k *K8sWatcher) addCiliumClusterwideEnvoyConfig(ccec *cilium_v2.CiliumClust
 		k.envoyConfigManager,
 		len(ccec.Spec.Services) > 0,
 		useOriginalSourceAddress(&ccec.ObjectMeta),
+		injectCiliumFilters(&ccec.ObjectMeta),
 	)
 	if err != nil {
 		scopedLog.WithError(err).Warn("Failed to add CiliumClusterwideEnvoyConfig: malformed Envoy config")
@@ -141,6 +142,7 @@ func (k *K8sWatcher) updateCiliumClusterwideEnvoyConfig(oldCCEC *cilium_v2.Ciliu
 		k.envoyConfigManager,
 		len(oldCCEC.Spec.Services) > 0,
 		useOriginalSourceAddress(&oldCCEC.ObjectMeta),
+		injectCiliumFilters(&oldCCEC.ObjectMeta),
 	)
 	if err != nil {
 		scopedLog.WithError(err).Warn("Failed to update CiliumClusterwideEnvoyConfig: malformed old Envoy config")
@@ -154,6 +156,7 @@ func (k *K8sWatcher) updateCiliumClusterwideEnvoyConfig(oldCCEC *cilium_v2.Ciliu
 		k.envoyConfigManager,
 		len(newCCEC.Spec.Services) > 0,
 		useOriginalSourceAddress(&newCCEC.ObjectMeta),
+		injectCiliumFilters(&newCCEC.ObjectMeta),
 	)
 	if err != nil {
 		scopedLog.WithError(err).Warn("Failed to update CiliumClusterwideEnvoyConfig: malformed new Envoy config")
@@ -200,6 +203,7 @@ func (k *K8sWatcher) deleteCiliumClusterwideEnvoyConfig(ccec *cilium_v2.CiliumCl
 		k.envoyConfigManager,
 		len(ccec.Spec.Services) > 0,
 		useOriginalSourceAddress(&ccec.ObjectMeta),
+		injectCiliumFilters(&ccec.ObjectMeta),
 	)
 	if err != nil {
 		scopedLog.WithError(err).Warn("Failed to delete CiliumClusterwideEnvoyConfig: parsing rersource names failed")

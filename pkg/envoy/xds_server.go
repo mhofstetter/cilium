@@ -338,7 +338,7 @@ func (s *xdsServer) getHttpFilterChainProto(clusterName string, tls bool) *envoy
 	idleTimeout := int64(option.Config.HTTPIdleTimeout)       // seconds
 	maxGRPCTimeout := int64(option.Config.HTTPMaxGRPCTimeout) // seconds
 	numRetries := uint32(option.Config.HTTPRetryCount)
-	retryTimeout := int64(option.Config.HTTPRetryTimeout) //seconds
+	retryTimeout := int64(option.Config.HTTPRetryTimeout) // seconds
 
 	hcmConfig := &envoy_config_http.HttpConnectionManager{
 		StatPrefix:       "proxy",
@@ -390,7 +390,7 @@ func (s *xdsServer) getHttpFilterChainProto(clusterName string, tls bool) *envoy
 									Cluster: clusterName,
 								},
 								Timeout: &durationpb.Duration{Seconds: requestTimeout},
-								//IdleTimeout: &durationpb.Duration{Seconds: idleTimeout},
+								// IdleTimeout: &durationpb.Duration{Seconds: idleTimeout},
 								RetryPolicy: &envoy_config_route.RetryPolicy{
 									RetryOn:       "5xx",
 									NumRetries:    &wrapperspb.UInt32Value{Value: numRetries},
@@ -805,7 +805,7 @@ func (s *xdsServer) deleteSecret(name string, wg *completion.WaitGroup, callback
 }
 
 // 'l7lb' triggers the upstream mark to embed source pod EndpointID instead of source security ID
-func getListenerFilter(isIngress bool, useOriginalSourceAddr bool, l7lb bool) *envoy_config_listener.ListenerFilter {
+func getCiliumBPFMetadataListenerFilter(isIngress bool, useOriginalSourceAddr bool, l7lb bool) *envoy_config_listener.ListenerFilter {
 	conf := &cilium.BpfMetadata{
 		IsIngress:                isIngress,
 		UseOriginalSourceAddress: useOriginalSourceAddr,
@@ -873,7 +873,7 @@ func (s *xdsServer) getListenerConf(name string, kind policy.L7ParserType, port 
 					TypedConfig: toAny(&envoy_extensions_listener_tls_inspector_v3.TlsInspector{}),
 				},
 			},
-			getListenerFilter(isIngress, mayUseOriginalSourceAddr, false),
+			getCiliumBPFMetadataListenerFilter(isIngress, mayUseOriginalSourceAddr, false),
 		},
 	}
 
@@ -989,7 +989,8 @@ func getL7Rules(l7Rules []api.PortRuleL7, l7Proto string) *cilium.L7NetworkPolic
 						value = &envoy_type_matcher.ValueMatcher{
 							MatchPattern: &envoy_type_matcher.ValueMatcher_PresentMatch{
 								PresentMatch: true,
-							}}
+							},
+						}
 					} else {
 						value = &envoy_type_matcher.ValueMatcher{
 							MatchPattern: &envoy_type_matcher.ValueMatcher_ListMatch{
@@ -1007,7 +1008,8 @@ func getL7Rules(l7Rules []api.PortRuleL7, l7Proto string) *cilium.L7NetworkPolic
 										},
 									},
 								},
-							}}
+							},
+						}
 					}
 					rule.MetadataRule = append(rule.MetadataRule, &envoy_type_matcher.MetadataMatcher{
 						Filter: envoyFilterName,
@@ -1106,7 +1108,9 @@ func getHTTPRule(secretManager certificatemanager.SecretManager, h *api.PortRule
 							Regex: h.Path,
 						},
 					},
-				}}})
+				},
+			},
+		})
 	}
 	if h.Method != "" {
 		headers = append(headers, &envoy_config_route.HeaderMatcher{
@@ -1118,7 +1122,9 @@ func getHTTPRule(secretManager certificatemanager.SecretManager, h *api.PortRule
 							Regex: h.Method,
 						},
 					},
-				}}})
+				},
+			},
+		})
 	}
 	if h.Host != "" {
 		headers = append(headers, &envoy_config_route.HeaderMatcher{
@@ -1130,7 +1136,9 @@ func getHTTPRule(secretManager certificatemanager.SecretManager, h *api.PortRule
 							Regex: h.Host,
 						},
 					},
-				}}})
+				},
+			},
+		})
 	}
 	for _, hdr := range h.Headers {
 		strs := strings.SplitN(hdr, " ", 2)
@@ -1138,7 +1146,8 @@ func getHTTPRule(secretManager certificatemanager.SecretManager, h *api.PortRule
 			// Remove ':' in "X-Key: true"
 			key := strings.TrimRight(strs[0], ":")
 			// Header presence and matching (literal) value needed.
-			headers = append(headers, &envoy_config_route.HeaderMatcher{Name: key,
+			headers = append(headers, &envoy_config_route.HeaderMatcher{
+				Name: key,
 				HeaderMatchSpecifier: &envoy_config_route.HeaderMatcher_StringMatch{
 					StringMatch: &envoy_type_matcher.StringMatcher{
 						MatchPattern: &envoy_type_matcher.StringMatcher_Exact{
@@ -1149,8 +1158,10 @@ func getHTTPRule(secretManager certificatemanager.SecretManager, h *api.PortRule
 			})
 		} else {
 			// Only header presence needed
-			headers = append(headers, &envoy_config_route.HeaderMatcher{Name: strs[0],
-				HeaderMatchSpecifier: &envoy_config_route.HeaderMatcher_PresentMatch{PresentMatch: true}})
+			headers = append(headers, &envoy_config_route.HeaderMatcher{
+				Name:                 strs[0],
+				HeaderMatchSpecifier: &envoy_config_route.HeaderMatcher_PresentMatch{PresentMatch: true},
+			})
 		}
 	}
 
@@ -1175,7 +1186,8 @@ func getHTTPRule(secretManager certificatemanager.SecretManager, h *api.PortRule
 			log.WithError(err).Warning("Failed fetching K8s Secret, header match will fail")
 			// Envoy treats an empty exact match value as matching ANY value; adding
 			// InvertMatch: true here will cause this rule to NEVER match.
-			headers = append(headers, &envoy_config_route.HeaderMatcher{Name: hdr.Name,
+			headers = append(headers, &envoy_config_route.HeaderMatcher{
+				Name: hdr.Name,
 				HeaderMatchSpecifier: &envoy_config_route.HeaderMatcher_StringMatch{
 					StringMatch: &envoy_type_matcher.StringMatcher{
 						MatchPattern: &envoy_type_matcher.StringMatcher_Exact{
@@ -1183,23 +1195,28 @@ func getHTTPRule(secretManager certificatemanager.SecretManager, h *api.PortRule
 						},
 					},
 				},
-				InvertMatch: true})
+				InvertMatch: true,
+			})
 		} else {
 			// Header presence and matching (literal) value needed.
 			if mismatch_action == cilium.HeaderMatch_FAIL_ON_MISMATCH {
 				if value != "" {
-					headers = append(headers, &envoy_config_route.HeaderMatcher{Name: hdr.Name,
+					headers = append(headers, &envoy_config_route.HeaderMatcher{
+						Name: hdr.Name,
 						HeaderMatchSpecifier: &envoy_config_route.HeaderMatcher_StringMatch{
 							StringMatch: &envoy_type_matcher.StringMatcher{
 								MatchPattern: &envoy_type_matcher.StringMatcher_Exact{
 									Exact: value,
 								},
 							},
-						}})
+						},
+					})
 				} else {
 					// Only header presence needed
-					headers = append(headers, &envoy_config_route.HeaderMatcher{Name: hdr.Name,
-						HeaderMatchSpecifier: &envoy_config_route.HeaderMatcher_PresentMatch{PresentMatch: true}})
+					headers = append(headers, &envoy_config_route.HeaderMatcher{
+						Name:                 hdr.Name,
+						HeaderMatchSpecifier: &envoy_config_route.HeaderMatcher_PresentMatch{PresentMatch: true},
+					})
 				}
 			} else {
 				log.Debugf("HeaderMatches: Adding %s", hdr.Name)
@@ -1577,7 +1594,8 @@ func getDirectionNetworkPolicy(ep endpoint.EndpointUpdater, l4Policy policy.L4Po
 
 // getNetworkPolicy converts a network policy into a cilium.NetworkPolicy.
 func getNetworkPolicy(ep endpoint.EndpointUpdater, vis *policy.VisibilityPolicy, ips []string, l4Policy *policy.L4Policy,
-	ingressPolicyEnforced, egressPolicyEnforced bool) *cilium.NetworkPolicy {
+	ingressPolicyEnforced, egressPolicyEnforced bool,
+) *cilium.NetworkPolicy {
 	p := &cilium.NetworkPolicy{
 		EndpointIps:      ips,
 		EndpointId:       ep.GetID(),
@@ -1632,7 +1650,8 @@ func getNodeIDs(ep endpoint.EndpointUpdater, policy *policy.L4Policy) []string {
 }
 
 func (s *xdsServer) UpdateNetworkPolicy(ep endpoint.EndpointUpdater, vis *policy.VisibilityPolicy, policy *policy.L4Policy,
-	ingressPolicyEnforced, egressPolicyEnforced bool, wg *completion.WaitGroup) (error, func() error) {
+	ingressPolicyEnforced, egressPolicyEnforced bool, wg *completion.WaitGroup,
+) (error, func() error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 

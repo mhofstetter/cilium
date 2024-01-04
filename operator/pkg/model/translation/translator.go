@@ -144,6 +144,7 @@ func (i *defaultTranslator) getHTTPRouteListener(m *model.Model) []ciliumv2.XDSR
 	if i.useProxyProtocol {
 		mutatorFuncs = append(mutatorFuncs, WithProxyProtocol())
 	}
+	mutatorFuncs = append(mutatorFuncs, WithHostPortAddress(80))
 	l, _ := NewHTTPListenerWithDefaults("listener", i.secretsNamespace, tlsMap, mutatorFuncs...)
 	return []ciliumv2.XDSResource{l}
 }
@@ -172,6 +173,7 @@ func (i *defaultTranslator) getTLSRouteListener(m *model.Model) []ciliumv2.XDSRe
 	if i.useProxyProtocol {
 		mutatorFuncs = append(mutatorFuncs, WithProxyProtocol())
 	}
+	mutatorFuncs = append(mutatorFuncs, WithHostPortAddress(443))
 	l, _ := NewSNIListenerWithDefaults("listener", backendsMap, mutatorFuncs...)
 	return []ciliumv2.XDSResource{l}
 }
