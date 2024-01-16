@@ -14,7 +14,6 @@ import (
 	"github.com/cilium/cilium/pkg/hive/job"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/resource"
-	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
 	"github.com/cilium/cilium/pkg/service"
@@ -38,9 +37,6 @@ type watchParams struct {
 	Lifecycle   hive.Lifecycle
 	JobRegistry job.Registry
 	Scope       cell.Scope
-
-	// Local node needs to be initialized first
-	LocalNodeStore *node.LocalNodeStore
 
 	PolicyUpdater  *policy.Updater
 	ServiceManager service.ServiceManager
