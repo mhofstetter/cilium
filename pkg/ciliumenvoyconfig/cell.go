@@ -28,6 +28,7 @@ var Cell = cell.Module(
 	"CiliumEnvoyConfig",
 
 	cell.Invoke(registerCECK8sWatcher),
+	cell.ProvidePrivate(newEnvoyServiceBackendSyncer),
 )
 
 type watchParams struct {
@@ -46,7 +47,7 @@ type watchParams struct {
 
 	Proxy         *proxy.Proxy
 	XdsServer     envoy.XDSServer
-	BackendSyncer *envoy.EnvoyServiceBackendSyncer
+	BackendSyncer *envoyServiceBackendSyncer
 
 	CECResources  resource.Resource[*ciliumv2.CiliumEnvoyConfig]
 	CCECResources resource.Resource[*ciliumv2.CiliumClusterwideEnvoyConfig]
