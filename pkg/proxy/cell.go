@@ -23,6 +23,7 @@ var Cell = cell.Module(
 	cell.Provide(func() ProxyConfig { return DefaultProxyConfig }),
 
 	cell.Provide(newProxy),
+	cell.Provide(newPortAllocator),
 	cell.Provide(newEnvoyProxyIntegration),
 	cell.Provide(newDNSProxyIntegration),
 	cell.ProvidePrivate(endpoint.NewEndpointInfoRegistry),
@@ -39,6 +40,10 @@ var DefaultProxyConfig = ProxyConfig{
 	// The default value for the DNS proxy port is set to 0 to allocate a random
 	// port.
 	DNSProxyPort: 0,
+}
+
+func newPortAllocator(proxy *Proxy) PortAllocator {
+	return proxy
 }
 
 type proxyParams struct {

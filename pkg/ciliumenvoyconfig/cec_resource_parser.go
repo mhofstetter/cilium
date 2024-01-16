@@ -30,20 +30,14 @@ import (
 
 type cecResourceParser struct {
 	logger        logrus.FieldLogger
-	portAllocator PortAllocator
+	portAllocator proxy.PortAllocator
 }
 
-func newCECResourceParser(logger logrus.FieldLogger, proxy *proxy.Proxy) *cecResourceParser {
+func newCECResourceParser(logger logrus.FieldLogger, portAllocator proxy.PortAllocator) *cecResourceParser {
 	return &cecResourceParser{
 		logger:        logger,
-		portAllocator: proxy,
+		portAllocator: portAllocator,
 	}
-}
-
-type PortAllocator interface {
-	AllocateProxyPort(name string, ingress, localOnly bool) (uint16, error)
-	AckProxyPort(ctx context.Context, name string) error
-	ReleaseProxyPort(name string) error
 }
 
 // parseResources parses all supported Envoy resource types from CiliumEnvoyConfig CRD to Resources
