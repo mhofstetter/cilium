@@ -171,12 +171,8 @@ func ParseResources(cecNamespace string, cecName string, anySlice []cilium_v2.XD
 				}
 			}
 
-			if option.Config.EnableBPFTProxy {
-				// Envoy since 1.20.0 uses SO_REUSEPORT on listeners by default.
-				// BPF TPROXY is currently not compatible with SO_REUSEPORT, so
-				// disable it.  Note that this may degrade Envoy performance.
-				listener.EnableReusePort = &wrapperspb.BoolValue{Value: false}
-			}
+			// Disable enforced reuseport. It's handled via BpfMetadata enable_reuse_port
+			listener.EnableReusePort = &wrapperspb.BoolValue{Value: false}
 
 			// Figure out if this is an internal listener
 			isInternalListener := listener.GetInternalListener() != nil

@@ -229,8 +229,8 @@ github.com/cilium/linters/timeafter
 # github.com/cilium/lumberjack/v2 v2.3.0
 ## explicit; go 1.13
 github.com/cilium/lumberjack/v2
-# github.com/cilium/proxy v0.0.0-20231031145409-f19708f3d018
-## explicit; go 1.20
+# github.com/cilium/proxy v0.0.0-20240122125631-df5e3c8456a3
+## explicit; go 1.21
 github.com/cilium/proxy/go/cilium/api
 github.com/cilium/proxy/go/contrib/envoy/extensions/filters/network/mysql_proxy/v3
 github.com/cilium/proxy/go/envoy/admin/v3
