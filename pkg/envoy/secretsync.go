@@ -11,7 +11,10 @@ import (
 	envoy_entensions_tls_v3 "github.com/cilium/proxy/go/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/sirupsen/logrus"
 
+	"github.com/cilium/cilium/pkg/k8s/resource"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
+	"github.com/cilium/cilium/pkg/lock"
+	"github.com/cilium/cilium/pkg/logging/logfields"
 )
 
 const (
@@ -23,16 +26,90 @@ const (
 	caCrtAttribute = "ca.crt"
 )
 
+// secretSyncer is responsible to sync K8s TLS Secrets in pre-defined namespaces
+// via xDS SDS to Envoy.
 type secretSyncer struct {
 	logger         logrus.FieldLogger
 	envoyXdsServer XDSServer
+
+	mutex   lock.Mutex
+	secrets map[resource.Key]*slim_corev1.Secret
 }
 
 func newSecretSyncer(logger logrus.FieldLogger, envoyXdsServer XDSServer) *secretSyncer {
 	return &secretSyncer{
 		logger:         logger,
 		envoyXdsServer: envoyXdsServer,
+		secrets:        map[resource.Key]*slim_corev1.Secret{},
 	}
+}
+
+func (r *secretSyncer) handleSecretEvent(ctx context.Context, event resource.Event[*slim_corev1.Secret]) error {
+	scopedLogger := r.logger.
+		WithField(logfields.K8sNamespace, event.Key.Namespace).
+		WithField("name", event.Key.Name)
+
+	var err error
+
+	switch event.Kind {
+	case resource.Upsert:
+		scopedLogger.Debug("Received Secret upsert event")
+		err = r.handleUpsert(ctx, event.Key, event.Object)
+		if err != nil {
+			scopedLogger.WithError(err).Error("failed to handle Secret upsert")
+			err = fmt.Errorf("failed to handle CEC upsert: %w", err)
+		}
+	case resource.Delete:
+		scopedLogger.Debug("Received Secret delete event")
+		err = r.handleDelete(ctx, event.Key)
+		if err != nil {
+			scopedLogger.WithError(err).Error("failed to handle Secret delete")
+			err = fmt.Errorf("failed to handle Secret delete: %w", err)
+		}
+	}
+
+	event.Done(err)
+
+	return nil
+}
+
+func (r *secretSyncer) handleUpsert(ctx context.Context, key resource.Key, secret *slim_corev1.Secret) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	appliedSecret, exists := r.secrets[key]
+	if exists {
+		if err := r.updateK8sSecretV1(ctx, appliedSecret, secret); err != nil {
+			return err
+		}
+	} else {
+		if err := r.addK8sSecretV1(ctx, secret); err != nil {
+			return err
+		}
+	}
+
+	r.secrets[key] = secret.DeepCopy()
+
+	return nil
+}
+
+func (r *secretSyncer) handleDelete(ctx context.Context, key resource.Key) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	appliedSecret, exists := r.secrets[key]
+	if !exists {
+		r.logger.WithField("key", key).Warn("Secret not found")
+		return nil
+	}
+
+	if err := r.deleteK8sSecretV1(ctx, appliedSecret); err != nil {
+		return err
+	}
+
+	delete(r.secrets, key)
+
+	return nil
 }
 
 // addK8sSecretV1 performs Envoy upsert operation for newly added secret.
