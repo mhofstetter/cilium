@@ -5,6 +5,7 @@ package envoy
 
 import (
 	"context"
+	"errors"
 	"io"
 	"testing"
 
@@ -41,152 +42,113 @@ func Test_k8sToEnvoySecret(t *testing.T) {
 }
 
 func TestHandleSecretEvent(t *testing.T) {
-	logger := logrus.New()
-	logger.SetOutput(io.Discard)
-
-	xdsServer := &fakeXdsServer{}
-
-	syncer := newSecretSyncer(logger, xdsServer)
-
-	doneCalled := false
-	var doneError error
-
-	doneFunc := func(err error) {
-		doneCalled = true
-		doneError = err
+	tests := []struct {
+		name                 string
+		secret               *slim_corev1.Secret
+		kind                 resource.EventKind
+		currentNodeLabels    map[string]string
+		newNodeLabels        map[string]string
+		xdsShouldReturnError bool
+		expectedError        bool
+		expectedUpserts      int
+		expectedDeletions    int
+	}{
+		{
+			name:              "upserted secret should be upserted in xDS",
+			secret:            testSecret(),
+			kind:              resource.Upsert,
+			expectedError:     false,
+			expectedUpserts:   1,
+			expectedDeletions: 0,
+		},
+		{
+			name:              "deleted secret should be deleted in xDS",
+			secret:            testSecret(),
+			kind:              resource.Delete,
+			expectedError:     false,
+			expectedUpserts:   0,
+			expectedDeletions: 1,
+		},
+		{
+			name:              "sync event should not be handled",
+			secret:            testSecret(),
+			kind:              resource.Sync,
+			expectedError:     false,
+			expectedUpserts:   0,
+			expectedDeletions: 0,
+		},
+		{
+			name:              "upserting a nil secret should result in an error",
+			secret:            nil,
+			kind:              resource.Upsert,
+			expectedError:     true,
+			expectedUpserts:   0,
+			expectedDeletions: 0,
+		},
+		{
+			name:              "delete event with empty key namespace and/or name should result in an error",
+			secret:            nil,
+			kind:              resource.Delete,
+			expectedError:     true,
+			expectedUpserts:   0,
+			expectedDeletions: 0,
+		},
+		{
+			name:                 "upsert errors of xDS server should be returned",
+			secret:               testSecret(),
+			kind:                 resource.Upsert,
+			xdsShouldReturnError: true,
+			expectedError:        true,
+			expectedUpserts:      0,
+			expectedDeletions:    0,
+		},
+		{
+			name:                 "delete errors of xDS server should be returned",
+			secret:               testSecret(),
+			kind:                 resource.Delete,
+			xdsShouldReturnError: true,
+			expectedError:        true,
+			expectedUpserts:      0,
+			expectedDeletions:    0,
+		},
 	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			logger := logrus.New()
+			logger.SetOutput(io.Discard)
 
-	// init
-	assert.Empty(t, syncer.secrets)
+			xdsServer := &fakeXdsServer{
+				returnError: tc.xdsShouldReturnError,
+			}
 
-	// upsert of unknown secret1
-	secret1 := testSecret("test1", "content")
-	err := syncer.handleSecretEvent(context.Background(), testEvent(secret1, resource.Upsert, doneFunc))
-	assert.NoError(t, err)
+			syncer := newSecretSyncer(logger, xdsServer)
 
-	assert.Len(t, syncer.secrets, 1)
-	assert.Equal(t, secret1, syncer.secrets[resource.NewKey(secret1)])
+			doneCalled := false
+			var doneError error
 
-	assert.True(t, doneCalled)
-	assert.NoError(t, doneError)
+			doneFunc := func(err error) {
+				doneCalled = true
+				doneError = err
+			}
 
-	assert.Equal(t, 1, xdsServer.nrOfUpserts, "Secret should be upserted")
-	assert.Equal(t, 0, xdsServer.nrOfUpdates, "Secret should't be updated")
-	assert.Equal(t, 0, xdsServer.nrOfDeletions, "Secret should't be deleted")
+			err := syncer.handleSecretEvent(context.Background(), testEvent(tc.secret, tc.kind, doneFunc))
+			assert.Equal(t, tc.expectedError, err != nil, "Expected returned error should match")
 
-	// sync
-	xdsServer.Reset()
-	doneCalled = false
+			assert.True(t, doneCalled, "Done must be called on the event in all cases")
+			assert.Equal(t, tc.expectedError, doneError != nil, "Expected done error should match")
 
-	secret1 = testSecret("test1", "content")
-	err = syncer.handleSecretEvent(context.Background(), testEvent(secret1, resource.Sync, doneFunc))
-	assert.NoError(t, err)
-
-	assert.Len(t, syncer.secrets, 1)
-	assert.Equal(t, secret1, syncer.secrets[resource.NewKey(secret1)])
-
-	assert.True(t, doneCalled)
-	assert.NoError(t, doneError)
-
-	assert.Equal(t, 0, xdsServer.nrOfUpserts, "Secret shouldn't be upserted")
-	assert.Equal(t, 0, xdsServer.nrOfUpdates, "Secret should't be updated")
-	assert.Equal(t, 0, xdsServer.nrOfDeletions, "Secret should't be deleted")
-
-	// upsert of existing secret without changes
-	xdsServer.Reset()
-	doneCalled = false
-
-	secret1 = testSecret("test1", "content")
-	err = syncer.handleSecretEvent(context.Background(), testEvent(secret1, resource.Upsert, doneFunc))
-	assert.NoError(t, err)
-
-	assert.Len(t, syncer.secrets, 1)
-	assert.Equal(t, secret1, syncer.secrets[resource.NewKey(secret1)])
-
-	assert.True(t, doneCalled)
-	assert.NoError(t, doneError)
-
-	assert.Equal(t, 0, xdsServer.nrOfUpserts, "Secret shouldn't be upserted")
-	assert.Equal(t, 0, xdsServer.nrOfUpdates, "Secret shouldn't be updated")
-	assert.Equal(t, 0, xdsServer.nrOfDeletions, "Secret should't be deleted")
-
-	// upsert of existing secret with changes
-	xdsServer.Reset()
-	doneCalled = false
-
-	secret1 = testSecret("test1", "changed-content")
-	err = syncer.handleSecretEvent(context.Background(), testEvent(secret1, resource.Upsert, doneFunc))
-	assert.NoError(t, err)
-
-	assert.Len(t, syncer.secrets, 1)
-	assert.Equal(t, secret1, syncer.secrets[resource.NewKey(secret1)])
-
-	assert.True(t, doneCalled)
-	assert.NoError(t, doneError)
-
-	assert.Equal(t, 1, xdsServer.nrOfUpserts, "Secret should be upserted")
-	assert.Equal(t, 0, xdsServer.nrOfUpdates, "Secret shouldn't be updated")
-	assert.Equal(t, 0, xdsServer.nrOfDeletions, "Secret should't be deleted")
-
-	// upsert of additional secret
-	xdsServer.Reset()
-	doneCalled = false
-
-	secret2 := testSecret("test2", "content")
-	err = syncer.handleSecretEvent(context.Background(), testEvent(secret2, resource.Upsert, doneFunc))
-	assert.NoError(t, err)
-
-	assert.Len(t, syncer.secrets, 2)
-	assert.Equal(t, secret1, syncer.secrets[resource.NewKey(secret1)])
-	assert.Equal(t, secret2, syncer.secrets[resource.NewKey(secret2)])
-
-	assert.True(t, doneCalled)
-	assert.NoError(t, doneError)
-
-	assert.Equal(t, 1, xdsServer.nrOfUpserts, "Secret should be upserted")
-	assert.Equal(t, 0, xdsServer.nrOfUpdates, "Secret shouldn't be updated")
-	assert.Equal(t, 0, xdsServer.nrOfDeletions, "Secret should't be deleted")
-
-	// delete of existing secret
-	xdsServer.Reset()
-	doneCalled = false
-
-	secret1 = testSecret("test1", "content")
-	err = syncer.handleSecretEvent(context.Background(), testEvent(secret1, resource.Delete, doneFunc))
-	assert.NoError(t, err)
-
-	assert.Len(t, syncer.secrets, 1)
-	assert.Equal(t, secret2, syncer.secrets[resource.NewKey(secret2)])
-
-	assert.True(t, doneCalled)
-	assert.NoError(t, doneError)
-
-	assert.Equal(t, 0, xdsServer.nrOfUpserts, "Secret shouldn't be upserted")
-	assert.Equal(t, 0, xdsServer.nrOfUpdates, "Secret shouldn't be updated")
-	assert.Equal(t, 1, xdsServer.nrOfDeletions, "Secret should be deleted")
-
-	// delete of unexisting secret
-	xdsServer.Reset()
-	doneCalled = false
-
-	secret3 := testSecret("test3", "content")
-	err = syncer.handleSecretEvent(context.Background(), testEvent(secret3, resource.Delete, doneFunc))
-	assert.NoError(t, err)
-
-	assert.Len(t, syncer.secrets, 1)
-	assert.Equal(t, secret2, syncer.secrets[resource.NewKey(secret2)])
-
-	assert.True(t, doneCalled)
-	assert.NoError(t, doneError, "deletion of unknown secret shouldn't result in an error")
-
-	assert.Equal(t, 0, xdsServer.nrOfUpserts, "Secret shouldn't be upserted")
-	assert.Equal(t, 0, xdsServer.nrOfUpdates, "Secret shouldn't be updated")
-	assert.Equal(t, 0, xdsServer.nrOfDeletions, "Secret shouldn't be deleted")
+			assert.Equal(t, tc.expectedUpserts, xdsServer.nrOfUpserts)
+			assert.Equal(t, tc.expectedDeletions, xdsServer.nrOfDeletions)
+			assert.Equal(t, 0, xdsServer.nrOfUpdates, "Secret sync should never use update functionality")
+		})
+	}
 }
 
 func testEvent(secret *slim_corev1.Secret, eventKind resource.EventKind, eventDone func(err error)) resource.Event[*slim_corev1.Secret] {
 	event := resource.Event[*slim_corev1.Secret]{}
-	event.Key = resource.NewKey(secret)
+	if secret != nil {
+		event.Key = resource.NewKey(secret)
+	}
 	event.Object = secret
 	event.Kind = eventKind
 	event.Done = eventDone
@@ -194,14 +156,14 @@ func testEvent(secret *slim_corev1.Secret, eventKind resource.EventKind, eventDo
 	return event
 }
 
-func testSecret(secretName string, data string) *slim_corev1.Secret {
+func testSecret() *slim_corev1.Secret {
 	return &slim_corev1.Secret{
 		ObjectMeta: slim_metav1.ObjectMeta{
 			Namespace: "test",
-			Name:      secretName,
+			Name:      "test",
 		},
 		Data: map[string]slim_corev1.Bytes{
-			"tls.crt": []byte(data),
+			"tls.crt": []byte("content"),
 		},
 		Type: "kubernetes.io/tls",
 	}
@@ -209,6 +171,7 @@ func testSecret(secretName string, data string) *slim_corev1.Secret {
 
 type fakeXdsServer struct {
 	nrOfDeletions int
+	returnError   bool
 	nrOfUpdates   int
 	nrOfUpserts   int
 }
@@ -222,16 +185,28 @@ func (r *fakeXdsServer) Reset() {
 }
 
 func (r *fakeXdsServer) UpdateEnvoyResources(ctx context.Context, old Resources, new Resources) error {
+	if r.returnError {
+		return errors.New("failed to update envoy resources")
+	}
+
 	r.nrOfUpdates++
 	return nil
 }
 
 func (r *fakeXdsServer) DeleteEnvoyResources(ctx context.Context, resources Resources) error {
+	if r.returnError {
+		return errors.New("failed to delete envoy resources")
+	}
+
 	r.nrOfDeletions++
 	return nil
 }
 
 func (r *fakeXdsServer) UpsertEnvoyResources(ctx context.Context, resources Resources) error {
+	if r.returnError {
+		return errors.New("failed to upsert envoy resources")
+	}
+
 	r.nrOfUpserts++
 	return nil
 }

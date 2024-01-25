@@ -5,6 +5,7 @@ package envoy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	envoy_config_core_v3 "github.com/cilium/proxy/go/envoy/config/core/v3"
@@ -13,7 +14,6 @@ import (
 
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
-	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 )
 
@@ -31,16 +31,12 @@ const (
 type secretSyncer struct {
 	logger         logrus.FieldLogger
 	envoyXdsServer XDSServer
-
-	mutex   lock.Mutex
-	secrets map[resource.Key]*slim_corev1.Secret
 }
 
 func newSecretSyncer(logger logrus.FieldLogger, envoyXdsServer XDSServer) *secretSyncer {
 	return &secretSyncer{
 		logger:         logger,
 		envoyXdsServer: envoyXdsServer,
-		secrets:        map[resource.Key]*slim_corev1.Secret{},
 	}
 }
 
@@ -54,14 +50,14 @@ func (r *secretSyncer) handleSecretEvent(ctx context.Context, event resource.Eve
 	switch event.Kind {
 	case resource.Upsert:
 		scopedLogger.Debug("Received Secret upsert event")
-		err = r.handleUpsert(ctx, event.Key, event.Object)
+		err = r.upsertK8sSecretV1(ctx, event.Object)
 		if err != nil {
 			scopedLogger.WithError(err).Error("failed to handle Secret upsert")
 			err = fmt.Errorf("failed to handle CEC upsert: %w", err)
 		}
 	case resource.Delete:
 		scopedLogger.Debug("Received Secret delete event")
-		err = r.handleDelete(ctx, event.Key)
+		err = r.deleteK8sSecretV1(ctx, event.Key)
 		if err != nil {
 			scopedLogger.WithError(err).Error("failed to handle Secret delete")
 			err = fmt.Errorf("failed to handle Secret delete: %w", err)
@@ -73,71 +69,29 @@ func (r *secretSyncer) handleSecretEvent(ctx context.Context, event resource.Eve
 	return err
 }
 
-func (r *secretSyncer) handleUpsert(ctx context.Context, key resource.Key, secret *slim_corev1.Secret) error {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	appliedSecret, exists := r.secrets[key]
-	if exists {
-		if err := r.updateK8sSecretV1(ctx, appliedSecret, secret); err != nil {
-			return err
-		}
-	} else {
-		if err := r.addK8sSecretV1(ctx, secret); err != nil {
-			return err
-		}
+// updateK8sSecretV1 performs Envoy upsert operation for added or updated secret.
+func (r *secretSyncer) upsertK8sSecretV1(ctx context.Context, secret *slim_corev1.Secret) error {
+	if secret == nil {
+		return errors.New("secret is nil")
 	}
 
-	r.secrets[key] = secret.DeepCopy()
-
-	return nil
-}
-
-func (r *secretSyncer) handleDelete(ctx context.Context, key resource.Key) error {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-
-	appliedSecret, exists := r.secrets[key]
-	if !exists {
-		r.logger.WithField("key", key).Warn("Secret not found")
-		return nil
-	}
-
-	if err := r.deleteK8sSecretV1(ctx, appliedSecret); err != nil {
-		return err
-	}
-
-	delete(r.secrets, key)
-
-	return nil
-}
-
-// addK8sSecretV1 performs Envoy upsert operation for newly added secret.
-func (r *secretSyncer) addK8sSecretV1(ctx context.Context, secret *slim_corev1.Secret) error {
 	resource := Resources{
 		Secrets: []*envoy_entensions_tls_v3.Secret{k8sToEnvoySecret(secret)},
 	}
 	return r.envoyXdsServer.UpsertEnvoyResources(ctx, resource)
 }
 
-// updateK8sSecretV1 performs Envoy upsert operation for updated secret (if required).
-func (r *secretSyncer) updateK8sSecretV1(ctx context.Context, oldSecret, newSecret *slim_corev1.Secret) error {
-	if oldSecret != nil && oldSecret.DeepEqual(newSecret) {
-		return nil
-	}
-	resource := Resources{
-		Secrets: []*envoy_entensions_tls_v3.Secret{k8sToEnvoySecret(newSecret)},
-	}
-	return r.envoyXdsServer.UpsertEnvoyResources(ctx, resource)
-}
-
 // deleteK8sSecretV1 makes sure the related secret values in Envoy SDS is removed.
-func (r *secretSyncer) deleteK8sSecretV1(ctx context.Context, secret *slim_corev1.Secret) error {
+func (r *secretSyncer) deleteK8sSecretV1(ctx context.Context, key resource.Key) error {
+	if len(key.Namespace) == 0 || len(key.Name) == 0 {
+		return errors.New("key has empty namespace and/or name")
+	}
+
 	resource := Resources{
 		Secrets: []*envoy_entensions_tls_v3.Secret{
 			{
 				// For deletion, only the name is required.
-				Name: getEnvoySecretName(secret.GetNamespace(), secret.GetName()),
+				Name: getEnvoySecretName(key.Namespace, key.Name),
 			},
 		},
 	}
