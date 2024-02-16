@@ -164,7 +164,7 @@ func (i *cecTranslator) getTLSRouteListener(m *model.Model) []ciliumv2.XDSResour
 	if i.useProxyProtocol {
 		mutatorFuncs = append(mutatorFuncs, WithProxyProtocol())
 	}
-	l, _ := NewSNIListenerWithDefaults("listener", backendsMap, mutatorFuncs...)
+	l, _ := NewSNIListenerWithDefaults("listener-tls", backendsMap, mutatorFuncs...)
 	return []ciliumv2.XDSResource{l}
 }
 

@@ -227,7 +227,7 @@ var basicTLSListenersCiliumEnvoyConfig = &ciliumv2.CiliumEnvoyConfig{
 		Resources: []ciliumv2.XDSResource{
 			{
 				Any: toAny(&envoy_config_listener.Listener{
-					Name: "listener",
+					Name: "listener-tls",
 					FilterChains: []*envoy_config_listener.FilterChain{{
 						FilterChainMatch: &envoy_config_listener.FilterChainMatch{
 							ServerNames:       []string{"foo.com"},
