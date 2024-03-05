@@ -63,11 +63,17 @@ var (
 
 // The compile-time check for whether the structs implement the interfaces
 var _ RevNatKey = (*RevNat6Key)(nil)
+
 var _ RevNatValue = (*RevNat6Value)(nil)
+
 var _ ServiceKey = (*Service6Key)(nil)
+
 var _ ServiceValue = (*Service6Value)(nil)
+
 var _ BackendKey = (*Backend6Key)(nil)
+
 var _ BackendValue = (*Backend6Value)(nil)
+
 var _ Backend = (*Backend6)(nil)
 
 type RevNat6Key struct {
@@ -78,10 +84,13 @@ func NewRevNat6Key(value uint16) *RevNat6Key {
 	return &RevNat6Key{value}
 }
 
-func (v *RevNat6Key) Map() *bpf.Map   { return RevNat6Map }
-func (v *RevNat6Key) String() string  { return fmt.Sprintf("%d", v.ToHost().(*RevNat6Key).Key) }
+func (v *RevNat6Key) Map() *bpf.Map { return RevNat6Map }
+
+func (v *RevNat6Key) String() string { return fmt.Sprintf("%d", v.ToHost().(*RevNat6Key).Key) }
+
 func (v *RevNat6Key) New() bpf.MapKey { return &RevNat6Key{} }
-func (v *RevNat6Key) GetKey() uint16  { return v.Key }
+
+func (v *RevNat6Key) GetKey() uint16 { return v.Key }
 
 // ToNetwork converts RevNat6Key to network byte order.
 func (v *RevNat6Key) ToNetwork() RevNatKey {
@@ -157,16 +166,25 @@ func (k *Service6Key) String() string {
 
 func (k *Service6Key) New() bpf.MapKey { return &Service6Key{} }
 
-func (k *Service6Key) IsIPv6() bool            { return true }
-func (k *Service6Key) IsSurrogate() bool       { return k.GetAddress().IsUnspecified() }
-func (k *Service6Key) Map() *bpf.Map           { return Service6MapV2 }
+func (k *Service6Key) IsIPv6() bool { return true }
+
+func (k *Service6Key) IsSurrogate() bool { return k.GetAddress().IsUnspecified() }
+
+func (k *Service6Key) Map() *bpf.Map { return Service6MapV2 }
+
 func (k *Service6Key) SetBackendSlot(slot int) { k.BackendSlot = uint16(slot) }
-func (k *Service6Key) GetBackendSlot() int     { return int(k.BackendSlot) }
-func (k *Service6Key) SetScope(scope uint8)    { k.Scope = scope }
-func (k *Service6Key) GetScope() uint8         { return k.Scope }
-func (k *Service6Key) GetAddress() net.IP      { return k.Address.IP() }
-func (k *Service6Key) GetPort() uint16         { return k.Port }
-func (k *Service6Key) MapDelete() error        { return k.Map().Delete(k.ToNetwork()) }
+
+func (k *Service6Key) GetBackendSlot() int { return int(k.BackendSlot) }
+
+func (k *Service6Key) SetScope(scope uint8) { k.Scope = scope }
+
+func (k *Service6Key) GetScope() uint8 { return k.Scope }
+
+func (k *Service6Key) GetAddress() net.IP { return k.Address.IP() }
+
+func (k *Service6Key) GetPort() uint16 { return k.Port }
+
+func (k *Service6Key) MapDelete() error { return k.Map().Delete(k.ToNetwork()) }
 
 func (k *Service6Key) RevNatValue() RevNatValue {
 	return &RevNat6Value{
@@ -205,11 +223,16 @@ func (s *Service6Value) String() string {
 	return fmt.Sprintf("%d %d (%d) [0x%x 0x%x]", sHost.BackendID, sHost.Count, sHost.RevNat, sHost.Flags, sHost.Flags2)
 }
 
-func (s *Service6Value) SetCount(count int)   { s.Count = uint16(count) }
-func (s *Service6Value) GetCount() int        { return int(s.Count) }
-func (s *Service6Value) SetRevNat(id int)     { s.RevNat = uint16(id) }
-func (s *Service6Value) GetRevNat() int       { return int(s.RevNat) }
+func (s *Service6Value) SetCount(count int) { s.Count = uint16(count) }
+
+func (s *Service6Value) GetCount() int { return int(s.Count) }
+
+func (s *Service6Value) SetRevNat(id int) { s.RevNat = uint16(id) }
+
+func (s *Service6Value) GetRevNat() int { return int(s.RevNat) }
+
 func (s *Service6Value) RevNatKey() RevNatKey { return &RevNat6Key{s.RevNat} }
+
 func (s *Service6Value) SetFlags(flags uint16) {
 	s.Flags = uint8(flags & 0xff)
 	s.Flags2 = uint8(flags >> 8)
@@ -233,8 +256,13 @@ func (s *Service6Value) SetL7LBProxyPort(port uint16) {
 func (s *Service6Value) SetBackendID(id loadbalancer.BackendID) {
 	s.BackendID = uint32(id)
 }
+
 func (s *Service6Value) GetBackendID() loadbalancer.BackendID {
 	return loadbalancer.BackendID(s.BackendID)
+}
+
+func (s *Service6Value) GetL7LBProxyPort() uint16 {
+	return byteorder.NetworkToHost16(uint16(s.BackendID))
 }
 
 func (s *Service6Value) ToNetwork() ServiceValue {
@@ -258,21 +286,29 @@ func NewBackend6KeyV3(id loadbalancer.BackendID) *Backend6KeyV3 {
 	return &Backend6KeyV3{ID: id}
 }
 
-func (k *Backend6KeyV3) String() string                  { return fmt.Sprintf("%d", k.ID) }
-func (k *Backend6KeyV3) New() bpf.MapKey                 { return &Backend6KeyV3{} }
-func (k *Backend6KeyV3) Map() *bpf.Map                   { return Backend6MapV3 }
+func (k *Backend6KeyV3) String() string { return fmt.Sprintf("%d", k.ID) }
+
+func (k *Backend6KeyV3) New() bpf.MapKey { return &Backend6KeyV3{} }
+
+func (k *Backend6KeyV3) Map() *bpf.Map { return Backend6MapV3 }
+
 func (k *Backend6KeyV3) SetID(id loadbalancer.BackendID) { k.ID = id }
-func (k *Backend6KeyV3) GetID() loadbalancer.BackendID   { return k.ID }
+
+func (k *Backend6KeyV3) GetID() loadbalancer.BackendID { return k.ID }
 
 type Backend6Key struct {
 	ID uint16
 }
 
-func (k *Backend6Key) String() string                  { return fmt.Sprintf("%d", k.ID) }
-func (k *Backend6Key) New() bpf.MapKey                 { return &Backend6Key{} }
-func (k *Backend6Key) Map() *bpf.Map                   { return Backend6Map }
+func (k *Backend6Key) String() string { return fmt.Sprintf("%d", k.ID) }
+
+func (k *Backend6Key) New() bpf.MapKey { return &Backend6Key{} }
+
+func (k *Backend6Key) Map() *bpf.Map { return Backend6Map }
+
 func (k *Backend6Key) SetID(id loadbalancer.BackendID) { k.ID = uint16(id) }
-func (k *Backend6Key) GetID() loadbalancer.BackendID   { return loadbalancer.BackendID(k.ID) }
+
+func (k *Backend6Key) GetID() loadbalancer.BackendID { return loadbalancer.BackendID(k.ID) }
 
 // Backend6Value must match 'struct lb6_backend' in "bpf/lib/common.h".
 type Backend6Value struct {
@@ -303,13 +339,17 @@ func (v *Backend6Value) String() string {
 	vHost := v.ToHost().(*Backend6Value)
 	return fmt.Sprintf("%s://[%s]:%d", vHost.Proto, vHost.Address, vHost.Port)
 }
+
 func (v *Backend6Value) New() bpf.MapValue { return &Backend6Value{} }
 
 func (b *Backend6Value) GetAddress() net.IP { return b.Address.IP() }
+
 func (b *Backend6Value) GetIPCluster() cmtypes.AddrCluster {
 	return cmtypes.AddrClusterFrom(b.Address.Addr(), 0)
 }
+
 func (b *Backend6Value) GetPort() uint16 { return b.Port }
+
 func (b *Backend6Value) GetFlags() uint8 { return b.Flags }
 
 func (v *Backend6Value) ToNetwork() BackendValue {
@@ -368,10 +408,13 @@ func (v *Backend6ValueV3) String() string {
 func (v *Backend6ValueV3) New() bpf.MapValue { return &Backend6ValueV3{} }
 
 func (b *Backend6ValueV3) GetAddress() net.IP { return b.Address.IP() }
+
 func (b *Backend6ValueV3) GetIPCluster() cmtypes.AddrCluster {
 	return cmtypes.AddrClusterFrom(b.Address.Addr(), uint32(b.ClusterID))
 }
+
 func (b *Backend6ValueV3) GetPort() uint16 { return b.Port }
+
 func (b *Backend6ValueV3) GetFlags() uint8 { return b.Flags }
 
 func (v *Backend6ValueV3) ToNetwork() BackendValue {
@@ -393,7 +436,8 @@ type Backend6V3 struct {
 }
 
 func NewBackend6V3(id loadbalancer.BackendID, addrCluster cmtypes.AddrCluster, port uint16,
-	proto u8proto.U8proto, state loadbalancer.BackendState) (*Backend6V3, error) {
+	proto u8proto.U8proto, state loadbalancer.BackendState,
+) (*Backend6V3, error) {
 	val, err := NewBackend6ValueV3(addrCluster, port, proto, state)
 	if err != nil {
 		return nil, err
@@ -405,8 +449,10 @@ func NewBackend6V3(id loadbalancer.BackendID, addrCluster cmtypes.AddrCluster, p
 	}, nil
 }
 
-func (b *Backend6V3) Map() *bpf.Map          { return Backend6MapV3 }
-func (b *Backend6V3) GetKey() BackendKey     { return b.Key }
+func (b *Backend6V3) Map() *bpf.Map { return Backend6MapV3 }
+
+func (b *Backend6V3) GetKey() BackendKey { return b.Key }
+
 func (b *Backend6V3) GetValue() BackendValue { return b.Value }
 
 type Backend6V2 struct {
@@ -415,7 +461,8 @@ type Backend6V2 struct {
 }
 
 func NewBackend6V2(id loadbalancer.BackendID, ip net.IP, port uint16, proto u8proto.U8proto,
-	state loadbalancer.BackendState) (*Backend6V2, error) {
+	state loadbalancer.BackendState,
+) (*Backend6V2, error) {
 	val, err := NewBackend6Value(ip, port, proto, state)
 	if err != nil {
 		return nil, err
@@ -427,8 +474,10 @@ func NewBackend6V2(id loadbalancer.BackendID, ip net.IP, port uint16, proto u8pr
 	}, nil
 }
 
-func (b *Backend6V2) Map() *bpf.Map          { return Backend6MapV2 }
-func (b *Backend6V2) GetKey() BackendKey     { return b.Key }
+func (b *Backend6V2) Map() *bpf.Map { return Backend6MapV2 }
+
+func (b *Backend6V2) GetKey() BackendKey { return b.Key }
+
 func (b *Backend6V2) GetValue() BackendValue { return b.Value }
 
 type Backend6 struct {
@@ -436,8 +485,10 @@ type Backend6 struct {
 	Value *Backend6Value
 }
 
-func (b *Backend6) Map() *bpf.Map          { return Backend6Map }
-func (b *Backend6) GetKey() BackendKey     { return b.Key }
+func (b *Backend6) Map() *bpf.Map { return Backend6Map }
+
+func (b *Backend6) GetKey() BackendKey { return b.Key }
+
 func (b *Backend6) GetValue() BackendValue { return b.Value }
 
 // SockRevNat6Key is the tuple with address, port and cookie used as key in

@@ -89,6 +89,8 @@ type ServiceValue interface {
 	// Get backend identifier
 	GetBackendID() loadbalancer.BackendID
 
+	GetL7LBProxyPort() uint16
+
 	// Returns a RevNatKey matching a ServiceValue
 	RevNatKey() RevNatKey
 

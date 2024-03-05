@@ -208,14 +208,9 @@ func newXDSServer(envoySocketDir string, ipCache IPCacheEventSource, localEndpoi
 
 // start configures and starts the xDS GRPC server.
 func (s *xdsServer) start() error {
-	socketListener, err := s.newSocketListener()
-	if err != nil {
-		return fmt.Errorf("failed to create socket listener: %w", err)
-	}
-
 	resourceConfig := s.initializeXdsConfigs()
 
-	s.stopFunc = startXDSGRPCServer(socketListener, resourceConfig)
+	s.stopFunc = startXDSGRPCServer(s.newSocketListener, resourceConfig)
 
 	return nil
 }
@@ -1826,11 +1821,19 @@ func (s *xdsServer) UpsertEnvoyResources(ctx context.Context, resources Resource
 	}
 	for _, r := range resources.Clusters {
 		log.Debugf("Envoy upsertCluster %s %v", r.Name, r)
-		revertFuncs = append(revertFuncs, s.upsertCluster(r.Name, r, wg, nil))
+		go func(r *envoy_config_cluster.Cluster) {
+			time.Sleep(1 * time.Minute)
+			log.Info("update cluster after 1 min")
+			revertFuncs = append(revertFuncs, s.upsertCluster(r.Name, r, nil, nil))
+		}(r)
 	}
 	for _, r := range resources.Routes {
 		log.Debugf("Envoy upsertRoute %s %v", r.Name, r)
-		revertFuncs = append(revertFuncs, s.upsertRoute(r.Name, r, nil, nil))
+		go func(r *envoy_config_route.RouteConfiguration) {
+			time.Sleep(1 * time.Minute)
+			log.Info("upsert route after 1 min")
+			revertFuncs = append(revertFuncs, s.upsertRoute(r.Name, r, nil, nil))
+		}(r)
 	}
 	// Wait before new Listeners are added if clusters were also added above.
 	if wg != nil {
@@ -2031,11 +2034,19 @@ func (s *xdsServer) UpdateEnvoyResources(ctx context.Context, old, new Resources
 	}
 	// Add new Clusters
 	for _, r := range new.Clusters {
-		revertFuncs = append(revertFuncs, s.upsertCluster(r.Name, r, wg, nil))
+		go func(r *envoy_config_cluster.Cluster) {
+			time.Sleep(1 * time.Minute)
+			log.Info("update cluster after 1 min")
+			revertFuncs = append(revertFuncs, s.upsertCluster(r.Name, r, nil, nil))
+		}(r)
 	}
 	// Add new Routes
 	for _, r := range new.Routes {
-		revertFuncs = append(revertFuncs, s.upsertRoute(r.Name, r, nil, nil))
+		go func(r *envoy_config_route.RouteConfiguration) {
+			time.Sleep(1 * time.Minute)
+			log.Info("update route after 1 min")
+			revertFuncs = append(revertFuncs, s.upsertRoute(r.Name, r, nil, nil))
+		}(r)
 	}
 	if wg != nil && len(new.Clusters) > 0 {
 		start := time.Now()

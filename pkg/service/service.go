@@ -656,10 +656,7 @@ func (s *Service) upsertService(params *lb.SVC) (bool, lb.ID, error) {
 	l7lbInfo, exists := s.l7lbSvcs[params.Name]
 	if exists && l7lbInfo.ownerRef != empty {
 		params.L7LBProxyPort = l7lbInfo.proxyPort
-	} else {
-		params.L7LBProxyPort = 0
 	}
-
 	// L7 LB is sharing a C union in the datapath, disable session
 	// affinity if L7 LB is configured for this service.
 	if params.L7LBProxyPort != 0 {
@@ -1405,7 +1402,9 @@ func (s *Service) createSVCInfoIfNotExist(p *lb.SVC) (*svcInfo, bool, bool,
 		svc.restoredFromDatapath = false
 
 		// Update L7 load balancer proxy port
-		svc.l7LBProxyPort = p.L7LBProxyPort
+		if p.L7LBProxyPort != 0 {
+			svc.l7LBProxyPort = p.L7LBProxyPort
+		}
 	}
 
 	return svc, !found, prevSessionAffinity, prevLoadBalancerSourceRanges, nil
@@ -1740,6 +1739,7 @@ func (s *Service) restoreServicesLocked(svcBackendsById map[lb.BackendID]struct{
 			svcIntTrafficPolicy: svc.IntTrafficPolicy,
 			svcNatPolicy:        svc.NatPolicy,
 			LoopbackHostport:    svc.LoopbackHostport,
+			l7LBProxyPort:       svc.L7LBProxyPort,
 
 			sessionAffinity:           svc.SessionAffinity,
 			sessionAffinityTimeoutSec: svc.SessionAffinityTimeoutSec,

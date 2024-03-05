@@ -230,7 +230,8 @@ func deleteServiceProto(svc loadbalancer.L3n4AddrID, backendCount int, useMaglev
 
 // DeleteService removes given service from a BPF map.
 func (*LBBPFMap) DeleteService(svc loadbalancer.L3n4AddrID, backendCount int, useMaglev bool,
-	natPolicy loadbalancer.SVCNatPolicy) error {
+	natPolicy loadbalancer.SVCNatPolicy,
+) error {
 	if svc.ID == 0 {
 		return fmt.Errorf("Invalid svc ID 0")
 	}
@@ -392,8 +393,8 @@ func deleteRevNatLocked(key RevNatKey) error {
 }
 
 func (*LBBPFMap) UpdateSourceRanges(revNATID uint16, prevSourceRanges []*cidr.CIDR,
-	sourceRanges []*cidr.CIDR, ipv6 bool) error {
-
+	sourceRanges []*cidr.CIDR, ipv6 bool,
+) error {
 	m := SourceRange4Map
 	if ipv6 {
 		m = SourceRange6Map
@@ -459,7 +460,7 @@ func (*LBBPFMap) DumpServiceMaps() ([]*loadbalancer.SVC, []error) {
 			portStr := strconv.Itoa(int(svcKey.GetPort()))
 			flagsCache[net.JoinHostPort(addrStr, portStr)] = loadbalancer.ServiceFlags(svcValue.GetFlags())
 
-			newSVCMap.addFE(fe)
+			newSVCMap.addFE(fe, svcValue.GetL7LBProxyPort())
 			return
 		}
 
@@ -566,8 +567,8 @@ func (*LBBPFMap) IsMaglevLookupTableRecreated(ipv6 bool) bool {
 
 func updateMasterService(fe ServiceKey, v ServiceValue, activeBackends int, revNATID int, svcType loadbalancer.SVCType,
 	svcExtLocal, svcIntLocal bool, svcNatPolicy loadbalancer.SVCNatPolicy, sessionAffinity bool,
-	sessionAffinityTimeoutSec uint32, checkSourceRange bool, l7lbProxyPort uint16, loopbackHostport bool) error {
-
+	sessionAffinityTimeoutSec uint32, checkSourceRange bool, l7lbProxyPort uint16, loopbackHostport bool,
+) error {
 	// isRoutable denotes whether this service can be accessed from outside the cluster.
 	isRoutable := !fe.IsSurrogate() &&
 		(svcType != loadbalancer.SVCTypeClusterIP || option.Config.ExternalClusterIP)
@@ -665,11 +666,14 @@ type svcMap map[string]loadbalancer.SVC
 // addFE adds the give 'fe' to the svcMap without any backends. If it does not
 // yet exist, an entry is created. Otherwise, the existing entry is left
 // unchanged.
-func (svcs svcMap) addFE(fe *loadbalancer.L3n4AddrID) *loadbalancer.SVC {
+func (svcs svcMap) addFE(fe *loadbalancer.L3n4AddrID, l7lbProxyPort uint16) *loadbalancer.SVC {
 	hash := fe.Hash()
 	lbsvc, ok := svcs[hash]
 	if !ok {
-		lbsvc = loadbalancer.SVC{Frontend: *fe}
+		lbsvc = loadbalancer.SVC{
+			Frontend:      *fe,
+			L7LBProxyPort: l7lbProxyPort,
+		}
 		svcs[hash] = lbsvc
 	}
 	return &lbsvc

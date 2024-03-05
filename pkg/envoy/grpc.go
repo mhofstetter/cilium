@@ -6,6 +6,7 @@ package envoy
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 
 	cilium "github.com/cilium/proxy/go/cilium/api"
@@ -15,23 +16,21 @@ import (
 	envoy_service_listener "github.com/cilium/proxy/go/envoy/service/listener/v3"
 	envoy_service_route "github.com/cilium/proxy/go/envoy/service/route/v3"
 	envoy_service_secret "github.com/cilium/proxy/go/envoy/service/secret/v3"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 
 	"github.com/cilium/cilium/pkg/envoy/xds"
+	"github.com/cilium/cilium/pkg/time"
 )
 
-var (
-	// ErrNotImplemented is the error returned by gRPC methods that are not
-	// implemented by Cilium.
-	ErrNotImplemented = errors.New("not implemented")
-)
+// ErrNotImplemented is the error returned by gRPC methods that are not
+// implemented by Cilium.
+var ErrNotImplemented = errors.New("not implemented")
 
 // startXDSGRPCServer starts a gRPC server to serve xDS APIs using the given
 // resource watcher and network listener.
 // Returns a function that stops the GRPC server when called.
-func startXDSGRPCServer(listener net.Listener, config map[string]*xds.ResourceTypeConfiguration) context.CancelFunc {
+func startXDSGRPCServer(bla func() (*net.UnixListener, error), config map[string]*xds.ResourceTypeConfiguration) context.CancelFunc {
 	grpcServer := grpc.NewServer()
 
 	xdsServer := xds.NewServer(config)
@@ -39,7 +38,7 @@ func startXDSGRPCServer(listener net.Listener, config map[string]*xds.ResourceTy
 
 	// TODO: https://github.com/cilium/cilium/issues/5051
 	// Implement IncrementalAggregatedResources to support Incremental xDS.
-	//envoy_service_discovery_v3.RegisterAggregatedDiscoveryServiceServer(grpcServer, dsServer)
+	// envoy_service_discovery_v3.RegisterAggregatedDiscoveryServiceServer(grpcServer, dsServer)
 	envoy_service_secret.RegisterSecretDiscoveryServiceServer(grpcServer, dsServer)
 	envoy_service_endpoint.RegisterEndpointDiscoveryServiceServer(grpcServer, dsServer)
 	envoy_service_cluster.RegisterClusterDiscoveryServiceServer(grpcServer, dsServer)
@@ -51,8 +50,14 @@ func startXDSGRPCServer(listener net.Listener, config map[string]*xds.ResourceTy
 	reflection.Register(grpcServer)
 
 	go func() {
-		log.Infof("Envoy: Starting xDS gRPC server listening on %s", listener.Addr())
-		if err := grpcServer.Serve(listener); err != nil && !errors.Is(err, net.ErrClosed) {
+		time.Sleep(30 * time.Second)
+		socketListener, err := bla()
+		if err != nil {
+			panic(fmt.Errorf("failed to create socket listener: %w", err))
+		}
+
+		log.Infof("Envoy: Starting xDS gRPC server listening on %s", socketListener.Addr())
+		if err := grpcServer.Serve(socketListener); err != nil && !errors.Is(err, net.ErrClosed) {
 			log.WithError(err).Fatal("Envoy: Failed to serve xDS gRPC API")
 		}
 	}()
