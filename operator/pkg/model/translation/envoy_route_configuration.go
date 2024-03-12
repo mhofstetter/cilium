@@ -18,7 +18,7 @@ type RouteConfigurationMutator func(*envoy_config_route_v3.RouteConfiguration) *
 func NewRouteConfiguration(name string, virtualhosts []*envoy_config_route_v3.VirtualHost, mutators ...RouteConfigurationMutator) (ciliumv2.XDSResource, error) {
 	routeConfig := &envoy_config_route_v3.RouteConfiguration{
 		Name:         name,
-		VirtualHosts: virtualhosts,
+		VirtualHosts: virtualhosts, // sorted?
 	}
 
 	// Apply mutation functions for customizing the route configuration.

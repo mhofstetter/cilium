@@ -216,6 +216,58 @@ func TestSharedIngressTranslator_getHTTPRouteListenerProxy(t *testing.T) {
 	require.Equal(t, []string{proxyProtocolType, tlsInspectorType}, listenerNames)
 }
 
+func TestSharedIngressTranslator_getHTTPRouteListenerProxyOOps(t *testing.T) {
+	i := &cecTranslator{
+		secretsNamespace: "cilium-secrets",
+		useProxyProtocol: true,
+	}
+	res1 := i.getHTTPRouteListener(&model.Model{
+		HTTP: []model.HTTPListener{
+			{
+				Hostname: "bar.foo",
+				TLS: []model.TLSSecret{
+					{
+						Name:      "dummy-secret",
+						Namespace: "dummy-namespace",
+					},
+				},
+			},
+			{
+				Hostname: "foo.bar",
+				TLS: []model.TLSSecret{
+					{
+						Name:      "dummy-secret",
+						Namespace: "dummy-namespace",
+					},
+				},
+			},
+		},
+	})
+	res2 := i.getHTTPRouteListener(&model.Model{
+		HTTP: []model.HTTPListener{
+			{
+				Hostname: "foo.bar",
+				TLS: []model.TLSSecret{
+					{
+						Name:      "dummy-secret",
+						Namespace: "dummy-namespace",
+					},
+				},
+			},
+			{
+				Hostname: "bar.foo",
+				TLS: []model.TLSSecret{
+					{
+						Name:      "dummy-secret",
+						Namespace: "dummy-namespace",
+					},
+				},
+			},
+		},
+	})
+	require.Equal(t, res1, res2)
+}
+
 func TestSharedIngressTranslator_getHTTPRouteListener(t *testing.T) {
 	i := &cecTranslator{
 		secretsNamespace: "cilium-secrets",
@@ -345,6 +397,96 @@ func TestSharedIngressTranslator_getClusters(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBla(t *testing.T) {
+	defT := &cecTranslator{}
+
+	l1 := []model.HTTPListener{
+		{
+			Port:                     443,
+			Hostname:                 "foo.bar",
+			ForceHTTPtoHTTPSRedirect: true,
+			Routes: []model.HTTPRoute{
+				{
+					Backends: []model.Backend{
+						{
+							Name:      "default-backend",
+							Namespace: "random-namespace",
+							Port: &model.BackendPort{
+								Port: 8080,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Port:     443,
+			Hostname: "bar.foo",
+			Routes: []model.HTTPRoute{
+				{
+					Backends: []model.Backend{
+						{
+							Name:      "default-backend",
+							Namespace: "random-namespace",
+							Port: &model.BackendPort{
+								Port: 8080,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	l2 := []model.HTTPListener{
+		{
+			Port:     443,
+			Hostname: "bar.foo",
+			Routes: []model.HTTPRoute{
+				{
+					Backends: []model.Backend{
+						{
+							Name:      "default-backend",
+							Namespace: "random-namespace",
+							Port: &model.BackendPort{
+								Port: 8080,
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			Port:                     443,
+			Hostname:                 "foo.bar",
+			ForceHTTPtoHTTPSRedirect: true,
+			Routes: []model.HTTPRoute{
+				{
+					Backends: []model.Backend{
+						{
+							Name:      "default-backend",
+							Namespace: "random-namespace",
+							Port: &model.BackendPort{
+								Port: 8080,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	res1 := defT.getEnvoyHTTPRouteConfiguration(&model.Model{HTTP: l1})
+	res2 := defT.getEnvoyHTTPRouteConfiguration(&model.Model{HTTP: l2})
+
+	diffOutput := cmp.Diff(res1, res2, protocmp.Transform())
+	if len(diffOutput) != 0 {
+		t.Errorf("CiliumEnvoyConfigs did not match:\n%s\n", diffOutput)
+	}
+
+	// assert.Equal(t, res1, res2)
 }
 
 func TestSharedIngressTranslator_getEnvoyHTTPRouteConfiguration(t *testing.T) {
