@@ -153,7 +153,7 @@ func startEmbeddedEnvoy(config embeddedEnvoyConfig) (*EmbeddedEnvoy, error) {
 
 		for {
 			logLevel := logging.GetLevel(logging.DefaultLogger)
-			cmd := exec.Command(ciliumEnvoyStarter, "-l", mapLogLevel(logLevel), "-c", bootstrapFilePath, "--base-id", strconv.FormatUint(config.baseID, 10), "--log-format", logFormat)
+			cmd := exec.Command(ciliumEnvoyStarter, "--keep-cap-net-bind-service", "-l", mapLogLevel(logLevel), "-c", bootstrapFilePath, "--base-id", strconv.FormatUint(config.baseID, 10), "--log-format", logFormat)
 			cmd.Stderr = logWriter
 			cmd.Stdout = logWriter
 

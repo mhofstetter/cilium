@@ -1163,7 +1163,7 @@
    * - :spelling:ignore:`envoy.image`
      - Envoy container image.
      - object
-     - ``{"digest":"sha256:9c45b847f0d6689b537000257dc26a1db3799fd40cb2d430397fd0aec375a562","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.28.1-0a4c2d1a90a7e13116bed4b0c1d4aacaf0e49686","useDigest":true}``
+     - ``{"digest":"sha256:f86b6ae6c2866dc1fe9dbd8a7b1463d5c1d578d24d35ebccd02c55988b8662e8","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy-dev","tag":"4ce0a7b2b0140b13d3ff5229ee1c0a61edd3be86","useDigest":true}``
    * - :spelling:ignore:`envoy.livenessProbe.failureThreshold`
      - failure threshold of liveness probe
      - int
@@ -1263,7 +1263,7 @@
    * - :spelling:ignore:`envoy.securityContext.capabilities.envoy`
      - Capabilities for the ``cilium-envoy`` container
      - list
-     - ``["NET_ADMIN","SYS_ADMIN"]``
+     - ``["NET_ADMIN","NET_BIND_SERVICE","SYS_ADMIN"]``
    * - :spelling:ignore:`envoy.securityContext.privileged`
      - Run the pod with elevated privileges
      - bool
@@ -2911,7 +2911,7 @@
    * - :spelling:ignore:`securityContext.capabilities.ciliumAgent`
      - Capabilities for the ``cilium-agent`` container
      - list
-     - ``["CHOWN","KILL","NET_ADMIN","NET_RAW","IPC_LOCK","SYS_MODULE","SYS_ADMIN","SYS_RESOURCE","DAC_OVERRIDE","FOWNER","SETGID","SETUID"]``
+     - ``["CHOWN","KILL","NET_ADMIN","NET_RAW","IPC_LOCK","SYS_MODULE","SYS_ADMIN","NET_BIND_SERVICE","SYS_RESOURCE","DAC_OVERRIDE","FOWNER","SETGID","SETUID"]``
    * - :spelling:ignore:`securityContext.capabilities.cleanCiliumState`
      - Capabilities for the ``clean-cilium-state`` init container
      - list

@@ -340,7 +340,7 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.extraVolumes | list | `[]` | Additional envoy volumes. |
 | envoy.healthPort | int | `9878` | TCP port for the health API. |
 | envoy.idleTimeoutDurationSeconds | int | `60` | Set Envoy upstream HTTP idle connection timeout seconds. Does not apply to connections with pending requests. Default 60s |
-| envoy.image | object | `{"digest":"sha256:9c45b847f0d6689b537000257dc26a1db3799fd40cb2d430397fd0aec375a562","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy","tag":"v1.28.1-0a4c2d1a90a7e13116bed4b0c1d4aacaf0e49686","useDigest":true}` | Envoy container image. |
+| envoy.image | object | `{"digest":"sha256:f86b6ae6c2866dc1fe9dbd8a7b1463d5c1d578d24d35ebccd02c55988b8662e8","override":null,"pullPolicy":"Always","repository":"quay.io/cilium/cilium-envoy-dev","tag":"4ce0a7b2b0140b13d3ff5229ee1c0a61edd3be86","useDigest":true}` | Envoy container image. |
 | envoy.livenessProbe.failureThreshold | int | `10` | failure threshold of liveness probe |
 | envoy.livenessProbe.periodSeconds | int | `30` | interval between checks of the liveness probe |
 | envoy.log.format | string | `"[%Y-%m-%d %T.%e][%t][%l][%n] [%g:%#] %v"` | The format string to use for laying out the log message metadata of Envoy. |
@@ -365,7 +365,7 @@ contributors across the globe, there is almost always someone available to help.
 | envoy.readinessProbe.periodSeconds | int | `30` | interval between checks of the readiness probe |
 | envoy.resources | object | `{}` | Envoy resource limits & requests ref: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/ |
 | envoy.rollOutPods | bool | `false` | Roll out cilium envoy pods automatically when configmap is updated. |
-| envoy.securityContext.capabilities.envoy | list | `["NET_ADMIN","SYS_ADMIN"]` | Capabilities for the `cilium-envoy` container |
+| envoy.securityContext.capabilities.envoy | list | `["NET_ADMIN","NET_BIND_SERVICE","SYS_ADMIN"]` | Capabilities for the `cilium-envoy` container |
 | envoy.securityContext.privileged | bool | `false` | Run the pod with elevated privileges |
 | envoy.securityContext.seLinuxOptions | object | `{"level":"s0","type":"spc_t"}` | SELinux options for the `cilium-envoy` container |
 | envoy.startupProbe.failureThreshold | int | `105` | failure threshold of startup probe. 105 x 2s translates to the old behaviour of the readiness probe (120s delay + 30 x 3s) |
@@ -777,7 +777,7 @@ contributors across the globe, there is almost always someone available to help.
 | sctp | object | `{"enabled":false}` | SCTP Configuration Values |
 | sctp.enabled | bool | `false` | Enable SCTP support. NOTE: Currently, SCTP support does not support rewriting ports or multihoming. |
 | securityContext.capabilities.applySysctlOverwrites | list | `["SYS_ADMIN","SYS_CHROOT","SYS_PTRACE"]` | capabilities for the `apply-sysctl-overwrites` init container |
-| securityContext.capabilities.ciliumAgent | list | `["CHOWN","KILL","NET_ADMIN","NET_RAW","IPC_LOCK","SYS_MODULE","SYS_ADMIN","SYS_RESOURCE","DAC_OVERRIDE","FOWNER","SETGID","SETUID"]` | Capabilities for the `cilium-agent` container |
+| securityContext.capabilities.ciliumAgent | list | `["CHOWN","KILL","NET_ADMIN","NET_RAW","IPC_LOCK","SYS_MODULE","SYS_ADMIN","NET_BIND_SERVICE","SYS_RESOURCE","DAC_OVERRIDE","FOWNER","SETGID","SETUID"]` | Capabilities for the `cilium-agent` container |
 | securityContext.capabilities.cleanCiliumState | list | `["NET_ADMIN","SYS_MODULE","SYS_ADMIN","SYS_RESOURCE"]` | Capabilities for the `clean-cilium-state` init container |
 | securityContext.capabilities.mountCgroup | list | `["SYS_ADMIN","SYS_CHROOT","SYS_PTRACE"]` | Capabilities for the `mount-cgroup` init container |
 | securityContext.privileged | bool | `false` | Run the pod with elevated privileges |
