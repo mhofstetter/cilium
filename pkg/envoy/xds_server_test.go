@@ -43,7 +43,6 @@ var (
 		Id:       1000,
 		Ipv4:     "10.0.0.1",
 		Ipv6:     "f00d::1",
-		Labels:   []string{"id.foo", "id.bar"},
 		Identity: Identity,
 	}
 )
