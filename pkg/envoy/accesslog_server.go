@@ -93,8 +93,7 @@ func (s *AccessLogServer) newSocketListener() (*net.UnixListener, error) {
 	}
 	accessLogListener.SetUnlinkOnClose(true)
 
-	// Make the socket accessible by owner and group only. Group access is needed for Istio
-	// sidecar proxies.
+	// Make the socket accessible by owner and group only.
 	if err = os.Chmod(s.socketPath, 0660); err != nil {
 		return nil, fmt.Errorf("failed to change mode of access log listen socket at %s: %w", s.socketPath, err)
 	}

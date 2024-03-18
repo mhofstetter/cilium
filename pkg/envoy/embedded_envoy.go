@@ -104,7 +104,6 @@ func startEmbeddedEnvoy(config embeddedEnvoyConfig) (*EmbeddedEnvoy, error) {
 	bootstrapFilePath := filepath.Join(config.runDir, "envoy", "bootstrap.pb")
 
 	writeBootstrapConfigFile(bootstrapConfig{
-		// Use the same structure as Istio's pilot-agent for the node ID: nodeType~ipAddress~proxyId~domain
 		filePath:                 bootstrapFilePath,
 		nodeId:                   "host~127.0.0.1~no-id~localdomain",
 		cluster:                  ingressClusterName,

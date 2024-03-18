@@ -316,8 +316,7 @@ func (s *xdsServer) newSocketListener() (*net.UnixListener, error) {
 		return nil, fmt.Errorf("failed to open xDS listen socket at %s: %w", s.socketPath, err)
 	}
 
-	// Make the socket accessible by owner and group only. Group access is needed for Istio
-	// sidecar proxies.
+	// Make the socket accessible by owner and group only.
 	if err = os.Chmod(s.socketPath, 0660); err != nil {
 		return nil, fmt.Errorf("failed to change mode of xDS listen socket at %s: %w", s.socketPath, err)
 	}
