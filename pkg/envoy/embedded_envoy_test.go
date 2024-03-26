@@ -18,7 +18,6 @@ import (
 	"github.com/cilium/cilium/pkg/flowdebug"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/policy"
-	testipcache "github.com/cilium/cilium/pkg/testutils/ipcache"
 )
 
 // Hook up gocheck into the "go test" runner.
@@ -58,7 +57,7 @@ func (s *EnvoySuite) TestEnvoy(c *C) {
 
 	localEndpointStore := newLocalEndpointStore()
 
-	xdsServer, err := newXDSServer(testipcache.NewMockIPCache(), localEndpointStore,
+	xdsServer, err := newXDSServer(localEndpointStore,
 		xdsServerConfig{
 			envoySocketDir:    testRunDir,
 			proxyGID:          1337,
@@ -161,7 +160,7 @@ func (s *EnvoySuite) TestEnvoyNACK(c *C) {
 
 	localEndpointStore := newLocalEndpointStore()
 
-	xdsServer, err := newXDSServer(testipcache.NewMockIPCache(), localEndpointStore,
+	xdsServer, err := newXDSServer(localEndpointStore,
 		xdsServerConfig{
 			envoySocketDir:    testRunDir,
 			proxyGID:          1337,

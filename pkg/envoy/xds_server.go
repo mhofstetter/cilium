@@ -185,10 +185,6 @@ type xdsServer struct {
 	// stopFunc contains the function which stops the xDS gRPC server.
 	stopFunc context.CancelFunc
 
-	// IPCache is used for tracking IP->Identity mappings and propagating
-	// them to the proxy via NPHDS in the cases described
-	ipCache IPCacheEventSource
-
 	localEndpointStore *LocalEndpointStore
 }
 
@@ -212,10 +208,9 @@ type xdsServerConfig struct {
 }
 
 // newXDSServer creates a new xDS GRPC server.
-func newXDSServer(ipCache IPCacheEventSource, localEndpointStore *LocalEndpointStore, config xdsServerConfig) (*xdsServer, error) {
+func newXDSServer(localEndpointStore *LocalEndpointStore, config xdsServerConfig) (*xdsServer, error) {
 	return &xdsServer{
 		listeners:          make(map[string]*Listener),
-		ipCache:            ipCache,
 		localEndpointStore: localEndpointStore,
 
 		socketPath:    getXDSSocketPath(config.envoySocketDir),
@@ -281,12 +276,6 @@ func (s *xdsServer) initializeXdsConfigs() map[string]*xds.ResourceTypeConfigura
 		AckObserver: npdsMutator,
 	}
 
-	nphdsCache := newNPHDSCache(s.ipCache)
-	nphdsConfig := &xds.ResourceTypeConfiguration{
-		Source:      nphdsCache,
-		AckObserver: &nphdsCache,
-	}
-
 	s.listenerMutator = ldsMutator
 	s.routeMutator = rdsMutator
 	s.clusterMutator = cdsMutator
@@ -296,13 +285,12 @@ func (s *xdsServer) initializeXdsConfigs() map[string]*xds.ResourceTypeConfigura
 	s.NetworkPolicyMutator = npdsMutator
 
 	resourceConfig := map[string]*xds.ResourceTypeConfiguration{
-		ListenerTypeURL:           ldsConfig,
-		RouteTypeURL:              rdsConfig,
-		ClusterTypeURL:            cdsConfig,
-		EndpointTypeURL:           edsConfig,
-		SecretTypeURL:             sdsConfig,
-		NetworkPolicyTypeURL:      npdsConfig,
-		NetworkPolicyHostsTypeURL: nphdsConfig,
+		ListenerTypeURL:      ldsConfig,
+		RouteTypeURL:         rdsConfig,
+		ClusterTypeURL:       cdsConfig,
+		EndpointTypeURL:      edsConfig,
+		SecretTypeURL:        sdsConfig,
+		NetworkPolicyTypeURL: npdsConfig,
 	}
 	return resourceConfig
 }

@@ -14,7 +14,6 @@ import (
 
 	"github.com/cilium/cilium/pkg/hive/cell"
 	"github.com/cilium/cilium/pkg/hive/job"
-	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
@@ -101,7 +100,6 @@ type xdsServerParams struct {
 	cell.In
 
 	Lifecycle          cell.Lifecycle
-	IPCache            *ipcache.IPCache
 	LocalEndpointStore *LocalEndpointStore
 
 	EnvoyProxyConfig envoyProxyConfig
@@ -118,7 +116,6 @@ type xdsServerParams struct {
 
 func newEnvoyXDSServer(params xdsServerParams) (XDSServer, error) {
 	xdsServer, err := newXDSServer(
-		params.IPCache,
 		params.LocalEndpointStore,
 		xdsServerConfig{
 			envoySocketDir:     GetSocketDir(option.Config.RunDir),
