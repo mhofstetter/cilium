@@ -92,7 +92,7 @@ func (d *Daemon) initHealth(spec *healthApi.Spec, cleaner *daemonCleanup, sysctl
 						d.mtuConfig,
 						d.bigTCPConfig,
 						d.endpointManager,
-						d.l7Proxy,
+						nil, // create health endpoint without l7 proxy
 						d.identityAllocator,
 						d.healthEndpointRouting,
 						sysctl,
