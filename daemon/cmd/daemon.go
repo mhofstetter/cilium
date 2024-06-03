@@ -369,38 +369,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 	ctmap.InitMapInfo(option.Config.EnableIPv4, option.Config.EnableIPv6, option.Config.EnableNodePort)
 	policymap.InitMapInfo(option.Config.PolicyMapEntries)
-
-	lbmapInitParams := lbmap.InitParams{
-		IPv4: option.Config.EnableIPv4,
-		IPv6: option.Config.EnableIPv6,
-
-		MaxSockRevNatMapEntries:  option.Config.SockRevNatEntries,
-		ServiceMapMaxEntries:     option.Config.LBMapEntries,
-		BackEndMapMaxEntries:     option.Config.LBMapEntries,
-		RevNatMapMaxEntries:      option.Config.LBMapEntries,
-		AffinityMapMaxEntries:    option.Config.LBMapEntries,
-		SourceRangeMapMaxEntries: option.Config.LBMapEntries,
-		MaglevMapMaxEntries:      option.Config.LBMapEntries,
-	}
-	if option.Config.LBServiceMapEntries > 0 {
-		lbmapInitParams.ServiceMapMaxEntries = option.Config.LBServiceMapEntries
-	}
-	if option.Config.LBBackendMapEntries > 0 {
-		lbmapInitParams.BackEndMapMaxEntries = option.Config.LBBackendMapEntries
-	}
-	if option.Config.LBRevNatEntries > 0 {
-		lbmapInitParams.RevNatMapMaxEntries = option.Config.LBRevNatEntries
-	}
-	if option.Config.LBAffinityMapEntries > 0 {
-		lbmapInitParams.AffinityMapMaxEntries = option.Config.LBAffinityMapEntries
-	}
-	if option.Config.LBSourceRangeMapEntries > 0 {
-		lbmapInitParams.SourceRangeMapMaxEntries = option.Config.LBSourceRangeMapEntries
-	}
-	if option.Config.LBMaglevMapEntries > 0 {
-		lbmapInitParams.MaglevMapMaxEntries = option.Config.LBMaglevMapEntries
-	}
-	lbmap.Init(lbmapInitParams)
+	lbmap.Init(lbInitParamsFromConfig())
 
 	params.NodeManager.Subscribe(params.Datapath.Node())
 
@@ -885,6 +854,41 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	}
 
 	return &d, restoredEndpoints, nil
+}
+
+func lbInitParamsFromConfig() lbmap.InitParams {
+	lbmapInitParams := lbmap.InitParams{
+		IPv4: option.Config.EnableIPv4,
+		IPv6: option.Config.EnableIPv6,
+
+		MaxSockRevNatMapEntries:  option.Config.SockRevNatEntries,
+		ServiceMapMaxEntries:     option.Config.LBMapEntries,
+		BackEndMapMaxEntries:     option.Config.LBMapEntries,
+		RevNatMapMaxEntries:      option.Config.LBMapEntries,
+		AffinityMapMaxEntries:    option.Config.LBMapEntries,
+		SourceRangeMapMaxEntries: option.Config.LBMapEntries,
+		MaglevMapMaxEntries:      option.Config.LBMapEntries,
+	}
+	if option.Config.LBServiceMapEntries > 0 {
+		lbmapInitParams.ServiceMapMaxEntries = option.Config.LBServiceMapEntries
+	}
+	if option.Config.LBBackendMapEntries > 0 {
+		lbmapInitParams.BackEndMapMaxEntries = option.Config.LBBackendMapEntries
+	}
+	if option.Config.LBRevNatEntries > 0 {
+		lbmapInitParams.RevNatMapMaxEntries = option.Config.LBRevNatEntries
+	}
+	if option.Config.LBAffinityMapEntries > 0 {
+		lbmapInitParams.AffinityMapMaxEntries = option.Config.LBAffinityMapEntries
+	}
+	if option.Config.LBSourceRangeMapEntries > 0 {
+		lbmapInitParams.SourceRangeMapMaxEntries = option.Config.LBSourceRangeMapEntries
+	}
+	if option.Config.LBMaglevMapEntries > 0 {
+		lbmapInitParams.MaglevMapMaxEntries = option.Config.LBMaglevMapEntries
+	}
+
+	return lbmapInitParams
 }
 
 func (d *Daemon) stopAllEndpoints() {
