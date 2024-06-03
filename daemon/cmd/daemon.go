@@ -504,23 +504,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	bootstrapStats.daemonInit.End(true)
 
 	// Stop all endpoints (its goroutines) on exit.
-	cleaner.cleanupFuncs.Add(func() {
-		log.Info("Waiting for all endpoints' goroutines to be stopped.")
-		var wg sync.WaitGroup
-
-		eps := d.endpointManager.GetEndpoints()
-		wg.Add(len(eps))
-
-		for _, ep := range eps {
-			go func(ep *endpoint.Endpoint) {
-				ep.Stop()
-				wg.Done()
-			}(ep)
-		}
-
-		wg.Wait()
-		log.Info("All endpoints' goroutines stopped.")
-	})
+	cleaner.cleanupFuncs.Add(d.stopAllEndpoints)
 
 	// Open or create BPF maps.
 	bootstrapStats.mapsInit.Start()
@@ -961,6 +945,24 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	}
 
 	return &d, restoredEndpoints, nil
+}
+
+func (d *Daemon) stopAllEndpoints() {
+	log.Info("Waiting for all endpoints' goroutines to be stopped.")
+	var wg sync.WaitGroup
+
+	eps := d.endpointManager.GetEndpoints()
+	wg.Add(len(eps))
+
+	for _, ep := range eps {
+		go func(ep *endpoint.Endpoint) {
+			ep.Stop()
+			wg.Done()
+		}(ep)
+	}
+
+	wg.Wait()
+	log.Info("All endpoints' goroutines stopped.")
 }
 
 // Close shuts down a daemon
