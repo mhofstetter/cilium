@@ -539,69 +539,9 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		log.Debugf("Registering cleanup function to unload DNS policies due to --%s", option.DNSPolicyUnloadOnShutdown)
 
 		// add to pre-cleanup funcs because this needs to run on graceful shutdown, but
-		// before the relevant subystems are being shut down.
-		cleaner.preCleanupFuncs.Add(func() {
-			// Stop k8s watchers
-			log.Info("Stopping k8s service handler")
-			d.k8sWatcher.StopK8sServiceHandler()
-
-			// Iterate over the policy repository and remove L7 DNS part
-			needsPolicyRegen := false
-			removeL7DNSRules := func(pr policyAPI.Ports) error {
-				portProtocols := pr.GetPortProtocols()
-				if len(portProtocols) == 0 {
-					return nil
-				}
-				portRule := pr.GetPortRule()
-				if portRule == nil || portRule.Rules == nil {
-					return nil
-				}
-				dnsRules := portRule.Rules.DNS
-				log.Debugf("Found egress L7 DNS rules (portProtocol %#v): %#v", portProtocols[0], dnsRules)
-
-				// For security reasons, the L7 DNS policy must be a
-				// wildcard in order to trigger this logic.
-				// Otherwise we could invalidate the L7 security
-				// rules. This means if any of the DNS L7 rules
-				// have a matchPattern of * then it is OK to delete
-				// the L7 portion of those rules.
-				hasWildcard := false
-				for _, dns := range dnsRules {
-					if dns.MatchPattern == "*" {
-						hasWildcard = true
-						break
-					}
-				}
-				if hasWildcard {
-					portRule.Rules = nil
-					needsPolicyRegen = true
-				}
-				return nil
-			}
-
-			policyRepo := d.GetPolicyRepository()
-			policyRepo.Iterate(func(rule *policyAPI.Rule) {
-				for _, er := range rule.Egress {
-					_ = er.ToPorts.Iterate(removeL7DNSRules)
-				}
-			})
-
-			if !needsPolicyRegen {
-				log.Infof("No policy recalculation needed to remove DNS rules due to --%s", option.DNSPolicyUnloadOnShutdown)
-				return
-			}
-
-			// Bump revision to trigger policy recalculation
-			log.Infof("Triggering policy recalculation to remove DNS rules due to --%s", option.DNSPolicyUnloadOnShutdown)
-			policyRepo.BumpRevision()
-			regenerationMetadata := &regeneration.ExternalRegenerationMetadata{
-				Reason:            "unloading DNS rules on graceful shutdown",
-				RegenerationLevel: regeneration.RegenerateWithoutDatapath,
-			}
-			wg := d.endpointManager.RegenerateAllEndpoints(regenerationMetadata)
-			wg.Wait()
-			log.Info("All endpoints regenerated after unloading DNS rules on graceful shutdown")
-		})
+		// before the relevant subsystems are being shut down.
+		cleaner.preCleanupFuncs.Add(d.k8sWatcher.StopK8sServiceHandler)
+		cleaner.preCleanupFuncs.Add(d.cleanupDNS)
 	}
 
 	policyAPI.InitEntities(params.ClusterInfo.Name)
@@ -963,6 +903,65 @@ func (d *Daemon) stopAllEndpoints() {
 
 	wg.Wait()
 	log.Info("All endpoints' goroutines stopped.")
+}
+
+func (d *Daemon) cleanupDNS() {
+	// Iterate over the policy repository and remove L7 DNS part
+	needsPolicyRegen := false
+	removeL7DNSRules := func(pr policyAPI.Ports) error {
+		portProtocols := pr.GetPortProtocols()
+		if len(portProtocols) == 0 {
+			return nil
+		}
+		portRule := pr.GetPortRule()
+		if portRule == nil || portRule.Rules == nil {
+			return nil
+		}
+		dnsRules := portRule.Rules.DNS
+		log.Debugf("Found egress L7 DNS rules (portProtocol %#v): %#v", portProtocols[0], dnsRules)
+
+		// For security reasons, the L7 DNS policy must be a
+		// wildcard in order to trigger this logic.
+		// Otherwise we could invalidate the L7 security
+		// rules. This means if any of the DNS L7 rules
+		// have a matchPattern of * then it is OK to delete
+		// the L7 portion of those rules.
+		hasWildcard := false
+		for _, dns := range dnsRules {
+			if dns.MatchPattern == "*" {
+				hasWildcard = true
+				break
+			}
+		}
+		if hasWildcard {
+			portRule.Rules = nil
+			needsPolicyRegen = true
+		}
+		return nil
+	}
+
+	policyRepo := d.GetPolicyRepository()
+	policyRepo.Iterate(func(rule *policyAPI.Rule) {
+		for _, er := range rule.Egress {
+			_ = er.ToPorts.Iterate(removeL7DNSRules)
+		}
+	})
+
+	if !needsPolicyRegen {
+		log.Infof("No policy recalculation needed to remove DNS rules due to --%s", option.DNSPolicyUnloadOnShutdown)
+		return
+	}
+
+	// Bump revision to trigger policy recalculation
+	log.Infof("Triggering policy recalculation to remove DNS rules due to --%s", option.DNSPolicyUnloadOnShutdown)
+	policyRepo.BumpRevision()
+	regenerationMetadata := &regeneration.ExternalRegenerationMetadata{
+		Reason:            "unloading DNS rules on graceful shutdown",
+		RegenerationLevel: regeneration.RegenerateWithoutDatapath,
+	}
+	wg := d.endpointManager.RegenerateAllEndpoints(regenerationMetadata)
+	wg.Wait()
+	log.Info("All endpoints regenerated after unloading DNS rules on graceful shutdown")
 }
 
 // Close shuts down a daemon
