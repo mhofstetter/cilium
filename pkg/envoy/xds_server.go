@@ -190,6 +190,8 @@ type xdsServer struct {
 	// them to the proxy via NPHDS in the cases described
 	ipCache IPCacheEventSource
 
+	xDS xds.XDS
+
 	localEndpointStore *LocalEndpointStore
 }
 
@@ -216,8 +218,9 @@ type xdsServerConfig struct {
 }
 
 // newXDSServer creates a new xDS GRPC server.
-func newXDSServer(ipCache IPCacheEventSource, localEndpointStore *LocalEndpointStore, config xdsServerConfig) (*xdsServer, error) {
+func newXDSServer(xDS xds.XDS, ipCache IPCacheEventSource, localEndpointStore *LocalEndpointStore, config xdsServerConfig) (*xdsServer, error) {
 	return &xdsServer{
+		xDS:                xDS,
 		listeners:          make(map[string]*Listener),
 		ipCache:            ipCache,
 		localEndpointStore: localEndpointStore,
@@ -237,49 +240,51 @@ func (s *xdsServer) start() error {
 
 	resourceConfig := s.initializeXdsConfigs()
 
-	s.stopFunc = startXDSGRPCServer(socketListener, resourceConfig)
+	s.stopFunc = s.startXDSGRPCServer(socketListener, resourceConfig)
 
 	return nil
 }
 
 func (s *xdsServer) initializeXdsConfigs() map[string]*xds.ResourceTypeConfiguration {
+	restore := s.xDS.Restore()
+
 	ldsCache := xds.NewCache()
-	ldsMutator := xds.NewAckingResourceMutatorWrapper(ldsCache)
+	ldsMutator := xds.NewAckingResourceMutatorWrapper(ldsCache, restore)
 	ldsConfig := &xds.ResourceTypeConfiguration{
 		Source:      ldsCache,
 		AckObserver: ldsMutator,
 	}
 
 	rdsCache := xds.NewCache()
-	rdsMutator := xds.NewAckingResourceMutatorWrapper(rdsCache)
+	rdsMutator := xds.NewAckingResourceMutatorWrapper(rdsCache, restore)
 	rdsConfig := &xds.ResourceTypeConfiguration{
 		Source:      rdsCache,
 		AckObserver: rdsMutator,
 	}
 
 	cdsCache := xds.NewCache()
-	cdsMutator := xds.NewAckingResourceMutatorWrapper(cdsCache)
+	cdsMutator := xds.NewAckingResourceMutatorWrapper(cdsCache, restore)
 	cdsConfig := &xds.ResourceTypeConfiguration{
 		Source:      cdsCache,
 		AckObserver: cdsMutator,
 	}
 
 	edsCache := xds.NewCache()
-	edsMutator := xds.NewAckingResourceMutatorWrapper(edsCache)
+	edsMutator := xds.NewAckingResourceMutatorWrapper(edsCache, restore)
 	edsConfig := &xds.ResourceTypeConfiguration{
 		Source:      edsCache,
 		AckObserver: edsMutator,
 	}
 
 	sdsCache := xds.NewCache()
-	sdsMutator := xds.NewAckingResourceMutatorWrapper(sdsCache)
+	sdsMutator := xds.NewAckingResourceMutatorWrapper(sdsCache, restore)
 	sdsConfig := &xds.ResourceTypeConfiguration{
 		Source:      sdsCache,
 		AckObserver: sdsMutator,
 	}
 
 	npdsCache := xds.NewCache()
-	npdsMutator := xds.NewAckingResourceMutatorWrapper(npdsCache)
+	npdsMutator := xds.NewAckingResourceMutatorWrapper(npdsCache, restore)
 	npdsConfig := &xds.ResourceTypeConfiguration{
 		Source:      npdsCache,
 		AckObserver: npdsMutator,

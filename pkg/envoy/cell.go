@@ -15,6 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
+	"github.com/cilium/cilium/pkg/envoy/xds"
 	"github.com/cilium/cilium/pkg/ipcache"
 	"github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/resource"
@@ -40,6 +41,9 @@ var Cell = cell.Module(
 	cell.ProvidePrivate(newArtifactCopier),
 	cell.Invoke(registerEnvoyVersionCheck),
 	cell.Invoke(registerSecretSyncer),
+
+	// xDS cache & server
+	xds.Cell,
 )
 
 type envoyProxyConfig struct {
@@ -112,6 +116,7 @@ type xdsServerParams struct {
 
 	Lifecycle          cell.Lifecycle
 	IPCache            *ipcache.IPCache
+	XDS                xds.XDS
 	LocalEndpointStore *LocalEndpointStore
 
 	EnvoyProxyConfig envoyProxyConfig
@@ -128,6 +133,7 @@ type xdsServerParams struct {
 
 func newEnvoyXDSServer(params xdsServerParams) (XDSServer, error) {
 	xdsServer, err := newXDSServer(
+		params.XDS,
 		params.IPCache,
 		params.LocalEndpointStore,
 		xdsServerConfig{

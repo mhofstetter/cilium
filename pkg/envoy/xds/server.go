@@ -63,6 +63,8 @@ var (
 
 // Server implements the handling of xDS streams.
 type Server struct {
+	*xds
+
 	// watchers maps each supported type URL to its corresponding resource
 	// watcher.
 	watchers map[string]*ResourceWatcher
@@ -91,7 +93,7 @@ type ResourceTypeConfiguration struct {
 // sources.
 // types maps each supported resource type URL to its corresponding resource
 // source and ACK observer.
-func NewServer(resourceTypes map[string]*ResourceTypeConfiguration) *Server {
+func (x *xds) NewServer(resourceTypes map[string]*ResourceTypeConfiguration) *Server {
 	watchers := make(map[string]*ResourceWatcher, len(resourceTypes))
 	ackObservers := make(map[string]ResourceVersionAckObserver, len(resourceTypes))
 	for typeURL, resType := range resourceTypes {
@@ -106,7 +108,7 @@ func NewServer(resourceTypes map[string]*ResourceTypeConfiguration) *Server {
 
 	// TODO: Unregister the watchers when stopping the server.
 
-	return &Server{watchers: watchers, ackObservers: ackObservers}
+	return &Server{xds: x, watchers: watchers, ackObservers: ackObservers}
 }
 
 func getXDSRequestFields(req *envoy_service_discovery.DiscoveryRequest) logrus.Fields {
@@ -253,6 +255,23 @@ func (s *Server) processRequestStream(ctx context.Context, streamLog *logrus.Ent
 	streamLog.Info("starting xDS stream processing")
 
 	nodeIP := ""
+
+	if s.restorerPromise != nil {
+		restorer, err := s.restorerPromise.Await(context.Background())
+		if err != nil {
+			return err
+		}
+
+		if restorer != nil {
+			streamLog.Debug("Waiting for endpoint restoration before serving resources...")
+			restorer.WaitForEndpointRestore(ctx)
+			for typeURL, ackObserver := range s.ackObservers {
+				streamLog.WithField(logfields.XDSTypeURL, typeURL).
+					Debug("Endpoints restored, starting serving.")
+				ackObserver.MarkRestoreCompleted()
+			}
+		}
+	}
 
 	for {
 		// Process either a new request from the xDS stream or a response

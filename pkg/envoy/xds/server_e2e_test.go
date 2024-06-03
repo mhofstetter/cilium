@@ -87,13 +87,13 @@ func TestRequestAllResources(t *testing.T) {
 	defer cancel()
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache)
+	mutator := NewAckingResourceMutatorWrapper(cache, false)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -210,13 +210,13 @@ func TestAck(t *testing.T) {
 	wg := completion.NewWaitGroup(ctx)
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache)
+	mutator := NewAckingResourceMutatorWrapper(cache, false)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -331,13 +331,13 @@ func TestRequestSomeResources(t *testing.T) {
 	defer cancel()
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache)
+	mutator := NewAckingResourceMutatorWrapper(cache, false)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -501,13 +501,13 @@ func TestUpdateRequestResources(t *testing.T) {
 	defer cancel()
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache)
+	mutator := NewAckingResourceMutatorWrapper(cache, false)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -601,13 +601,13 @@ func TestRequestStaleNonce(t *testing.T) {
 	defer cancel()
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache)
+	mutator := NewAckingResourceMutatorWrapper(cache, false)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -727,13 +727,13 @@ func TestNAck(t *testing.T) {
 	wg := completion.NewWaitGroup(ctx)
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache)
+	mutator := NewAckingResourceMutatorWrapper(cache, false)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -853,13 +853,13 @@ func TestNAckFromTheStart(t *testing.T) {
 	wg := completion.NewWaitGroup(ctx)
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache)
+	mutator := NewAckingResourceMutatorWrapper(cache, false)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -980,13 +980,13 @@ func TestRequestHighVersionFromTheStart(t *testing.T) {
 	wg := completion.NewWaitGroup(ctx)
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache)
+	mutator := NewAckingResourceMutatorWrapper(cache, false)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
