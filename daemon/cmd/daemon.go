@@ -701,36 +701,9 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	d.configureIPAM()
 
 	if option.Config.JoinCluster {
-		if params.Clientset.IsEnabled() {
-			log.WithError(err).Errorf("cannot join a Cilium cluster (--%s) when configured as a Kubernetes node", option.JoinClusterName)
-			return nil, nil, fmt.Errorf("cannot join a Cilium cluster (--%s) when configured as a Kubernetes node", option.JoinClusterName)
-		}
-		if option.Config.KVStore == "" {
-			log.WithError(err).Errorf("joining a Cilium cluster (--%s) requires kvstore (--%s) be set", option.JoinClusterName, option.KVStore)
-			return nil, nil, fmt.Errorf("joining a Cilium cluster (--%s) requires kvstore (--%s) be set", option.JoinClusterName, option.KVStore)
-		}
-
-		agentLabels := labels.NewLabelsFromModel(option.Config.AgentLabels).K8sStringMap()
-		if option.Config.K8sNamespace != "" {
-			agentLabels[k8sConst.PodNamespaceLabel] = option.Config.K8sNamespace
-		}
-		agentLabels[k8sConst.PodNameLabel] = nodeTypes.GetName()
-		agentLabels[k8sConst.PolicyLabelCluster] = option.Config.ClusterName
-
-		// Set configured agent labels to local node for node registration
-		params.LocalNodeStore.Update(func(ln *node.LocalNode) {
-			ln.Labels = maps.Clone(ln.Labels)
-			maps.Copy(ln.Labels, agentLabels)
-		})
-
-		// This can override node addressing config, so do this before starting IPAM
-		log.WithField(logfields.NodeName, nodeTypes.GetName()).Debug("Calling JoinCluster()")
-		if err := d.nodeDiscovery.JoinCluster(nodeTypes.GetName()); err != nil {
+		if err := joinCluster(params.Clientset, params.LocalNodeStore, params.NodeDiscovery, d.k8sWatcher.K8sSvcCache); err != nil {
 			return nil, nil, err
 		}
-
-		// Start services watcher
-		serviceStore.JoinClusterServices(d.k8sWatcher.K8sSvcCache, option.Config.ClusterName)
 	}
 
 	// Start IPAM
@@ -889,6 +862,41 @@ func lbInitParamsFromConfig() lbmap.InitParams {
 	}
 
 	return lbmapInitParams
+}
+
+func joinCluster(clientset k8sClient.Clientset, localNodeStore *node.LocalNodeStore, nodeDiscovery *nodediscovery.NodeDiscovery, k8sSvcCache *k8s.ServiceCache) error {
+	if clientset.IsEnabled() {
+		log.Errorf("cannot join a Cilium cluster (--%s) when configured as a Kubernetes node", option.JoinClusterName)
+		return fmt.Errorf("cannot join a Cilium cluster (--%s) when configured as a Kubernetes node", option.JoinClusterName)
+	}
+	if option.Config.KVStore == "" {
+		log.Errorf("joining a Cilium cluster (--%s) requires kvstore (--%s) be set", option.JoinClusterName, option.KVStore)
+		return fmt.Errorf("joining a Cilium cluster (--%s) requires kvstore (--%s) be set", option.JoinClusterName, option.KVStore)
+	}
+
+	agentLabels := labels.NewLabelsFromModel(option.Config.AgentLabels).K8sStringMap()
+	if option.Config.K8sNamespace != "" {
+		agentLabels[k8sConst.PodNamespaceLabel] = option.Config.K8sNamespace
+	}
+	agentLabels[k8sConst.PodNameLabel] = nodeTypes.GetName()
+	agentLabels[k8sConst.PolicyLabelCluster] = option.Config.ClusterName
+
+	// Set configured agent labels to local node for node registration
+	localNodeStore.Update(func(ln *node.LocalNode) {
+		ln.Labels = maps.Clone(ln.Labels)
+		maps.Copy(ln.Labels, agentLabels)
+	})
+
+	// This can override node addressing config, so do this before starting IPAM
+	log.WithField(logfields.NodeName, nodeTypes.GetName()).Debug("Calling JoinCluster()")
+	if err := nodeDiscovery.JoinCluster(nodeTypes.GetName()); err != nil {
+		return err
+	}
+
+	// Start services watcher
+	serviceStore.JoinClusterServices(k8sSvcCache, option.Config.ClusterName)
+
+	return nil
 }
 
 func (d *Daemon) stopAllEndpoints() {
