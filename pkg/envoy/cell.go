@@ -116,7 +116,7 @@ type xdsServerParams struct {
 
 	Lifecycle          cell.Lifecycle
 	IPCache            *ipcache.IPCache
-	XDS                xds.XDS
+	XDS                *xds.Server
 	LocalEndpointStore *LocalEndpointStore
 
 	EnvoyProxyConfig envoyProxyConfig

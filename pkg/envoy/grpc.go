@@ -21,11 +21,9 @@ import (
 	"github.com/cilium/cilium/pkg/envoy/xds"
 )
 
-var (
-	// ErrNotImplemented is the error returned by gRPC methods that are not
-	// implemented by Cilium.
-	ErrNotImplemented = errors.New("not implemented")
-)
+// ErrNotImplemented is the error returned by gRPC methods that are not
+// implemented by Cilium.
+var ErrNotImplemented = errors.New("not implemented")
 
 // startXDSGRPCServer starts a gRPC server to serve xDS APIs using the given
 // resource watcher and network listener.
@@ -34,12 +32,12 @@ func (s *xdsServer) startXDSGRPCServer(listener net.Listener, config map[string]
 	grpcServer := grpc.NewServer()
 
 	// xdsServer optionally pauses serving any resources until endpoints have been restored
-	xdsServer := s.xDS.NewServer(config)
-	dsServer := (*xdsGRPCServer)(xdsServer)
+	s.xDS.ConfigureResourceTypes(config)
+	dsServer := (*xdsGRPCServer)(s.xDS)
 
 	// TODO: https://github.com/cilium/cilium/issues/5051
 	// Implement IncrementalAggregatedResources to support Incremental xDS.
-	//envoy_service_discovery_v3.RegisterAggregatedDiscoveryServiceServer(grpcServer, dsServer)
+	// envoy_service_discovery_v3.RegisterAggregatedDiscoveryServiceServer(grpcServer, dsServer)
 	envoy_service_secret.RegisterSecretDiscoveryServiceServer(grpcServer, dsServer)
 	envoy_service_endpoint.RegisterEndpointDiscoveryServiceServer(grpcServer, dsServer)
 	envoy_service_cluster.RegisterClusterDiscoveryServiceServer(grpcServer, dsServer)

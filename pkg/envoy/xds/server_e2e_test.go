@@ -27,13 +27,11 @@ const (
 	StreamTimeout = 4 * time.Second
 )
 
-var (
-	nodes = map[string]*envoy_config_core.Node{
-		node0: {Id: "node0~10.0.0.0~node0~bar"},
-		node1: {Id: "node1~10.0.0.1~node1~bar"},
-		node2: {Id: "node2~10.0.0.2~node2~bar"},
-	}
-)
+var nodes = map[string]*envoy_config_core.Node{
+	node0: {Id: "node0~10.0.0.0~node0~bar"},
+	node1: {Id: "node1~10.0.0.1~node1~bar"},
+	node2: {Id: "node2~10.0.0.2~node2~bar"},
+}
 
 var resources = []*envoy_config_route.RouteConfiguration{
 	{Name: "resource0"},
@@ -42,7 +40,8 @@ var resources = []*envoy_config_route.RouteConfiguration{
 }
 
 func responseCheck(response *envoy_service_discovery.DiscoveryResponse,
-	versionInfo string, resources []proto.Message, canary bool, typeURL string) assert.Comparison {
+	versionInfo string, resources []proto.Message, canary bool, typeURL string,
+) assert.Comparison {
 	return func() bool {
 		result := response.VersionInfo == versionInfo &&
 			len(response.Resources) == len(resources) &&
@@ -93,7 +92,8 @@ func TestRequestAllResources(t *testing.T) {
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := &Server{}
+	server.ConfigureResourceTypes(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -216,7 +216,8 @@ func TestAck(t *testing.T) {
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := &Server{}
+	server.ConfigureResourceTypes(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -337,7 +338,8 @@ func TestRequestSomeResources(t *testing.T) {
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := &Server{}
+	server.ConfigureResourceTypes(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -507,7 +509,8 @@ func TestUpdateRequestResources(t *testing.T) {
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := &Server{}
+	server.ConfigureResourceTypes(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -607,7 +610,8 @@ func TestRequestStaleNonce(t *testing.T) {
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := &Server{}
+	server.ConfigureResourceTypes(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -733,7 +737,8 @@ func TestNAck(t *testing.T) {
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := &Server{}
+	server.ConfigureResourceTypes(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -859,7 +864,8 @@ func TestNAckFromTheStart(t *testing.T) {
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := &Server{}
+	server.ConfigureResourceTypes(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 
@@ -986,7 +992,8 @@ func TestRequestHighVersionFromTheStart(t *testing.T) {
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
 	defer stream.Close()
 
-	server := MockXDS().NewServer(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
+	server := &Server{}
+	server.ConfigureResourceTypes(map[string]*ResourceTypeConfiguration{typeURL: {Source: cache, AckObserver: mutator}})
 
 	streamDone := make(chan struct{})
 

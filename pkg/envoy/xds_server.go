@@ -190,7 +190,7 @@ type xdsServer struct {
 	// them to the proxy via NPHDS in the cases described
 	ipCache IPCacheEventSource
 
-	xDS xds.XDS
+	xDS *xds.Server
 
 	localEndpointStore *LocalEndpointStore
 }
@@ -218,7 +218,7 @@ type xdsServerConfig struct {
 }
 
 // newXDSServer creates a new xDS GRPC server.
-func newXDSServer(xDS xds.XDS, ipCache IPCacheEventSource, localEndpointStore *LocalEndpointStore, config xdsServerConfig) (*xdsServer, error) {
+func newXDSServer(xDS *xds.Server, ipCache IPCacheEventSource, localEndpointStore *LocalEndpointStore, config xdsServerConfig) (*xdsServer, error) {
 	return &xdsServer{
 		xDS:                xDS,
 		listeners:          make(map[string]*Listener),
@@ -367,7 +367,6 @@ func GetUpstreamCodecFilter() *envoy_config_http.HttpFilter {
 }
 
 func (s *xdsServer) getHttpFilterChainProto(clusterName string, tls bool, isIngress bool) *envoy_config_listener.FilterChain {
-
 	requestTimeout := int64(s.config.httpRequestTimeout) // seconds
 	idleTimeout := int64(s.config.httpIdleTimeout)       // seconds
 	maxGRPCTimeout := int64(s.config.httpMaxGRPCTimeout) // seconds

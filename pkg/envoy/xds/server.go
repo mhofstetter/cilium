@@ -18,7 +18,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	"github.com/cilium/cilium/pkg/endpointstate"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/promise"
 )
 
 const (
@@ -63,8 +65,6 @@ var (
 
 // Server implements the handling of xDS streams.
 type Server struct {
-	*xds
-
 	// watchers maps each supported type URL to its corresponding resource
 	// watcher.
 	watchers map[string]*ResourceWatcher
@@ -76,6 +76,10 @@ type Server struct {
 	// lastStreamID is the identifier of the last processed stream.
 	// It is incremented atomically when starting the handling of a new stream.
 	lastStreamID atomic.Uint64
+
+	// restorerPromise is initialized only if xDS server should wait sending any xDS resources
+	// until all endpoints have been restored.
+	restorerPromise promise.Promise[endpointstate.Restorer]
 }
 
 // ResourceTypeConfiguration is the configuration of the XDS server for a
@@ -89,11 +93,11 @@ type ResourceTypeConfiguration struct {
 	AckObserver ResourceVersionAckObserver
 }
 
-// NewServer creates an xDS gRPC stream handler using the given resource
-// sources.
+// ConfigureResourceTypes configures the xdsServer with xDS gRPC stream handlers
+// using the given resource sources.
 // types maps each supported resource type URL to its corresponding resource
 // source and ACK observer.
-func (x *xds) NewServer(resourceTypes map[string]*ResourceTypeConfiguration) *Server {
+func (s *Server) ConfigureResourceTypes(resourceTypes map[string]*ResourceTypeConfiguration) {
 	watchers := make(map[string]*ResourceWatcher, len(resourceTypes))
 	ackObservers := make(map[string]ResourceVersionAckObserver, len(resourceTypes))
 	for typeURL, resType := range resourceTypes {
@@ -107,8 +111,12 @@ func (x *xds) NewServer(resourceTypes map[string]*ResourceTypeConfiguration) *Se
 	}
 
 	// TODO: Unregister the watchers when stopping the server.
+	s.watchers = watchers
+	s.ackObservers = ackObservers
+}
 
-	return &Server{xds: x, watchers: watchers, ackObservers: ackObservers}
+func (s *Server) Restore() bool {
+	return s.restorerPromise != nil
 }
 
 func getXDSRequestFields(req *envoy_service_discovery.DiscoveryRequest) logrus.Fields {
