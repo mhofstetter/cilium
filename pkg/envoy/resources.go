@@ -77,6 +77,8 @@ func newNPHDSCache(ipcache IPCacheEventSource) NPHDSCache {
 
 var observerOnce = sync.Once{}
 
+func (cache *NPHDSCache) MarkRestorePending() {}
+
 func (cache *NPHDSCache) MarkRestoreCompleted() {}
 
 // HandleResourceVersionAck is required to implement ResourceVersionAckObserver.

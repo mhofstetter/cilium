@@ -85,7 +85,7 @@ func TestUpsertSingleNode(t *testing.T) {
 
 	// Empty cache is the version 1
 	cache := NewCache()
-	acker := NewAckingResourceMutatorWrapper(cache, false)
+	acker := NewAckingResourceMutatorWrapper(cache)
 	require.Len(t, acker.ackedVersions, 0)
 
 	// Create version 2 with resource 0.
@@ -139,7 +139,7 @@ func TestUseCurrent(t *testing.T) {
 
 	// Empty cache is the version 1
 	cache := NewCache()
-	acker := NewAckingResourceMutatorWrapper(cache, false)
+	acker := NewAckingResourceMutatorWrapper(cache)
 	require.Len(t, acker.ackedVersions, 0)
 
 	// Create version 2 with resource 0.
@@ -191,7 +191,7 @@ func TestUpsertMultipleNodes(t *testing.T) {
 
 	// Empty cache is the version 1
 	cache := NewCache()
-	acker := NewAckingResourceMutatorWrapper(cache, false)
+	acker := NewAckingResourceMutatorWrapper(cache)
 	require.Len(t, acker.ackedVersions, 0)
 
 	// Create version 2 with resource 0.
@@ -236,7 +236,7 @@ func TestUpsertMoreRecentVersion(t *testing.T) {
 
 	// Empty cache is the version 1
 	cache := NewCache()
-	acker := NewAckingResourceMutatorWrapper(cache, false)
+	acker := NewAckingResourceMutatorWrapper(cache)
 
 	// Create version 2 with resource 0.
 	callback, comp := newCompCallback()
@@ -260,7 +260,7 @@ func TestUpsertMoreRecentVersionNack(t *testing.T) {
 
 	// Empty cache is the version 1
 	cache := NewCache()
-	acker := NewAckingResourceMutatorWrapper(cache, false)
+	acker := NewAckingResourceMutatorWrapper(cache)
 
 	// Create version 2 with resource 0.
 	callback, comp := newCompCallback()
@@ -287,7 +287,7 @@ func TestDeleteSingleNode(t *testing.T) {
 
 	// Empty cache is the version 1
 	cache := NewCache()
-	acker := NewAckingResourceMutatorWrapper(cache, false)
+	acker := NewAckingResourceMutatorWrapper(cache)
 
 	// Create version 2 with resource 0.
 	callback, comp := newCompCallback()
@@ -321,7 +321,7 @@ func TestDeleteMultipleNodes(t *testing.T) {
 
 	// Empty cache is the version 1
 	cache := NewCache()
-	acker := NewAckingResourceMutatorWrapper(cache, false)
+	acker := NewAckingResourceMutatorWrapper(cache)
 
 	// Create version 2 with resource 0.
 	callback, comp := newCompCallback()
@@ -354,7 +354,7 @@ func TestRevertInsert(t *testing.T) {
 	wg := completion.NewWaitGroup(ctx)
 
 	cache := NewCache()
-	acker := NewAckingResourceMutatorWrapper(cache, false)
+	acker := NewAckingResourceMutatorWrapper(cache)
 
 	// Create version 1 with resource 0.
 	// Insert.
@@ -391,7 +391,7 @@ func TestRevertUpdate(t *testing.T) {
 	wg := completion.NewWaitGroup(ctx)
 
 	cache := NewCache()
-	acker := NewAckingResourceMutatorWrapper(cache, false)
+	acker := NewAckingResourceMutatorWrapper(cache)
 
 	// Create version 1 with resource 0.
 	// Insert.
@@ -435,7 +435,7 @@ func TestRevertDelete(t *testing.T) {
 	wg := completion.NewWaitGroup(ctx)
 
 	cache := NewCache()
-	acker := NewAckingResourceMutatorWrapper(cache, false)
+	acker := NewAckingResourceMutatorWrapper(cache)
 
 	// Create version 1 with resource 0.
 	// Insert.

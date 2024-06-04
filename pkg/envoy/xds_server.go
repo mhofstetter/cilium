@@ -246,45 +246,43 @@ func (s *xdsServer) start() error {
 }
 
 func (s *xdsServer) initializeXdsConfigs() map[string]*xds.ResourceTypeConfiguration {
-	restore := s.xDS.Restore()
-
 	ldsCache := xds.NewCache()
-	ldsMutator := xds.NewAckingResourceMutatorWrapper(ldsCache, restore)
+	ldsMutator := xds.NewAckingResourceMutatorWrapper(ldsCache)
 	ldsConfig := &xds.ResourceTypeConfiguration{
 		Source:      ldsCache,
 		AckObserver: ldsMutator,
 	}
 
 	rdsCache := xds.NewCache()
-	rdsMutator := xds.NewAckingResourceMutatorWrapper(rdsCache, restore)
+	rdsMutator := xds.NewAckingResourceMutatorWrapper(rdsCache)
 	rdsConfig := &xds.ResourceTypeConfiguration{
 		Source:      rdsCache,
 		AckObserver: rdsMutator,
 	}
 
 	cdsCache := xds.NewCache()
-	cdsMutator := xds.NewAckingResourceMutatorWrapper(cdsCache, restore)
+	cdsMutator := xds.NewAckingResourceMutatorWrapper(cdsCache)
 	cdsConfig := &xds.ResourceTypeConfiguration{
 		Source:      cdsCache,
 		AckObserver: cdsMutator,
 	}
 
 	edsCache := xds.NewCache()
-	edsMutator := xds.NewAckingResourceMutatorWrapper(edsCache, restore)
+	edsMutator := xds.NewAckingResourceMutatorWrapper(edsCache)
 	edsConfig := &xds.ResourceTypeConfiguration{
 		Source:      edsCache,
 		AckObserver: edsMutator,
 	}
 
 	sdsCache := xds.NewCache()
-	sdsMutator := xds.NewAckingResourceMutatorWrapper(sdsCache, restore)
+	sdsMutator := xds.NewAckingResourceMutatorWrapper(sdsCache)
 	sdsConfig := &xds.ResourceTypeConfiguration{
 		Source:      sdsCache,
 		AckObserver: sdsMutator,
 	}
 
 	npdsCache := xds.NewCache()
-	npdsMutator := xds.NewAckingResourceMutatorWrapper(npdsCache, restore)
+	npdsMutator := xds.NewAckingResourceMutatorWrapper(npdsCache)
 	npdsConfig := &xds.ResourceTypeConfiguration{
 		Source:      npdsCache,
 		AckObserver: npdsMutator,

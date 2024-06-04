@@ -106,6 +106,10 @@ func (s *Server) ConfigureResourceTypes(resourceTypes map[string]*ResourceTypeCo
 		watchers[typeURL] = w
 
 		if resType.AckObserver != nil {
+
+			if s.restore() {
+				resType.AckObserver.MarkRestorePending()
+			}
 			ackObservers[typeURL] = resType.AckObserver
 		}
 	}
@@ -115,7 +119,7 @@ func (s *Server) ConfigureResourceTypes(resourceTypes map[string]*ResourceTypeCo
 	s.ackObservers = ackObservers
 }
 
-func (s *Server) Restore() bool {
+func (s *Server) restore() bool {
 	return s.restorerPromise != nil
 }
 

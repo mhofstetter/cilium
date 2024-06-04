@@ -86,7 +86,7 @@ func TestRequestAllResources(t *testing.T) {
 	defer cancel()
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache, false)
+	mutator := NewAckingResourceMutatorWrapper(cache)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
@@ -210,7 +210,7 @@ func TestAck(t *testing.T) {
 	wg := completion.NewWaitGroup(ctx)
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache, false)
+	mutator := NewAckingResourceMutatorWrapper(cache)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
@@ -332,7 +332,7 @@ func TestRequestSomeResources(t *testing.T) {
 	defer cancel()
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache, false)
+	mutator := NewAckingResourceMutatorWrapper(cache)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
@@ -503,7 +503,7 @@ func TestUpdateRequestResources(t *testing.T) {
 	defer cancel()
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache, false)
+	mutator := NewAckingResourceMutatorWrapper(cache)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
@@ -604,7 +604,7 @@ func TestRequestStaleNonce(t *testing.T) {
 	defer cancel()
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache, false)
+	mutator := NewAckingResourceMutatorWrapper(cache)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
@@ -731,7 +731,7 @@ func TestNAck(t *testing.T) {
 	wg := completion.NewWaitGroup(ctx)
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache, false)
+	mutator := NewAckingResourceMutatorWrapper(cache)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
@@ -858,7 +858,7 @@ func TestNAckFromTheStart(t *testing.T) {
 	wg := completion.NewWaitGroup(ctx)
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache, false)
+	mutator := NewAckingResourceMutatorWrapper(cache)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)
@@ -986,7 +986,7 @@ func TestRequestHighVersionFromTheStart(t *testing.T) {
 	wg := completion.NewWaitGroup(ctx)
 
 	cache := NewCache()
-	mutator := NewAckingResourceMutatorWrapper(cache, false)
+	mutator := NewAckingResourceMutatorWrapper(cache)
 
 	streamCtx, closeStream := context.WithCancel(ctx)
 	stream := NewMockStream(streamCtx, 1, 1, StreamTimeout, StreamTimeout)

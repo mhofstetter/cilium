@@ -36,6 +36,9 @@ type ResourceVersionAckObserver interface {
 	// Calls to this function must not block.
 	HandleResourceVersionAck(ackVersion uint64, nackVersion uint64, nodeIP string, resourceNames []string, typeURL string, detail string)
 
+	// MarkRestorePending informs the observer about a pending state restoration.
+	MarkRestorePending()
+
 	// MarkRestoreCompleted clears the 'restore' state so that updates are acked normally.
 	MarkRestoreCompleted()
 }
@@ -126,13 +129,19 @@ type pendingCompletion struct {
 
 // NewAckingResourceMutatorWrapper creates a new AckingResourceMutatorWrapper
 // to wrap the given ResourceMutator.
-func NewAckingResourceMutatorWrapper(mutator ResourceMutator, restore bool) *AckingResourceMutatorWrapper {
+func NewAckingResourceMutatorWrapper(mutator ResourceMutator) *AckingResourceMutatorWrapper {
 	return &AckingResourceMutatorWrapper{
 		mutator:            mutator,
 		ackedVersions:      make(map[string]uint64),
 		pendingCompletions: make(map[*completion.Completion]*pendingCompletion),
-		restoring:          restore,
 	}
+}
+
+func (m *AckingResourceMutatorWrapper) MarkRestorePending() {
+	m.locker.Lock()
+	defer m.locker.Unlock()
+
+	m.restoring = true
 }
 
 // MarkRestoreCompleted clears the 'restore' state so that updates are acked normally.
