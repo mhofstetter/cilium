@@ -168,7 +168,6 @@ type manager struct {
 
 	// Ensure the pruning is only attempted once.
 	nodePruneOnce sync.Once
-	nodeHandler   datapath.NodeHandler
 }
 
 type nodeQueueEntry struct {
@@ -291,7 +290,7 @@ func NewNodeMetrics() *nodeMetrics {
 }
 
 // New returns a new node manager
-func New(c *option.DaemonConfig, ipCache IPCache, ipsetMgr ipset.Manager, ipsetFilter IPSetFilterFn, nodeMetrics *nodeMetrics, health cell.Health, nodeHandler datapath.NodeHandler) (*manager, error) {
+func New(c *option.DaemonConfig, ipCache IPCache, ipsetMgr ipset.Manager, ipsetFilter IPSetFilterFn, nodeMetrics *nodeMetrics, health cell.Health) (*manager, error) {
 	if ipsetFilter == nil {
 		ipsetFilter = func(*nodeTypes.Node) bool { return false }
 	}
@@ -308,7 +307,6 @@ func New(c *option.DaemonConfig, ipCache IPCache, ipsetMgr ipset.Manager, ipsetF
 		ipsetFilter:       ipsetFilter,
 		metrics:           nodeMetrics,
 		health:            health,
-		nodeHandler:       nodeHandler,
 	}
 
 	return m, nil
@@ -323,13 +321,7 @@ func (m *manager) Start(cell.HookContext) error {
 		return fmt.Errorf("failed to initialize node file writer: %w", err)
 	}
 
-	if err := m.workerpool.Submit("backgroundSync", m.backgroundSync); err != nil {
-		return fmt.Errorf("failed to start background sync: %w", err)
-	}
-
-	m.Subscribe(m.nodeHandler)
-
-	return nil
+	return m.workerpool.Submit("backgroundSync", m.backgroundSync)
 }
 
 // Stop shuts down a node manager
