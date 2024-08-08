@@ -42,9 +42,9 @@ var Cell = cell.Module(
 	"Fake Datapath",
 
 	cell.Provide(
-		func(na types.NodeAddressing) (*fakeTypes.FakeDatapath, types.Datapath, types.NodeIDHandler) {
+		func(na types.NodeAddressing) (*fakeTypes.FakeDatapath, types.Datapath, types.NodeIDHandler, types.NodeHandler) {
 			dp := fakeTypes.NewDatapathWithNodeAddressing(na)
-			return dp, dp, dp.NodeIDs()
+			return dp, dp, dp.NodeIDs(), dp.Node()
 		},
 
 		func() signalmap.Map { return fakesignalmap.NewFakeSignalMap([][]byte{}, time.Second) },
