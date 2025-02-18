@@ -4,11 +4,14 @@
 package envoy
 
 import (
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/cilium/cilium/pkg/logging"
 )
 
 func TestArtifactCopier_Copy_SourceDirDoesntExist(t *testing.T) {
@@ -16,6 +19,7 @@ func TestArtifactCopier_Copy_SourceDirDoesntExist(t *testing.T) {
 	targetTempDir := t.TempDir()
 
 	r := &ArtifactCopier{
+		logger:     slog.New(logging.SlogNopHandler),
 		sourcePath: sourceTempDir,
 		targetPath: targetTempDir,
 	}
@@ -33,6 +37,7 @@ func TestArtifactCopier_Copy_EmptySourceDir(t *testing.T) {
 	targetTempDir := t.TempDir()
 
 	r := &ArtifactCopier{
+		logger:     slog.New(logging.SlogNopHandler),
 		sourcePath: sourceTempDir,
 		targetPath: targetTempDir,
 	}
@@ -53,6 +58,7 @@ func TestArtifactCopier_Copy_CopyFiles(t *testing.T) {
 	assert.NoError(t, err)
 
 	r := &ArtifactCopier{
+		logger:     slog.New(logging.SlogNopHandler),
 		sourcePath: sourceTempDir,
 		targetPath: targetTempDir,
 	}
@@ -81,6 +87,7 @@ func TestArtifactCopier_Copy_DontCopySymlinks(t *testing.T) {
 	assert.NoError(t, err)
 
 	r := &ArtifactCopier{
+		logger:     slog.New(logging.SlogNopHandler),
 		sourcePath: sourceTempDir,
 		targetPath: targetTempDir,
 	}
@@ -102,6 +109,7 @@ func TestArtifactCopier_Copy_DontCopyDirectories(t *testing.T) {
 	assert.NoError(t, err)
 
 	r := &ArtifactCopier{
+		logger:     slog.New(logging.SlogNopHandler),
 		sourcePath: sourceTempDir,
 		targetPath: targetTempDir,
 	}
@@ -128,6 +136,7 @@ func TestArtifactCopier_Copy_CleanupExistingContent(t *testing.T) {
 	assert.NoError(t, err)
 
 	r := &ArtifactCopier{
+		logger:     slog.New(logging.SlogNopHandler),
 		sourcePath: sourceTempDir,
 		targetPath: targetTempDir,
 	}
