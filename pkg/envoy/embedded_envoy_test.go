@@ -5,6 +5,7 @@ package envoy
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -69,7 +70,9 @@ func TestEnvoy(t *testing.T) {
 
 	localEndpointStore := newLocalEndpointStore()
 
-	xdsServer := newXDSServer(nil, testipcache.NewMockIPCache(), localEndpointStore,
+	logger := slog.New(logging.SlogNopHandler)
+
+	xdsServer := newXDSServer(logger, nil, testipcache.NewMockIPCache(), localEndpointStore,
 		xdsServerConfig{
 			envoySocketDir:    GetSocketDir(testRunDir),
 			proxyGID:          1337,
@@ -184,7 +187,9 @@ func TestEnvoyNACK(t *testing.T) {
 
 	localEndpointStore := newLocalEndpointStore()
 
-	xdsServer := newXDSServer(nil, testipcache.NewMockIPCache(), localEndpointStore,
+	logger := slog.New(logging.SlogNopHandler)
+
+	xdsServer := newXDSServer(logger, nil, testipcache.NewMockIPCache(), localEndpointStore,
 		xdsServerConfig{
 			envoySocketDir:    GetSocketDir(testRunDir),
 			proxyGID:          1337,
