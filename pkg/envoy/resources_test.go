@@ -4,14 +4,17 @@
 package envoy
 
 import (
+	"log/slog"
 	"testing"
 
 	envoyAPI "github.com/cilium/proxy/go/cilium/api"
 	"github.com/stretchr/testify/require"
+
+	"github.com/cilium/cilium/pkg/logging"
 )
 
 func TestHandleIPUpsert(t *testing.T) {
-	cache := newNPHDSCache(nil)
+	cache := newNPHDSCache(slog.New(logging.SlogNopHandler), nil)
 
 	msg, err := cache.Lookup(NetworkPolicyHostsTypeURL, "123")
 	require.NoError(t, err)
