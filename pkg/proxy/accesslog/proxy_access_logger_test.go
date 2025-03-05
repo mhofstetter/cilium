@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
 
-package logger
+package accesslog
 
 import (
 	"bytes"
@@ -23,7 +23,7 @@ import (
 	"github.com/cilium/cilium/pkg/monitor/api"
 	"github.com/cilium/cilium/pkg/monitor/payload"
 	"github.com/cilium/cilium/pkg/node"
-	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
+	"github.com/cilium/cilium/pkg/proxy/accesslog/types"
 	"github.com/cilium/cilium/pkg/u8proto"
 )
 
@@ -31,15 +31,15 @@ import (
 // DNS related events notification.
 func mockLogRecord(accessLogger ProxyAccessLogger) *LogRecord {
 	return accessLogger.NewLogRecord(
-		accesslog.TypeResponse,
+		types.TypeResponse,
 		false,
 		func(lr *LogRecord, _ EndpointInfoRegistry) {
-			lr.LogRecord.TransportProtocol = accesslog.TransportProtocol(
+			lr.LogRecord.TransportProtocol = types.TransportProtocol(
 				u8proto.ProtoIDs[strings.ToLower("udp")],
 			)
 		},
 		LogTags.Verdict(
-			accesslog.VerdictForwarded,
+			types.VerdictForwarded,
 			"just a benchmark",
 		),
 		LogTags.Addressing(context.Background(), AddressingInfo{
@@ -48,7 +48,7 @@ func mockLogRecord(accessLogger ProxyAccessLogger) *LogRecord {
 			SrcIPPort:   "53",
 			SrcIdentity: 1,
 		}),
-		LogTags.DNS(&accesslog.LogRecordDNS{
+		LogTags.DNS(&types.LogRecordDNS{
 			Query: "data.test.svc.cluster.local",
 			IPs: []netip.Addr{
 				netip.MustParseAddr("1.1.1.1"),
@@ -60,7 +60,7 @@ func mockLogRecord(accessLogger ProxyAccessLogger) *LogRecord {
 				"alt1.test.svc.cluster.local",
 				"alt2.test.svc.cluster.local",
 			},
-			ObservationSource: accesslog.DNSSourceProxy,
+			ObservationSource: types.DNSSourceProxy,
 			RCode:             dns.RcodeSuccess,
 			QTypes:            []uint16{dns.TypeA, dns.TypeAAAA},
 			AnswerTypes:       []uint16{dns.TypeA, dns.TypeAAAA},

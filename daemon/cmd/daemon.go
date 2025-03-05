@@ -71,7 +71,7 @@ import (
 	"github.com/cilium/cilium/pkg/policy"
 	policyAPI "github.com/cilium/cilium/pkg/policy/api"
 	"github.com/cilium/cilium/pkg/proxy"
-	"github.com/cilium/cilium/pkg/proxy/logger"
+	"github.com/cilium/cilium/pkg/proxy/accesslog"
 	"github.com/cilium/cilium/pkg/rate"
 	"github.com/cilium/cilium/pkg/redirectpolicy"
 	"github.com/cilium/cilium/pkg/resiliency"
@@ -94,7 +94,7 @@ type Daemon struct {
 	db                *statedb.DB
 	buildEndpointSem  *semaphore.Weighted
 	l7Proxy           *proxy.Proxy
-	proxyAccessLogger logger.ProxyAccessLogger
+	proxyAccessLogger accesslog.ProxyAccessLogger
 	envoyXdsServer    envoy.XDSServer
 	svc               service.ServiceManager
 	policy            policy.PolicyRepository
