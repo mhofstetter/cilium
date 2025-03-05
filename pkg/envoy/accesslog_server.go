@@ -21,7 +21,7 @@ import (
 	"github.com/cilium/cilium/pkg/flowdebug"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/logging/logfields"
-	"github.com/cilium/cilium/pkg/proxy/accesslog"
+	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
 	"github.com/cilium/cilium/pkg/proxy/logger"
 	"github.com/cilium/cilium/pkg/time"
 )

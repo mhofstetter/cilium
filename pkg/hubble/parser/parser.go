@@ -23,7 +23,7 @@ import (
 	"github.com/cilium/cilium/pkg/hubble/parser/sock"
 	"github.com/cilium/cilium/pkg/hubble/parser/threefour"
 	monitorAPI "github.com/cilium/cilium/pkg/monitor/api"
-	"github.com/cilium/cilium/pkg/proxy/accesslog"
+	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
 )
 
 // Decoder is an interface for the parser.

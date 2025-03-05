@@ -11,7 +11,7 @@ import (
 
 	cilium "github.com/cilium/proxy/go/cilium/api"
 
-	"github.com/cilium/cilium/pkg/proxy/accesslog"
+	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
 )
 
 // ParseURL returns the URL as *net.url.URL

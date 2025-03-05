@@ -10,7 +10,7 @@ import (
 	flowpb "github.com/cilium/cilium/api/v1/flow"
 	"github.com/cilium/cilium/pkg/hubble/defaults"
 	"github.com/cilium/cilium/pkg/hubble/parser/options"
-	"github.com/cilium/cilium/pkg/proxy/accesslog"
+	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
 )
 
 func Test_decodeKafka(t *testing.T) {

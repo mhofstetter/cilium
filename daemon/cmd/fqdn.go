@@ -23,7 +23,7 @@ import (
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/proxy"
-	"github.com/cilium/cilium/pkg/proxy/accesslog"
+	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
 	"github.com/cilium/cilium/pkg/proxy/logger"
 	proxytypes "github.com/cilium/cilium/pkg/proxy/types"
 	"github.com/cilium/cilium/pkg/time"
