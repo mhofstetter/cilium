@@ -9,18 +9,23 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/cilium/cilium/pkg/flowdebug"
+	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/proxy/accesslog"
+	"github.com/cilium/cilium/pkg/time"
 )
 
 type ProxyAccessLogger interface {
 	Log(lr *LogRecord)
+	NewLogRecord(t accesslog.FlowType, ingress bool, tags ...LogTag) *LogRecord
 }
 
 type proxyAccessLogger struct {
 	logger *slog.Logger
 
-	notifier LogRecordNotifier
-	metadata []string
+	notifier             LogRecordNotifier
+	endpointInfoRegistry EndpointInfoRegistry
+	metadata             []string
 }
 
 // LogRecordNotifier is the interface to implement LogRecord notifications.
@@ -33,12 +38,51 @@ type LogRecordNotifier interface {
 	NewProxyLogRecord(l *LogRecord) error
 }
 
-func NewProcyAccessLogger(logger *slog.Logger, config ProxyAccessLoggerConfig, notifier LogRecordNotifier) ProxyAccessLogger {
+func NewProcyAccessLogger(logger *slog.Logger, config ProxyAccessLoggerConfig, notifier LogRecordNotifier, endpointInfoRegistry EndpointInfoRegistry) ProxyAccessLogger {
 	return &proxyAccessLogger{
-		logger:   logger,
-		notifier: notifier,
-		metadata: option.Config.AgentLabels, // TODO: use value from config struct
+		logger:               logger,
+		notifier:             notifier,
+		endpointInfoRegistry: endpointInfoRegistry,
+		metadata:             option.Config.AgentLabels, // TODO: use value from config struct
 	}
+}
+
+// NewLogRecord creates a new log record and applies optional tags
+//
+// Example:
+// NewLogRecord(flowType, observationPoint, logger.LogTags.Timestamp(time.Now()))
+func (r *proxyAccessLogger) NewLogRecord(t accesslog.FlowType, ingress bool, tags ...LogTag) *LogRecord {
+	var observationPoint accesslog.ObservationPoint
+	if ingress {
+		observationPoint = accesslog.Ingress
+	} else {
+		observationPoint = accesslog.Egress
+	}
+
+	lr := LogRecord{
+		LogRecord: accesslog.LogRecord{
+			Type:              t,
+			ObservationPoint:  observationPoint,
+			IPVersion:         accesslog.VersionIPv4,
+			TransportProtocol: 6,
+			Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
+			NodeAddressInfo:   accesslog.NodeAddressInfo{},
+		},
+	}
+
+	if ip := node.GetIPv4(); ip != nil {
+		lr.LogRecord.NodeAddressInfo.IPv4 = ip.String()
+	}
+
+	if ip := node.GetIPv6(); ip != nil {
+		lr.LogRecord.NodeAddressInfo.IPv6 = ip.String()
+	}
+
+	for _, tagFn := range tags {
+		tagFn(&lr, r.endpointInfoRegistry)
+	}
+
+	return &lr
 }
 
 // Log logs the given log record to the flow log (if flow debug logging is enabled)
