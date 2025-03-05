@@ -12,8 +12,8 @@ import (
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
 	"github.com/cilium/cilium/pkg/ipcache"
-	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
-	"github.com/cilium/cilium/pkg/proxy/logger"
+	"github.com/cilium/cilium/pkg/proxy/accesslog"
+	accesslogTypes "github.com/cilium/cilium/pkg/proxy/accesslog/types"
 )
 
 // EndpointLookup is any type which maps from IP to the endpoint owning that IP.
@@ -28,7 +28,7 @@ type endpointInfoRegistry struct {
 	identityAllocator cache.IdentityAllocator
 }
 
-func NewEndpointInfoRegistry(ipc *ipcache.IPCache, endpointManager endpointmanager.EndpointsLookup, identityAllocator cache.IdentityAllocator) logger.EndpointInfoRegistry {
+func NewEndpointInfoRegistry(ipc *ipcache.IPCache, endpointManager endpointmanager.EndpointsLookup, identityAllocator cache.IdentityAllocator) accesslog.EndpointInfoRegistry {
 	// **NOTE** The global identity allocator is not yet initialized here;
 	// that happens in the daemon init via InitIdentityAllocator().
 	// Only the local identity allocator is initialized here.
@@ -44,7 +44,7 @@ func NewEndpointInfoRegistry(ipc *ipcache.IPCache, endpointManager endpointmanag
 // It will populate empty fields on a best-effort basis.
 // Resolving security labels may require accessing the kvstore; labelLookupTimeout sets
 // the timeout.
-func (r *endpointInfoRegistry) FillEndpointInfo(ctx context.Context, info *accesslog.EndpointInfo, addr netip.Addr) {
+func (r *endpointInfoRegistry) FillEndpointInfo(ctx context.Context, info *accesslogTypes.EndpointInfo, addr netip.Addr) {
 	if addr.IsValid() {
 		if addr.Is4() {
 			info.IPv4 = addr.String()

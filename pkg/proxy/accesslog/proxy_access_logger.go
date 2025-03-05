@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
 
-package logger
+package accesslog
 
 import (
 	"log/slog"
 
 	"github.com/cilium/cilium/pkg/flowdebug"
 	"github.com/cilium/cilium/pkg/node"
-	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
+	"github.com/cilium/cilium/pkg/proxy/accesslog/types"
 	"github.com/cilium/cilium/pkg/time"
 )
 
 type ProxyAccessLogger interface {
 	Log(lr *LogRecord)
-	NewLogRecord(t accesslog.FlowType, ingress bool, tags ...LogTag) *LogRecord
+	NewLogRecord(t types.FlowType, ingress bool, tags ...LogTag) *LogRecord
 }
 
 type proxyAccessLogger struct {
@@ -48,22 +48,22 @@ func NewProcyAccessLogger(logger *slog.Logger, config ProxyAccessLoggerConfig, n
 //
 // Example:
 // NewLogRecord(flowType, observationPoint, logger.LogTags.Timestamp(time.Now()))
-func (r *proxyAccessLogger) NewLogRecord(t accesslog.FlowType, ingress bool, tags ...LogTag) *LogRecord {
-	var observationPoint accesslog.ObservationPoint
+func (r *proxyAccessLogger) NewLogRecord(t types.FlowType, ingress bool, tags ...LogTag) *LogRecord {
+	var observationPoint types.ObservationPoint
 	if ingress {
-		observationPoint = accesslog.Ingress
+		observationPoint = types.Ingress
 	} else {
-		observationPoint = accesslog.Egress
+		observationPoint = types.Egress
 	}
 
 	lr := LogRecord{
-		LogRecord: accesslog.LogRecord{
+		LogRecord: types.LogRecord{
 			Type:              t,
 			ObservationPoint:  observationPoint,
-			IPVersion:         accesslog.VersionIPv4,
+			IPVersion:         types.VersionIPv4,
 			TransportProtocol: 6,
 			Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
-			NodeAddressInfo:   accesslog.NodeAddressInfo{},
+			NodeAddressInfo:   types.NodeAddressInfo{},
 		},
 	}
 
