@@ -8,7 +8,6 @@ import (
 
 	monitoragent "github.com/cilium/cilium/pkg/monitor/agent"
 	monitorAPI "github.com/cilium/cilium/pkg/monitor/api"
-	"github.com/cilium/cilium/pkg/proxy/accesslog/types"
 )
 
 type monitorAgentLogRecordNotifier struct {
@@ -19,7 +18,7 @@ func newMonitorAgentLogRecordNotifier(monitorAgent monitoragent.Agent) LogRecord
 	return &monitorAgentLogRecordNotifier{monitorAgent: monitorAgent}
 }
 
-func (m *monitorAgentLogRecordNotifier) NewProxyLogRecord(l *types.LogRecord) error {
+func (m *monitorAgentLogRecordNotifier) NewProxyLogRecord(l *LogRecord) error {
 	if err := m.monitorAgent.SendEvent(monitorAPI.MessageTypeAccessLog, l); err != nil {
 		return fmt.Errorf("failed to send log record to monitor agent: %w", err)
 	}

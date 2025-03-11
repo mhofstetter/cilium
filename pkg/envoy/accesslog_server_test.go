@@ -14,7 +14,6 @@ import (
 
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/proxy/accesslog"
-	accesslogTypes "github.com/cilium/cilium/pkg/proxy/accesslog/types"
 )
 
 func TestParseURL(t *testing.T) {
@@ -38,7 +37,7 @@ type testNotifier struct {
 	l7    []string
 }
 
-func (n *testNotifier) NewProxyLogRecord(l *accesslogTypes.LogRecord) error {
+func (n *testNotifier) NewProxyLogRecord(l *accesslog.LogRecord) error {
 	if l.HTTP != nil {
 		jsn, _ := json.Marshal(l.HTTP)
 		n.http = append(n.http, string(jsn))

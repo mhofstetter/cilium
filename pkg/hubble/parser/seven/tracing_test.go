@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	flowpb "github.com/cilium/cilium/api/v1/flow"
-	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
+	"github.com/cilium/cilium/pkg/proxy/accesslog"
 )
 
 func TestExtractTraceContext(t *testing.T) {

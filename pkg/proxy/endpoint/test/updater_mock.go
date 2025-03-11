@@ -6,7 +6,7 @@ package test
 import (
 	"github.com/cilium/cilium/pkg/container/versioned"
 	"github.com/cilium/cilium/pkg/fqdn/restore"
-	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
+	"github.com/cilium/cilium/pkg/proxy/accesslog"
 	"github.com/cilium/cilium/pkg/u8proto"
 )
 

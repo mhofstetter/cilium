@@ -11,7 +11,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	flowpb "github.com/cilium/cilium/api/v1/flow"
-	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
+	"github.com/cilium/cilium/pkg/proxy/accesslog"
 )
 
 // traceparentHeader is a HTTP header defined in the W3C Trace Context specification:

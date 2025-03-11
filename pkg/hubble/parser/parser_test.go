@@ -20,7 +20,7 @@ import (
 	"github.com/cilium/cilium/pkg/hubble/testutils"
 	"github.com/cilium/cilium/pkg/monitor"
 	"github.com/cilium/cilium/pkg/monitor/api"
-	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
+	"github.com/cilium/cilium/pkg/proxy/accesslog"
 )
 
 func Test_InvalidPayloads(t *testing.T) {

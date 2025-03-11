@@ -35,7 +35,7 @@ import (
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/policy"
-	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
+	"github.com/cilium/cilium/pkg/proxy/accesslog"
 	"github.com/cilium/cilium/pkg/revert"
 	"github.com/cilium/cilium/pkg/spanstat"
 	"github.com/cilium/cilium/pkg/time"
@@ -1403,6 +1403,7 @@ func (w *wrappedTCPConn) Read(b []byte) (int, error) {
 	}
 	return n, err
 }
+
 func (w *wrappedTCPConn) Write(b []byte) (int, error) {
 	n, err := w.TCPConn.Write(b)
 	if err != nil {

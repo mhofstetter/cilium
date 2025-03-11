@@ -8,7 +8,6 @@ import (
 
 	"github.com/cilium/cilium/pkg/flowdebug"
 	"github.com/cilium/cilium/pkg/node"
-	"github.com/cilium/cilium/pkg/proxy/accesslog/types"
 	"github.com/cilium/cilium/pkg/time"
 )
 
@@ -17,11 +16,11 @@ type ProxyAccessLogger interface {
 	//
 	// Example:
 	// NewLogRecord(flowType, observationPoint, logger.LogTags.Timestamp(time.Now()))
-	NewLogRecord(t types.FlowType, ingress bool, tags ...LogTag) *types.LogRecord
+	NewLogRecord(t FlowType, ingress bool, tags ...LogTag) *LogRecord
 
 	// Log logs the given log record to the flow log (if flow debug logging is enabled)
 	// and sends it of to the monitor agent via notifier.
-	Log(lr *types.LogRecord)
+	Log(lr *LogRecord)
 }
 
 type proxyAccessLogger struct {
@@ -39,7 +38,7 @@ type proxyAccessLogger struct {
 // should be avoided (i.e.: avoid using a single lock for slow logging operations).
 type LogRecordNotifier interface {
 	// NewProxyLogRecord is called for each new log record
-	NewProxyLogRecord(l *types.LogRecord) error
+	NewProxyLogRecord(l *LogRecord) error
 }
 
 func NewProcyAccessLogger(logger *slog.Logger, config ProxyAccessLoggerConfig, notifier LogRecordNotifier, endpointInfoRegistry EndpointInfoRegistry) ProxyAccessLogger {
@@ -51,21 +50,21 @@ func NewProcyAccessLogger(logger *slog.Logger, config ProxyAccessLoggerConfig, n
 	}
 }
 
-func (r *proxyAccessLogger) NewLogRecord(t types.FlowType, ingress bool, tags ...LogTag) *types.LogRecord {
-	var observationPoint types.ObservationPoint
+func (r *proxyAccessLogger) NewLogRecord(t FlowType, ingress bool, tags ...LogTag) *LogRecord {
+	var observationPoint ObservationPoint
 	if ingress {
-		observationPoint = types.Ingress
+		observationPoint = Ingress
 	} else {
-		observationPoint = types.Egress
+		observationPoint = Egress
 	}
 
-	lr := types.LogRecord{
+	lr := LogRecord{
 		Type:              t,
 		ObservationPoint:  observationPoint,
-		IPVersion:         types.VersionIPv4,
+		IPVersion:         VersionIPv4,
 		TransportProtocol: 6,
 		Timestamp:         time.Now().UTC().Format(time.RFC3339Nano),
-		NodeAddressInfo:   types.NodeAddressInfo{},
+		NodeAddressInfo:   NodeAddressInfo{},
 	}
 
 	if ip := node.GetIPv4(); ip != nil {
@@ -83,7 +82,7 @@ func (r *proxyAccessLogger) NewLogRecord(t types.FlowType, ingress bool, tags ..
 	return &lr
 }
 
-func (r *proxyAccessLogger) Log(lr *types.LogRecord) {
+func (r *proxyAccessLogger) Log(lr *LogRecord) {
 	if flowdebug.Enabled() {
 		r.logger.Debug("Logging flow record", r.getLogFields(lr)...)
 	}
@@ -93,7 +92,7 @@ func (r *proxyAccessLogger) Log(lr *types.LogRecord) {
 	r.notifier.NewProxyLogRecord(lr)
 }
 
-func (r *proxyAccessLogger) getLogFields(lr *types.LogRecord) []any {
+func (r *proxyAccessLogger) getLogFields(lr *LogRecord) []any {
 	fields := []any{}
 
 	fields = append(fields,

@@ -23,7 +23,7 @@ import (
 	"github.com/cilium/cilium/pkg/hubble/parser/sock"
 	"github.com/cilium/cilium/pkg/hubble/parser/threefour"
 	monitorAPI "github.com/cilium/cilium/pkg/monitor/api"
-	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
+	"github.com/cilium/cilium/pkg/proxy/accesslog"
 )
 
 // Decoder is an interface for the parser.
@@ -54,7 +54,6 @@ func New(
 	skipUnknownCGroupIDs bool,
 	opts ...options.Option,
 ) (*Parser, error) {
-
 	l34, err := threefour.New(log, endpointGetter, identityGetter, dnsGetter, ipGetter, serviceGetter, linkGetter)
 	if err != nil {
 		return nil, err

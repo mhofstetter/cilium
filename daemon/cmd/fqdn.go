@@ -24,7 +24,6 @@ import (
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/proxy"
 	"github.com/cilium/cilium/pkg/proxy/accesslog"
-	accesslogTypes "github.com/cilium/cilium/pkg/proxy/accesslog/types"
 	proxytypes "github.com/cilium/cilium/pkg/proxy/types"
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/u8proto"
@@ -171,7 +170,7 @@ func (d *Daemon) notifyOnDNSMsg(
 	stat *dnsproxy.ProxyRequestContext,
 ) error {
 	protoID := u8proto.ProtoIDs[strings.ToLower(protocol)]
-	var verdict accesslogTypes.FlowVerdict
+	var verdict accesslog.FlowVerdict
 	var reason string
 	metricError := metricErrorAllow
 	stat.ProcessingTime.Start()
@@ -206,14 +205,14 @@ func (d *Daemon) notifyOnDNSMsg(
 		return nil
 	case stat.Err != nil:
 		metricError = metricErrorProxy
-		verdict = accesslogTypes.VerdictError
+		verdict = accesslog.VerdictError
 		reason = "Error: " + stat.Err.Error()
 	case allowed:
-		verdict = accesslogTypes.VerdictForwarded
+		verdict = accesslog.VerdictForwarded
 		reason = "Allowed by policy"
 	case !allowed:
 		metricError = metricErrorDenied
-		verdict = accesslogTypes.VerdictDenied
+		verdict = accesslog.VerdictDenied
 		reason = "Denied by policy"
 	}
 
@@ -229,11 +228,11 @@ func (d *Daemon) notifyOnDNSMsg(
 
 	// We determine the direction based on the DNS packet. The observation
 	// point is always Egress, however.
-	var flowType accesslogTypes.FlowType
+	var flowType accesslog.FlowType
 	var addrInfo accesslog.AddressingInfo
 	serverAddrPortStr := serverAddrPort.String()
 	if msg.Response {
-		flowType = accesslogTypes.TypeResponse
+		flowType = accesslog.TypeResponse
 		addrInfo.DstIPPort = epIPPort
 		addrInfo.DstEPID = ep.GetID()
 		// ignore error; log fields are best effort. Only returns error if endpoint
@@ -242,7 +241,7 @@ func (d *Daemon) notifyOnDNSMsg(
 		addrInfo.SrcIPPort = serverAddrPortStr
 		addrInfo.SrcIdentity = serverID
 	} else {
-		flowType = accesslogTypes.TypeRequest
+		flowType = accesslog.TypeRequest
 		addrInfo.SrcIPPort = epIPPort
 		addrInfo.SrcEPID = ep.GetID()
 		// ignore error; same reason as above.
@@ -375,12 +374,12 @@ func (d *Daemon) notifyOnDNSMsg(
 	logContext, lcncl := context.WithTimeout(d.ctx, 10*time.Millisecond)
 	defer lcncl()
 	record := d.proxyAccessLogger.NewLogRecord(flowType, false,
-		func(lr *accesslogTypes.LogRecord, _ accesslog.EndpointInfoRegistry) {
-			lr.TransportProtocol = accesslogTypes.TransportProtocol(protoID)
+		func(lr *accesslog.LogRecord, _ accesslog.EndpointInfoRegistry) {
+			lr.TransportProtocol = accesslog.TransportProtocol(protoID)
 		},
 		accesslog.LogTags.Verdict(verdict, reason),
 		accesslog.LogTags.Addressing(logContext, addrInfo),
-		accesslog.LogTags.DNS(&accesslogTypes.LogRecordDNS{
+		accesslog.LogTags.DNS(&accesslog.LogRecordDNS{
 			Query:             qname,
 			IPs:               responseIPs,
 			TTL:               TTL,

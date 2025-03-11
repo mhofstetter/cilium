@@ -23,23 +23,22 @@ import (
 	"github.com/cilium/cilium/pkg/monitor/api"
 	"github.com/cilium/cilium/pkg/monitor/payload"
 	"github.com/cilium/cilium/pkg/node"
-	"github.com/cilium/cilium/pkg/proxy/accesslog/types"
 	"github.com/cilium/cilium/pkg/u8proto"
 )
 
 // mockLogRecord is a log entry similar to the one used in fqdn.go for
 // DNS related events notification.
-func mockLogRecord(accessLogger ProxyAccessLogger) *types.LogRecord {
+func mockLogRecord(accessLogger ProxyAccessLogger) *LogRecord {
 	return accessLogger.NewLogRecord(
-		types.TypeResponse,
+		TypeResponse,
 		false,
-		func(lr *types.LogRecord, _ EndpointInfoRegistry) {
-			lr.TransportProtocol = types.TransportProtocol(
+		func(lr *LogRecord, _ EndpointInfoRegistry) {
+			lr.TransportProtocol = TransportProtocol(
 				u8proto.ProtoIDs[strings.ToLower("udp")],
 			)
 		},
 		LogTags.Verdict(
-			types.VerdictForwarded,
+			VerdictForwarded,
 			"just a benchmark",
 		),
 		LogTags.Addressing(context.Background(), AddressingInfo{
@@ -48,7 +47,7 @@ func mockLogRecord(accessLogger ProxyAccessLogger) *types.LogRecord {
 			SrcIPPort:   "53",
 			SrcIdentity: 1,
 		}),
-		LogTags.DNS(&types.LogRecordDNS{
+		LogTags.DNS(&LogRecordDNS{
 			Query: "data.test.svc.cluster.local",
 			IPs: []netip.Addr{
 				netip.MustParseAddr("1.1.1.1"),
@@ -60,7 +59,7 @@ func mockLogRecord(accessLogger ProxyAccessLogger) *types.LogRecord {
 				"alt1.test.svc.cluster.local",
 				"alt2.test.svc.cluster.local",
 			},
-			ObservationSource: types.DNSSourceProxy,
+			ObservationSource: DNSSourceProxy,
 			RCode:             dns.RcodeSuccess,
 			QTypes:            []uint16{dns.TypeA, dns.TypeAAAA},
 			AnswerTypes:       []uint16{dns.TypeA, dns.TypeAAAA},
@@ -131,7 +130,7 @@ func NewMockLogNotifier(monitor agent.Agent) *MockLogNotifier {
 }
 
 // NewProxyLogRecord sends the event to the monitor agent to notify the listeners.
-func (n *MockLogNotifier) NewProxyLogRecord(l *types.LogRecord) error {
+func (n *MockLogNotifier) NewProxyLogRecord(l *LogRecord) error {
 	return n.monitorAgent.SendEvent(api.MessageTypeAccessLog, l)
 }
 
