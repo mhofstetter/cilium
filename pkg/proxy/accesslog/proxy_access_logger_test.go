@@ -29,12 +29,12 @@ import (
 
 // mockLogRecord is a log entry similar to the one used in fqdn.go for
 // DNS related events notification.
-func mockLogRecord(accessLogger ProxyAccessLogger) *LogRecord {
+func mockLogRecord(accessLogger ProxyAccessLogger) *types.LogRecord {
 	return accessLogger.NewLogRecord(
 		types.TypeResponse,
 		false,
-		func(lr *LogRecord, _ EndpointInfoRegistry) {
-			lr.LogRecord.TransportProtocol = types.TransportProtocol(
+		func(lr *types.LogRecord, _ EndpointInfoRegistry) {
+			lr.TransportProtocol = types.TransportProtocol(
 				u8proto.ProtoIDs[strings.ToLower("udp")],
 			)
 		},
@@ -131,8 +131,8 @@ func NewMockLogNotifier(monitor agent.Agent) *MockLogNotifier {
 }
 
 // NewProxyLogRecord sends the event to the monitor agent to notify the listeners.
-func (n *MockLogNotifier) NewProxyLogRecord(l *LogRecord) error {
-	return n.monitorAgent.SendEvent(api.MessageTypeAccessLog, l.LogRecord)
+func (n *MockLogNotifier) NewProxyLogRecord(l *types.LogRecord) error {
+	return n.monitorAgent.SendEvent(api.MessageTypeAccessLog, l)
 }
 
 // RegisterNewListener adds a listener to the MockLogNotifier.

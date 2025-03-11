@@ -9,7 +9,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/logging/logfields"
-	accesslog "github.com/cilium/cilium/pkg/proxy/accesslog/types"
+	"github.com/cilium/cilium/pkg/proxy/accesslog/types"
 	"github.com/cilium/cilium/pkg/time"
 )
 
@@ -33,13 +33,8 @@ const (
 	FieldKafkaCorrelationID = "kafkaCorrelationID"
 )
 
-// LogRecord is a proxy log record based off accesslog.LogRecord.
-type LogRecord struct {
-	accesslog.LogRecord
-}
-
 // LogTag attaches a tag to a log record
-type LogTag func(lr *LogRecord, endpointInfoRegistry EndpointInfoRegistry)
+type LogTag func(lr *types.LogRecord, endpointInfoRegistry EndpointInfoRegistry)
 
 // LogTags are optional structured tags that can be attached to log records.
 // See NewLogRecord() and ApplyTags() for example usage.
@@ -48,8 +43,8 @@ var LogTags logTags
 type logTags struct{}
 
 // Verdict attach verdict information to the log record
-func (logTags) Verdict(v accesslog.FlowVerdict, info string) LogTag {
-	return func(lr *LogRecord, _ EndpointInfoRegistry) {
+func (logTags) Verdict(v types.FlowVerdict, info string) LogTag {
+	return func(lr *types.LogRecord, _ EndpointInfoRegistry) {
 		lr.Verdict = v
 		lr.Info = info
 	}
@@ -57,7 +52,7 @@ func (logTags) Verdict(v accesslog.FlowVerdict, info string) LogTag {
 
 // Timestamp overwrites the starting timestamp of the log record
 func (logTags) Timestamp(ts time.Time) LogTag {
-	return func(lr *LogRecord, _ EndpointInfoRegistry) {
+	return func(lr *types.LogRecord, _ EndpointInfoRegistry) {
 		lr.Timestamp = ts.UTC().Format(time.RFC3339Nano)
 	}
 }
@@ -79,7 +74,7 @@ type AddressingInfo struct {
 // Addressing attaches addressing information about the source and destination
 // to the logrecord
 func (logTags) Addressing(ctx context.Context, i AddressingInfo) LogTag {
-	return func(lr *LogRecord, endpointInfoRegistry EndpointInfoRegistry) {
+	return func(lr *types.LogRecord, endpointInfoRegistry EndpointInfoRegistry) {
 		lr.SourceEndpoint.ID = i.SrcEPID
 		if i.SrcSecIdentity != nil {
 			lr.SourceEndpoint.Identity = uint64(i.SrcSecIdentity.ID)
@@ -91,7 +86,7 @@ func (logTags) Addressing(ctx context.Context, i AddressingInfo) LogTag {
 		addrPort, err := netip.ParseAddrPort(i.SrcIPPort)
 		if err == nil {
 			if addrPort.Addr().Is6() {
-				lr.IPVersion = accesslog.VersionIPV6
+				lr.IPVersion = types.VersionIPV6
 			}
 
 			lr.SourceEndpoint.Port = addrPort.Port()
@@ -115,62 +110,31 @@ func (logTags) Addressing(ctx context.Context, i AddressingInfo) LogTag {
 }
 
 // HTTP attaches HTTP information to the log record
-func (logTags) HTTP(h *accesslog.LogRecordHTTP) LogTag {
-	return func(lr *LogRecord, _ EndpointInfoRegistry) {
+func (logTags) HTTP(h *types.LogRecordHTTP) LogTag {
+	return func(lr *types.LogRecord, _ EndpointInfoRegistry) {
 		lr.HTTP = h
 	}
 }
 
 // Kafka attaches Kafka information to the log record
-func (logTags) Kafka(k *accesslog.LogRecordKafka) LogTag {
-	return func(lr *LogRecord, _ EndpointInfoRegistry) {
+func (logTags) Kafka(k *types.LogRecordKafka) LogTag {
+	return func(lr *types.LogRecord, _ EndpointInfoRegistry) {
 		lr.Kafka = k
 	}
 }
 
 // DNS attaches DNS information to the log record
-func (logTags) DNS(d *accesslog.LogRecordDNS) LogTag {
-	return func(lr *LogRecord, _ EndpointInfoRegistry) {
+func (logTags) DNS(d *types.LogRecordDNS) LogTag {
+	return func(lr *types.LogRecord, _ EndpointInfoRegistry) {
 		lr.DNS = d
 	}
 }
 
 // L7 attaches generic L7 information to the log record
-func (logTags) L7(h *accesslog.LogRecordL7) LogTag {
-	return func(lr *LogRecord, _ EndpointInfoRegistry) {
+func (logTags) L7(h *types.LogRecordL7) LogTag {
+	return func(lr *types.LogRecord, _ EndpointInfoRegistry) {
 		lr.L7 = h
 	}
-}
-
-func (lr *LogRecord) getLogFields() []any {
-	fields := []any{}
-
-	fields = append(fields,
-		FieldType, lr.Type,
-		FieldVerdict, lr.Verdict,
-		FieldMessage, lr.Info,
-	)
-
-	if lr.HTTP != nil {
-		fields = append(fields,
-			FieldCode, lr.HTTP.Code,
-			FieldMethod, lr.HTTP.Method,
-			FieldURL, lr.HTTP.URL,
-			FieldProtocol, lr.HTTP.Protocol,
-			FieldHeader, lr.HTTP.Headers,
-		)
-	}
-
-	if lr.Kafka != nil {
-		fields = append(fields,
-			FieldCode, lr.Kafka.ErrorCode,
-			FieldKafkaAPIVersion, lr.Kafka.APIVersion,
-			FieldKafkaAPIKey, lr.Kafka.APIKey,
-			FieldKafkaCorrelationID, lr.Kafka.CorrelationID,
-		)
-	}
-
-	return fields
 }
 
 // EndpointInfoRegistry provides endpoint information lookup by endpoint IP address.
@@ -183,5 +147,5 @@ type EndpointInfoRegistry interface {
 	//  - info.IPv6           (if 'ip' is not IPv4)
 	//  - info.Identity       (defaults to WORLD if not known)
 	//  - info.Labels         (only if identity is found)
-	FillEndpointInfo(ctx context.Context, info *accesslog.EndpointInfo, addr netip.Addr)
+	FillEndpointInfo(ctx context.Context, info *types.EndpointInfo, addr netip.Addr)
 }

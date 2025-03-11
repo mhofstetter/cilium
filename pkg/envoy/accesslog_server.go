@@ -191,11 +191,11 @@ func (s *AccessLogServer) handleConn(ctx context.Context, conn *net.UnixConn) {
 	}
 }
 
-func (s *AccessLogServer) logRecord(ctx context.Context, pblog *cilium.LogEntry) *accesslog.LogRecord {
+func (s *AccessLogServer) logRecord(ctx context.Context, pblog *cilium.LogEntry) *accesslogTypes.LogRecord {
 	var kafkaRecord *accesslogTypes.LogRecordKafka
 	var kafkaTopics []string
 
-	var l7tags accesslog.LogTag = func(lr *accesslog.LogRecord, endpointInfoRegistry accesslog.EndpointInfoRegistry) {}
+	var l7tags accesslog.LogTag = func(lr *accesslogTypes.LogRecord, endpointInfoRegistry accesslog.EndpointInfoRegistry) {}
 
 	if httpLogEntry := pblog.GetHttp(); httpLogEntry != nil {
 		l7tags = accesslog.LogTags.HTTP(&accesslogTypes.LogRecordHTTP{
