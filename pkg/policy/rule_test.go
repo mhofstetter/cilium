@@ -11,7 +11,6 @@ import (
 	"github.com/cilium/hive/hivetest"
 	"github.com/cilium/proxy/pkg/policy/api/kafka"
 	"github.com/stretchr/testify/require"
-
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	"github.com/cilium/cilium/pkg/identity"
@@ -1154,7 +1153,6 @@ func TestL3RuleLabels(t *testing.T) {
 		rulesToApply          []string                         // the rules from the rules map to resolve, in order
 		expectedIngressLabels map[string]labels.LabelArrayList // the slice of LabelArray we should see, per CIDR prefix
 		expectedEgressLabels  map[string]labels.LabelArrayList // the slice of LabelArray we should see, per CIDR prefix
-
 	}{
 		{
 			description:           "Empty rule that matches. Should not apply labels",
@@ -1171,11 +1169,14 @@ func TestL3RuleLabels(t *testing.T) {
 			rulesToApply: []string{"rule0", "rule1", "rule2"},
 			expectedIngressLabels: map[string]labels.LabelArrayList{
 				"10.0.1.0/32": {ruleLabels["rule1"]},
-				"10.0.2.0/32": {ruleLabels["rule2"]}},
+				"10.0.2.0/32": {ruleLabels["rule2"]},
+			},
 			expectedEgressLabels: map[string]labels.LabelArrayList{
 				"10.1.0.0/32": {ruleLabels["rule1"]},
-				"10.2.0.0/32": {ruleLabels["rule2"]}},
-		}}
+				"10.2.0.0/32": {ruleLabels["rule2"]},
+			},
+		},
+	}
 
 	// endpoint selector for all tests
 
@@ -1281,7 +1282,6 @@ func TestL4RuleLabels(t *testing.T) {
 		rulesToApply          []string                         // the rules from the rules map to resolve, in order
 		expectedIngressLabels map[string]labels.LabelArrayList // the slice of LabelArray we should see, in order
 		expectedEgressLabels  map[string]labels.LabelArrayList // the slice of LabelArray we should see, in order
-
 	}{
 		{
 			description:           "Empty rule that matches. Should not apply labels",
@@ -1294,16 +1294,20 @@ func TestL4RuleLabels(t *testing.T) {
 			rulesToApply:          []string{"rule1"},
 			expectedIngressLabels: map[string]labels.LabelArrayList{"1010/TCP": {ruleLabels["rule1"]}},
 			expectedEgressLabels:  map[string]labels.LabelArrayList{"1100/TCP": {ruleLabels["rule1"]}},
-		}, {
+		},
+		{
 			description:  "Multiple matching rules. Should apply labels from all that have rule entries",
 			rulesToApply: []string{"rule0", "rule1", "rule2"},
 			expectedIngressLabels: map[string]labels.LabelArrayList{
 				"1010/TCP": {ruleLabels["rule1"]},
-				"1020/TCP": {ruleLabels["rule2"]}},
+				"1020/TCP": {ruleLabels["rule2"]},
+			},
 			expectedEgressLabels: map[string]labels.LabelArrayList{
 				"1100/TCP": {ruleLabels["rule1"]},
-				"1200/TCP": {ruleLabels["rule2"]}},
-		}}
+				"1200/TCP": {ruleLabels["rule2"]},
+			},
+		},
+	}
 
 	// endpoint selector for all tests
 
@@ -1324,7 +1328,7 @@ func TestL4RuleLabels(t *testing.T) {
 				require.NotNil(t, out, test.description)
 				require.Len(t, out.RuleOrigin, 1, test.description)
 				lbls := out.RuleOrigin[out.wildcard].GetLabelArrayList()
-				require.EqualValues(t, test.expectedIngressLabels[portProto], lbls, test.description)
+				require.Equal(t, test.expectedIngressLabels[portProto], lbls, test.description)
 			}
 
 			require.Equal(t, len(test.expectedEgressLabels), finalPolicy.L4Policy.Egress.PortRules.Len(), test.description)
@@ -1334,7 +1338,7 @@ func TestL4RuleLabels(t *testing.T) {
 				require.NotNil(t, out, test.description)
 				require.Len(t, out.RuleOrigin, 1, test.description)
 				lbls := out.RuleOrigin[out.wildcard].GetLabelArrayList()
-				require.EqualValues(t, test.expectedEgressLabels[portProto], lbls, test.description)
+				require.Equal(t, test.expectedEgressLabels[portProto], lbls, test.description)
 			}
 		})
 	}
@@ -1430,7 +1434,6 @@ func TestIngressAllowAll(t *testing.T) {
 }
 
 func TestIngressAllowAllL4Overlap(t *testing.T) {
-
 	td := newTestData(hivetest.Logger(t)).withIDs(ruleTestIDs)
 	repo := td.repo
 	repo.MustAddList(api.Rules{
@@ -1616,7 +1619,6 @@ func TestEgressAllowAll(t *testing.T) {
 	checkFlow(t, repo, flowAToB, api.Allowed)
 	checkFlow(t, repo, flowAToC, api.Allowed)
 	checkFlow(t, repo, flowAToC90, api.Allowed)
-
 }
 
 func TestEgressL4AllowAll(t *testing.T) {
@@ -1784,7 +1786,6 @@ func TestEgressL3AllowAllEntity(t *testing.T) {
 }
 
 func TestL4WildcardMerge(t *testing.T) {
-
 	// First, test implicit case.
 	//
 	// Test the case where if we have rules that select the same endpoint on the
@@ -1847,25 +1848,26 @@ func TestL4WildcardMerge(t *testing.T) {
 		},
 	}
 
-	expected := NewL4PolicyMapWithValues(map[string]*L4Filter{"80/TCP": {
-		Port: 80, Protocol: api.ProtoTCP, U8Proto: 6,
-		wildcard: td.wildcardCachedSelector,
-		PerSelectorPolicies: L7DataMap{
-			td.wildcardCachedSelector: nil,
-			td.cachedSelectorC: &PerSelectorPolicy{
-				L7Parser: ParserTypeHTTP,
-				Priority: ListenerPriorityHTTP,
-				L7Rules: api.L7Rules{
-					HTTP: []api.PortRuleHTTP{{Path: "/", Method: "GET"}},
+	expected := NewL4PolicyMapWithValues(map[string]*L4Filter{
+		"80/TCP": {
+			Port: 80, Protocol: api.ProtoTCP, U8Proto: 6,
+			wildcard: td.wildcardCachedSelector,
+			PerSelectorPolicies: L7DataMap{
+				td.wildcardCachedSelector: nil,
+				td.cachedSelectorC: &PerSelectorPolicy{
+					L7Parser: ParserTypeHTTP,
+					Priority: ListenerPriorityHTTP,
+					L7Rules: api.L7Rules{
+						HTTP: []api.PortRuleHTTP{{Path: "/", Method: "GET"}},
+					},
 				},
 			},
+			Ingress: true,
+			RuleOrigin: OriginForTest(map[CachedSelector]labels.LabelArrayList{
+				td.cachedSelectorC:        {nil},
+				td.wildcardCachedSelector: {nil},
+			}),
 		},
-		Ingress: true,
-		RuleOrigin: OriginForTest(map[CachedSelector]labels.LabelArrayList{
-			td.cachedSelectorC:        {nil},
-			td.wildcardCachedSelector: {nil},
-		}),
-	},
 		"7000/TCP": {
 			Port: 7000, Protocol: api.ProtoTCP, U8Proto: 6,
 			PerSelectorPolicies: L7DataMap{
@@ -2058,7 +2060,6 @@ func TestL4WildcardMerge(t *testing.T) {
 }
 
 func TestL3L4L7Merge(t *testing.T) {
-
 	// First rule allows ingress from all endpoints to port 80 only on
 	// GET to "/". However, second rule allows all traffic on port 80 only to a
 	// specific endpoint. When these rules are merged, it equates to allowing
@@ -2365,7 +2366,7 @@ func TestMergeListenerReference(t *testing.T) {
 	ps := &PerSelectorPolicy{}
 	err := ps.mergeRedirect(ps)
 	require.NoError(t, err)
-	require.Equal(t, "", ps.Listener)
+	require.Empty(t, ps.Listener)
 	require.Equal(t, ListenerPriority(0), ps.Priority)
 
 	// Listener reference remains when the other has none

@@ -32,8 +32,16 @@ func New(log *slog.Logger) *Example {
 	return &Example{log: log}
 }
 
+const (
+	logfieldName     = "name"
+	logfieldGreeting = "greeting"
+)
+
 func (e *Example) SayHello(name, greeting string) string {
-	e.log.Info("SayHello() called", "name", name, "greeting", greeting)
+	e.log.Info("SayHello() called",
+		logfieldName, name,
+		logfieldGreeting, greeting,
+	)
 	e.count.Add(1)
 	return fmt.Sprintf("%s %s\n", greeting, name)
 }

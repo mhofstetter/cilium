@@ -261,7 +261,7 @@ func TestParseServiceID(t *testing.T) {
 		},
 	}
 
-	require.EqualValues(t, ServiceID{Namespace: "bar", Name: "foo"}, ParseServiceID(svc))
+	require.Equal(t, ServiceID{Namespace: "bar", Name: "foo"}, ParseServiceID(svc))
 }
 
 func TestParseServiceWithServiceTypeExposure(t *testing.T) {
@@ -379,8 +379,8 @@ func TestParseService(t *testing.T) {
 	}
 
 	id, svc := ParseService(hivetest.Logger(t), k8sSvc, nil)
-	require.EqualValues(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
-	require.EqualValues(t, &Service{
+	require.Equal(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
+	require.Equal(t, &Service{
 		ExtTrafficPolicy:         loadbalancer.SVCTrafficPolicyCluster,
 		IntTrafficPolicy:         loadbalancer.SVCTrafficPolicyCluster,
 		FrontendIPs:              []net.IP{net.ParseIP("127.0.0.1")},
@@ -405,8 +405,8 @@ func TestParseService(t *testing.T) {
 	}
 
 	id, svc = ParseService(hivetest.Logger(t), k8sSvc, nil)
-	require.EqualValues(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
-	require.EqualValues(t, &Service{
+	require.Equal(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
+	require.Equal(t, &Service{
 		IsHeadless:               true,
 		ExtTrafficPolicy:         loadbalancer.SVCTrafficPolicyCluster,
 		IntTrafficPolicy:         loadbalancer.SVCTrafficPolicyCluster,
@@ -431,8 +431,8 @@ func TestParseService(t *testing.T) {
 	k8sSvc.ObjectMeta.Labels[corev1.IsHeadlessService] = ""
 
 	id, svc = ParseService(hivetest.Logger(t), k8sSvc, nil)
-	require.EqualValues(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
-	require.EqualValues(t, &Service{
+	require.Equal(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
+	require.Equal(t, &Service{
 		IsHeadless:               true,
 		ExtTrafficPolicy:         loadbalancer.SVCTrafficPolicyCluster,
 		IntTrafficPolicy:         loadbalancer.SVCTrafficPolicyCluster,
@@ -460,8 +460,8 @@ func TestParseService(t *testing.T) {
 	}
 
 	id, svc = ParseService(hivetest.Logger(t), k8sSvc, nil)
-	require.EqualValues(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
-	require.EqualValues(t, &Service{
+	require.Equal(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
+	require.Equal(t, &Service{
 		FrontendIPs:              []net.IP{net.ParseIP("127.0.0.1")},
 		ExtTrafficPolicy:         loadbalancer.SVCTrafficPolicyLocal,
 		IntTrafficPolicy:         loadbalancer.SVCTrafficPolicyLocal,
@@ -542,8 +542,8 @@ func TestParseService(t *testing.T) {
 		option.Config.LoadBalancerAlgorithmAnnotation = oldLbAlg
 	}()
 	id, svc = ParseService(hivetest.Logger(t), k8sSvc, addrs)
-	require.EqualValues(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
-	require.EqualValues(t, &Service{
+	require.Equal(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
+	require.Equal(t, &Service{
 		FrontendIPs: []net.IP{net.ParseIP("127.0.0.1")},
 		Labels:      map[string]string{"foo": "bar"},
 		Ports: map[loadbalancer.FEPortName]*loadbalancer.L4Addr{
@@ -607,8 +607,8 @@ func TestParseService(t *testing.T) {
 		},
 	}
 	id, svc = ParseService(hivetest.Logger(t), k8sSvc, addrs)
-	require.EqualValues(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
-	require.EqualValues(t, &Service{
+	require.Equal(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
+	require.Equal(t, &Service{
 		FrontendIPs: []net.IP{net.ParseIP("127.0.0.1")},
 		Labels:      map[string]string{"foo": "bar"},
 		Ports: map[loadbalancer.FEPortName]*loadbalancer.L4Addr{
@@ -664,8 +664,8 @@ func TestParseService(t *testing.T) {
 		},
 	}
 	id, svc = ParseService(hivetest.Logger(t), k8sSvc, addrs)
-	require.EqualValues(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
-	require.EqualValues(t, &Service{
+	require.Equal(t, ServiceID{Namespace: "bar", Name: "foo"}, id)
+	require.Equal(t, &Service{
 		FrontendIPs: []net.IP{net.ParseIP("127.0.0.1")},
 		Labels:      map[string]string{"foo": "bar"},
 		Ports: map[loadbalancer.FEPortName]*loadbalancer.L4Addr{
@@ -738,7 +738,7 @@ func TestServiceUniquePorts(t *testing.T) {
 	}
 
 	for _, m := range matrix {
-		require.EqualValues(t, m.expected, m.input.UniquePorts())
+		require.Equal(t, m.expected, m.input.UniquePorts())
 	}
 }
 
@@ -1390,7 +1390,7 @@ func TestNewClusterService(t *testing.T) {
 	})
 
 	clusterService := NewClusterService(id, svc, endpoints)
-	require.EqualValues(t, serviceStore.ClusterService{
+	require.Equal(t, serviceStore.ClusterService{
 		Name:      "foo",
 		Namespace: "bar",
 		Labels:    map[string]string{"foo": "bar"},

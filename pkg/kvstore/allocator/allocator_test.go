@@ -40,13 +40,17 @@ var (
 type TestAllocatorKey string
 
 func (t TestAllocatorKey) GetKey() string { return string(t) }
+
 func (t TestAllocatorKey) GetAsMap() map[string]string {
 	return map[string]string{string(t): string(t)}
 }
+
 func (t TestAllocatorKey) String() string { return string(t) }
+
 func (t TestAllocatorKey) PutKey(v string) allocator.AllocatorKey {
 	return TestAllocatorKey(v)
 }
+
 func (t TestAllocatorKey) PutKeyFromMap(m map[string]string) allocator.AllocatorKey {
 	for _, v := range m {
 		return TestAllocatorKey(v)
@@ -118,9 +122,7 @@ func benchmarkRunLocksGC(b *testing.B, backendName string) {
 		gotLock2     = make(chan struct{})
 	)
 	go func() {
-		var (
-			err error
-		)
+		var err error
 		lock1, err = backend1.Lock(context.Background(), shortKey)
 		require.NoError(b, err)
 		close(gotLock1)
@@ -570,7 +572,7 @@ func testRemoteCache(t *testing.T) {
 		a.ForeachCache(func(id idpool.ID, val allocator.AllocatorKey) {
 			cacheLen++
 		})
-		assert.EqualValues(c, 4, cacheLen)
+		assert.Len(c, cacheLen, 4)
 	}, timeout, tick)
 
 	// count identical allocations returned
@@ -615,7 +617,7 @@ func testRemoteCache(t *testing.T) {
 			cacheLen++
 		})
 		// 4 local + 4 remote
-		assert.EqualValues(c, 8, cacheLen)
+		assert.Equal(c, 8, cacheLen)
 	}, timeout, tick)
 
 	// count the allocations in the main cache *AND* the remote cache

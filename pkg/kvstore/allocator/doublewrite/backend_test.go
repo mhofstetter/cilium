@@ -21,10 +21,9 @@ import (
 	"github.com/cilium/cilium/pkg/idpool"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/identitybackend"
+	"github.com/cilium/cilium/pkg/kvstore"
 	kvstoreallocator "github.com/cilium/cilium/pkg/kvstore/allocator"
 	"github.com/cilium/cilium/pkg/labels"
-
-	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/testutils"
 )
 
@@ -75,19 +74,13 @@ func TestAllocateID(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, ids.Items, 1)
 	require.Equal(t, identityID.String(), ids.Items[0].Name)
-	require.EqualValues(t,
-		k.GetAsMap(),
-		ids.Items[0].SecurityLabels,
-	)
+	require.Equal(t, k.GetAsMap(), ids.Items[0].SecurityLabels)
 
 	// 2. KVStore
 	kvPairs, err := kvstore.Client().ListPrefix(context.Background(), path.Join(kvstorePrefix, "id"))
 	require.NoError(t, err)
 	require.Len(t, kvPairs, 1)
-	require.Equal(t,
-		k.GetKey(),
-		string(kvPairs[fmt.Sprintf("%s/id/%s", kvstorePrefix, identityID)].Data),
-	)
+	require.Equal(t, k.GetKey(), string(kvPairs[fmt.Sprintf("%s/id/%s", kvstorePrefix, identityID)].Data))
 }
 
 func TestAllocateIDFailure(t *testing.T) {

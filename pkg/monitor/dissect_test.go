@@ -13,7 +13,6 @@ import (
 )
 
 func TestDissectSummary(t *testing.T) {
-
 	srcMAC := "01:23:45:67:89:ab"
 	dstMAC := "02:33:45:67:89:ab"
 
@@ -29,9 +28,9 @@ func TestDissectSummary(t *testing.T) {
 
 	summary := GetDissectSummary(packetData)
 
-	require.NotEqual(t, "", summary.Ethernet)
-	require.NotEqual(t, "", summary.IPv4)
-	require.NotEqual(t, "", summary.TCP)
+	require.NotEmpty(t, summary.Ethernet)
+	require.NotEmpty(t, summary.IPv4)
+	require.NotEmpty(t, summary.TCP)
 
 	require.Equal(t, srcMAC, summary.L2.Src)
 	require.Equal(t, dstMAC, summary.L2.Dst)

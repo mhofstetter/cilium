@@ -187,7 +187,7 @@ func TestGetUniqueServiceFrontends(t *testing.T) {
 	}
 
 	frontends := cache.uniqueServiceFrontends()
-	require.EqualValues(t, FrontendList{
+	require.Equal(t, FrontendList{
 		"1.1.1.1:10/TCP": {},
 		"1.1.1.1:20/TCP": {},
 		"2.2.2.2:20/UDP": {},
@@ -222,6 +222,7 @@ func TestGetUniqueServiceFrontends(t *testing.T) {
 		require.Equal(t, wild_match_ok, frontends.looseMatch(*frontend))
 	}
 }
+
 func TestServiceCacheEndpoints(t *testing.T) {
 	endpoints := ParseEndpoints(&slim_corev1.Endpoints{
 		ObjectMeta: slim_metav1.ObjectMeta{
@@ -289,8 +290,8 @@ func TestServiceCacheEndpointSlice(t *testing.T) {
 }
 
 func testServiceCache(t *testing.T,
-	updateEndpointsCB, deleteEndpointsCB func(svcCache *ServiceCacheImpl, swgEps *lock.StoppableWaitGroup)) {
-
+	updateEndpointsCB, deleteEndpointsCB func(svcCache *ServiceCacheImpl, swgEps *lock.StoppableWaitGroup),
+) {
 	db, nodeAddrs := newDB(t)
 	svcCache := NewServiceCache(hivetest.Logger(t), db, nodeAddrs, NewSVCMetricsNoop())
 
@@ -406,7 +407,7 @@ func testServiceCache(t *testing.T,
 
 	endpoints, serviceReady := svcCache.correlateEndpoints(svcID)
 	require.False(t, serviceReady)
-	require.Equal(t, "", endpoints.String())
+	require.Empty(t, endpoints.String())
 
 	// Reinserting the endpoints should re-match with the still existing service
 	updateEndpointsCB(svcCache, swgEps)
@@ -701,7 +702,7 @@ func TestExternalServiceMerging(t *testing.T) {
 		require.Equal(t, svcID, event.ID)
 
 		require.Len(t, event.Endpoints.Backends, 1)
-		require.EqualValues(t, &Backend{
+		require.Equal(t, &Backend{
 			Ports: serviceStore.PortConfiguration{
 				"http-test-svc": {Protocol: loadbalancer.TCP, Port: 8080},
 			},
@@ -737,7 +738,7 @@ func TestExternalServiceMerging(t *testing.T) {
 		require.Equal(t, svcID, event.ID)
 
 		require.Len(t, event.Endpoints.Backends, 1)
-		require.EqualValues(t, &Backend{
+		require.Equal(t, &Backend{
 			Ports: serviceStore.PortConfiguration{
 				"http-test-svc": {Protocol: loadbalancer.TCP, Port: 8080},
 			},
@@ -775,13 +776,13 @@ func TestExternalServiceMerging(t *testing.T) {
 		defer event.SWGDone()
 		require.Equal(t, UpdateService, event.Action)
 		require.Equal(t, svcID, event.ID)
-		require.EqualValues(t, &Backend{
+		require.Equal(t, &Backend{
 			Ports: serviceStore.PortConfiguration{
 				"http-test-svc": {Protocol: loadbalancer.TCP, Port: 8080},
 			},
 		}, event.Endpoints.Backends[cmtypes.MustParseAddrCluster("2.2.2.2")])
 
-		require.EqualValues(t, &Backend{
+		require.Equal(t, &Backend{
 			Ports: serviceStore.PortConfiguration{
 				"port": {Protocol: loadbalancer.TCP, Port: 80},
 			},
@@ -871,7 +872,7 @@ func TestExternalServiceMerging(t *testing.T) {
 		event := <-svcCache.events
 		defer event.SWGDone()
 		require.Equal(t, UpdateService, event.Action)
-		require.EqualValues(t, &Backend{
+		require.Equal(t, &Backend{
 			Ports: serviceStore.PortConfiguration{
 				"port": {Protocol: loadbalancer.TCP, Port: 80},
 			},
@@ -906,7 +907,7 @@ func TestExternalServiceMerging(t *testing.T) {
 		defer event.SWGDone()
 		require.Equal(t, UpdateService, event.Action)
 		require.Equal(t, svcID, event.ID)
-		require.EqualValues(t, &Backend{
+		require.Equal(t, &Backend{
 			Ports: serviceStore.PortConfiguration{
 				"port": {Protocol: loadbalancer.TCP, Port: 80},
 			},
@@ -916,7 +917,7 @@ func TestExternalServiceMerging(t *testing.T) {
 
 	k8sSvcID, _ := ParseService(hivetest.Logger(t), k8sSvc, nil)
 	addresses := svcCache.getServiceIP(k8sSvcID)
-	require.EqualValues(t, loadbalancer.NewL3n4Addr(loadbalancer.TCP, cmtypes.MustParseAddrCluster("127.0.0.1"), 80, loadbalancer.ScopeExternal), addresses)
+	require.Equal(t, loadbalancer.NewL3n4Addr(loadbalancer.TCP, cmtypes.MustParseAddrCluster("127.0.0.1"), 80, loadbalancer.ScopeExternal), addresses)
 
 	swgSvcs.Stop()
 	require.NoError(t, testutils.WaitUntil(func() bool {
@@ -1256,7 +1257,7 @@ func TestServiceCacheWith2EndpointSlice(t *testing.T) {
 
 	endpoints, serviceReady := svcCache.correlateEndpoints(svcID)
 	require.False(t, serviceReady)
-	require.Equal(t, "", endpoints.String())
+	require.Empty(t, endpoints.String())
 
 	// Reinserting the endpoints should re-match with the still existing service
 	svcCache.UpdateEndpoints(k8sEndpointSlice1, swgEps)
@@ -1474,7 +1475,7 @@ func TestServiceCacheWith2EndpointSliceSameAddress(t *testing.T) {
 
 	endpoints, serviceReady := svcCache.correlateEndpoints(svcID)
 	require.False(t, serviceReady)
-	require.Equal(t, "", endpoints.String())
+	require.Empty(t, endpoints.String())
 
 	// Reinserting the endpoints should re-match with the still existing service
 	svcCache.UpdateEndpoints(k8sEndpointSlice1, swgEps)

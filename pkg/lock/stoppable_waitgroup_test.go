@@ -52,13 +52,9 @@ func TestDone(t *testing.T) {
 
 	l.done()
 	require.Equal(t, int64(0), l.i.Load())
-	select {
-	case _, ok := <-l.noopDone:
-		require.False(t, ok)
-	default:
-		// channel should have been closed
-		require.True(t, false)
-	}
+	_, ok := <-l.noopDone
+	// channel should have been closed
+	require.False(t, ok)
 
 	l.done()
 	require.Equal(t, int64(0), l.i.Load())

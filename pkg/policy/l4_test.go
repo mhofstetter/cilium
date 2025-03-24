@@ -254,15 +254,17 @@ func TestCreateL4FilterMissingSecret(t *testing.T) {
 
 type SortablePolicyRules []*models.PolicyRule
 
-func (a SortablePolicyRules) Len() int           { return len(a) }
-func (a SortablePolicyRules) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a SortablePolicyRules) Len() int { return len(a) }
+
+func (a SortablePolicyRules) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+
 func (a SortablePolicyRules) Less(i, j int) bool { return a[i].Rule < a[j].Rule }
 
 func TestJSONMarshal(t *testing.T) {
 	td := newTestData(hivetest.Logger(t))
 	model := &models.L4Policy{}
-	require.EqualValues(t, "[]", fmt.Sprintf("%+v", model.Egress))
-	require.EqualValues(t, "[]", fmt.Sprintf("%+v", model.Ingress))
+	require.Equal(t, "[]", fmt.Sprintf("%+v", model.Egress))
+	require.Equal(t, "[]", fmt.Sprintf("%+v", model.Ingress))
 
 	policy := L4Policy{
 		Egress: L4DirectionPolicy{PortRules: NewL4PolicyMapWithValues(map[string]*L4Filter{
@@ -295,10 +297,12 @@ func TestJSONMarshal(t *testing.T) {
 							L7: []api.PortRuleL7{
 								map[string]string{
 									"method": "PUT",
-									"path":   "/"},
+									"path":   "/",
+								},
 								map[string]string{
 									"method": "GET",
-									"path":   "/"},
+									"path":   "/",
+								},
 							},
 						},
 					},
@@ -338,7 +342,7 @@ func TestJSONMarshal(t *testing.T) {
 }`}
 	sort.StringSlice(expectedEgress).Sort()
 	sort.Sort(SortablePolicyRules(model.Egress))
-	require.Equal(t, len(model.Egress), len(expectedEgress))
+	require.Len(t, model.Egress, len(expectedEgress))
 	for i := range expectedEgress {
 		expected := new(bytes.Buffer)
 		err := json.Compact(expected, []byte(expectedEgress[i]))
@@ -346,7 +350,8 @@ func TestJSONMarshal(t *testing.T) {
 		require.Equal(t, expected.String(), model.Egress[i].Rule)
 	}
 
-	expectedIngress := []string{`{
+	expectedIngress := []string{
+		`{
   "port": 80,
   "protocol": "TCP",
   "l7-rules": [
@@ -412,10 +417,11 @@ func TestJSONMarshal(t *testing.T) {
       }
     }
   ]
-}`}
+}`,
+	}
 	sort.StringSlice(expectedIngress).Sort()
 	sort.Sort(SortablePolicyRules(model.Ingress))
-	require.Equal(t, len(model.Ingress), len(expectedIngress))
+	require.Len(t, expectedIngress, len(model.Ingress))
 	for i := range expectedIngress {
 		expected := new(bytes.Buffer)
 		err := json.Compact(expected, []byte(expectedIngress[i]))

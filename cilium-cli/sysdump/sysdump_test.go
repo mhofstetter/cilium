@@ -38,7 +38,8 @@ import (
 
 type nopHooks struct{}
 
-func (h *nopHooks) AddSysdumpFlags(*pflag.FlagSet)   {}
+func (h *nopHooks) AddSysdumpFlags(*pflag.FlagSet) {}
+
 func (h *nopHooks) AddSysdumpTasks(*Collector) error { return nil }
 
 func TestSysdumpCollector(t *testing.T) {
@@ -93,6 +94,7 @@ func TestNodeList(t *testing.T) {
 type extendingHooks struct{}
 
 func (h *extendingHooks) AddSysdumpFlags(*pflag.FlagSet) {}
+
 func (h *extendingHooks) AddSysdumpTasks(c *Collector) error {
 	c.AddTasks([]Task{
 		{
@@ -131,7 +133,6 @@ func TestAddTasks(t *testing.T) {
 	collector.AddTasks([]Task{{}, {}, {}})
 	assert.Len(t, collector.additionalTasks, 6)
 	assert.Equal(t, "extended", collector.additionalTasks[0].Description)
-
 }
 
 func TestExtractGopsPID(t *testing.T) {
@@ -171,7 +172,6 @@ func TestExtractGopsPID(t *testing.T) {
 	noOutput := ``
 	_, err = extractGopsPID(noOutput)
 	assert.Error(t, err)
-
 }
 
 func TestExtractGopsProfileData(t *testing.T) {
@@ -184,7 +184,6 @@ func TestExtractGopsProfileData(t *testing.T) {
 	gotFilepath, err := extractGopsProfileData(gopsOutput)
 	assert.NoError(t, err)
 	assert.Equal(t, wantFilepath, gotFilepath)
-
 }
 
 func TestKVStoreTask(t *testing.T) {
@@ -228,7 +227,7 @@ func TestListCiliumEndpointSlices(t *testing.T) {
 
 	endpointSlices, err := client.ListCiliumEndpointSlices(context.Background(), metav1.ListOptions{})
 	assert.NoError(err)
-	assert.GreaterOrEqual(len(endpointSlices.Items), 0)
+	assert.NotEmpty(endpointSlices.Items)
 }
 
 func TestFilterPods(t *testing.T) {
@@ -320,8 +319,10 @@ func TestFilterPods(t *testing.T) {
 	}
 
 	podList := &corev1.PodList{
-		Items: []corev1.Pod{crashingPod, crashingInitContainerPod, restartedInitContainerPod,
-			runningReadyPod, notRunningPod, notReadyPod},
+		Items: []corev1.Pod{
+			crashingPod, crashingInitContainerPod, restartedInitContainerPod,
+			runningReadyPod, notRunningPod, notReadyPod,
+		},
 	}
 	result := filterCrashedPods(podList, 0)
 	assert.Len(t, result, 2)
@@ -579,31 +580,34 @@ func (c *fakeClient) ListCiliumEndpointSlices(_ context.Context, _ metav1.ListOp
 			APIVersion: "v1",
 		},
 		ListMeta: metav1.ListMeta{},
-		Items: []ciliumv2alpha1.CiliumEndpointSlice{{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       "CiliumEndpointSlice",
-				APIVersion: "v2alpha1",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "testEndpointSlice1",
-			},
-			Endpoints: []ciliumv2alpha1.CoreCiliumEndpoint{{
-				Name:       "EndpointSlice1",
-				IdentityID: 1,
-				Networking: &ciliumv2.EndpointNetworking{
-					Addressing: ciliumv2.AddressPairList{{
-						IPV4: "10.0.0.1",
-					},
-						{
-							IPV4: "10.0.0.2",
+		Items: []ciliumv2alpha1.CiliumEndpointSlice{
+			{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "CiliumEndpointSlice",
+					APIVersion: "v2alpha1",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "testEndpointSlice1",
+				},
+				Endpoints: []ciliumv2alpha1.CoreCiliumEndpoint{
+					{
+						Name:       "EndpointSlice1",
+						IdentityID: 1,
+						Networking: &ciliumv2.EndpointNetworking{
+							Addressing: ciliumv2.AddressPairList{
+								{
+									IPV4: "10.0.0.1",
+								},
+								{
+									IPV4: "10.0.0.2",
+								},
+							},
 						},
+						Encryption: ciliumv2.EncryptionSpec{},
+						NamedPorts: models.NamedPorts{},
 					},
 				},
-				Encryption: ciliumv2.EncryptionSpec{},
-				NamedPorts: models.NamedPorts{},
 			},
-			},
-		},
 		},
 	}
 	return &ciliumEndpointSliceList, nil
@@ -687,7 +691,7 @@ func (c *fakeClient) GetNamespace(_ context.Context, ns string, _ metav1.GetOpti
 func Test_removeTopDirectory(t *testing.T) {
 	result, err := removeTopDirectory("/")
 	assert.NoError(t, err)
-	assert.Equal(t, "", result)
+	assert.Empty(t, result)
 
 	result, err = removeTopDirectory("a/b/c")
 	assert.NoError(t, err)

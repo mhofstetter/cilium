@@ -599,13 +599,12 @@ func Test_ParseToCiliumRule(t *testing.T) {
 
 			// Sanitize to set AggregatedSelectors field.
 			tt.want.Sanitize()
-			require.EqualValues(t, tt.want, got, "Test Name: %s", tt.name)
+			require.Equal(t, tt.want, got, "Test Name: %s", tt.name)
 		})
 	}
 }
 
 func TestParseToCiliumLabels(t *testing.T) {
-
 	uuid := types.UID("11bba160-ddca-11e8-b697-0800273b04ff")
 	type args struct {
 		namespace string
@@ -663,6 +662,6 @@ func TestParseToCiliumLabels(t *testing.T) {
 	}
 	for _, tt := range tests {
 		got := ParseToCiliumLabels(tt.args.namespace, tt.args.name, tt.args.uid, tt.args.ruleLbs)
-		require.EqualValuesf(t, tt.want, got, "Test Name: %s", tt.name)
+		require.Equalf(t, tt.want, got, "Test Name: %s", tt.name)
 	}
 }

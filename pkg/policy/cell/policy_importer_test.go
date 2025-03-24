@@ -41,7 +41,6 @@ func (m *fakeEPM) UpdatePolicy(idsToRegen *set.Set[identity.NumericIdentity], fr
 	m.regen = idsToRegen
 	m.fromRev = fromRev
 	m.toRev = toRev
-
 }
 
 type fakeipcache struct {
@@ -57,6 +56,7 @@ func (ipc *fakeipcache) UpsertMetadataBatch(updates ...ipcache.MU) (revision uin
 	}
 	return 2
 }
+
 func (ipc *fakeipcache) RemoveMetadataBatch(updates ...ipcache.MU) (revision uint64) {
 	ipc.removed = set.Set[string]{}
 	for _, update := range updates {
@@ -64,6 +64,7 @@ func (ipc *fakeipcache) RemoveMetadataBatch(updates ...ipcache.MU) (revision uin
 	}
 	return 2
 }
+
 func (ipc *fakeipcache) WaitForRevision(ctx context.Context, rev uint64) error {
 	ipc.waited = true
 	return nil
@@ -137,7 +138,8 @@ func TestAddReplaceRemoveRule(t *testing.T) {
 		WithEgressRules([]policyapi.EgressRule{{
 			EgressCommonRule: policyapi.EgressCommonRule{
 				ToCIDR: policyapi.CIDRSlice{"1.0.1.0/24"},
-			}}}))
+			},
+		}}))
 
 	// Check that prefix was allocated
 	require.True(t, ipc.waited)
@@ -161,7 +163,8 @@ func TestAddReplaceRemoveRule(t *testing.T) {
 		WithEgressRules([]policyapi.EgressRule{{
 			EgressCommonRule: policyapi.EgressCommonRule{
 				ToCIDR: policyapi.CIDRSlice{"1.0.1.0/24", "1.0.2.0/24"},
-			}}}))
+			},
+		}}))
 
 	require.True(t, ipc.waited)
 	// We only allocate 1 new cidr
@@ -189,7 +192,8 @@ func TestAddReplaceRemoveRule(t *testing.T) {
 		WithEgressRules([]policyapi.EgressRule{{
 			EgressCommonRule: policyapi.EgressCommonRule{
 				ToCIDR: policyapi.CIDRSlice{"2.0.0.0/24"},
-			}}}))
+			},
+		}}))
 
 	require.True(t, ipc.waited)
 	// We only allocate 1 new cidr
@@ -199,7 +203,6 @@ func TestAddReplaceRemoveRule(t *testing.T) {
 	// Check that the right endpoints were updated
 	require.Equal(t, rev, epm.toRev)
 	require.ElementsMatch(t, epm.regen.AsSlice(), []identity.NumericIdentity{101, 102})
-
 }
 
 // This test is ported over from the daemon test suite. Apologies if it seems a bit awkward.
@@ -511,7 +514,7 @@ func TestAddCiliumNetworkPolicyByLabels(t *testing.T) {
 			want.repo.GetSelectorCache().SetLocalIdentityNotifier(testidentity.NewDummyIdentityNotifier())
 
 			rules, policyImportErr := args.cnp.Parse(hivetest.Logger(t))
-			require.EqualValues(t, want.err, policyImportErr)
+			require.Equal(t, want.err, policyImportErr)
 
 			// Only add policies if we have successfully parsed them. Otherwise, if
 			// parsing fails, `rules` is nil, which would wipe out the repo.
@@ -530,7 +533,7 @@ func TestAddCiliumNetworkPolicyByLabels(t *testing.T) {
 				Source:            metrics.LabelEventSourceK8s,
 			}})
 
-			require.EqualValuesf(t, want.repo.GetRulesList().Policy, args.repo.GetRulesList().Policy, "Test name: %q", tt.name)
+			require.Equalf(t, want.repo.GetRulesList().Policy, args.repo.GetRulesList().Policy, "Test name: %q", tt.name)
 		})
 	}
 }

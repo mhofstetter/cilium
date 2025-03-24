@@ -55,14 +55,13 @@ spec:
     egress: false
 `
 
-type policyMananger struct {
+type policyManager struct{}
+
+func newPolicyManager() *policyManager {
+	return &policyManager{}
 }
 
-func newPolicyManager() *policyMananger {
-	return &policyMananger{}
-}
-
-func (p *policyMananger) UpdatePolicy(u *policytypes.PolicyUpdate) {
+func (p *policyManager) UpdatePolicy(u *policytypes.PolicyUpdate) {
 	if u.DoneChan != nil {
 		u.DoneChan <- 42
 	}
@@ -94,7 +93,7 @@ func TestAddToPolicyEngine(t *testing.T) {
 	data := []byte(policy1)
 	cnp, _ := p.translateToCNPObject(data)
 	err := p.addToPolicyEngine(cnp, "test.yaml")
-	require.NoError(t, err, "")
+	require.NoError(t, err)
 	require.Len(t, p.fileNameToCnpCache, 1)
 	val := p.fileNameToCnpCache["test.yaml"]
 	require.NotNil(t, val)
@@ -118,10 +117,10 @@ func TestDeleteFromPolicyEngine(t *testing.T) {
 	data := []byte(policy1)
 	cnp, _ := p.translateToCNPObject(data)
 	err := p.addToPolicyEngine(cnp, "test.yaml")
-	require.NoError(t, err, "")
+	require.NoError(t, err)
 	require.Len(t, p.fileNameToCnpCache, 1)
 	err = p.deleteFromPolicyEngine("test.yaml")
-	require.NoError(t, err, "")
+	require.NoError(t, err)
 	require.Empty(t, p.fileNameToCnpCache)
 
 	// Delete non existent entry and validate if appropriate error returned

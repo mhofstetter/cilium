@@ -696,7 +696,7 @@ func TestRequestIdentity(t *testing.T) {
 	hasIdentity := func(prefix netip.Prefix, nid identity.NumericIdentity) {
 		t.Helper()
 		id, _ := IPIdentityCache.LookupByPrefix(prefix.String())
-		assert.EqualValues(t, nid, id.ID)
+		assert.Equal(t, nid, id.ID)
 	}
 
 	// Add 2 prefixes in to the ipcache, one requesting the first local identity
@@ -1113,7 +1113,6 @@ func TestUpsertMetadataCIDRGroup(t *testing.T) {
 	hasLabels(p4, "cidr:10.0.0.0/25=;cidrgroup:a=;cidrgroup:b=;cidrgroup:c=;reserved:world-ipv4=")
 	hasLabels(p5, "cidr:10.0.0.0/26=;cidrgroup:a=;cidrgroup:b=;cidrgroup:c=;reserved:world-ipv4=")
 	hasLabels(p6, "cidr:10.0.0.0/26=;cidrgroup:a=;cidrgroup:b=;cidrgroup:c=;reserved:world-ipv4=;fqdn:*.cilium.io=")
-
 }
 
 func setupTest(t *testing.T) (cleanup func()) {

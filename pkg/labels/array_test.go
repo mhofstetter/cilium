@@ -33,12 +33,12 @@ func TestMatches(t *testing.T) {
 }
 
 func TestParse(t *testing.T) {
-	require.EqualValues(t, LabelArray{}, ParseLabelArray())
-	require.EqualValues(t, LabelArray{ParseLabel("magic")}, ParseLabelArray("magic"))
+	require.Equal(t, LabelArray{}, ParseLabelArray())
+	require.Equal(t, LabelArray{ParseLabel("magic")}, ParseLabelArray("magic"))
 	// LabelArray is sorted
-	require.EqualValues(t, LabelArray{ParseLabel("a"), ParseLabel("b"), ParseLabel("c")}, ParseLabelArray("c", "a", "b"))
+	require.Equal(t, LabelArray{ParseLabel("a"), ParseLabel("b"), ParseLabel("c")}, ParseLabelArray("c", "a", "b"))
 	// NewLabelArrayFromSortedList
-	require.EqualValues(t, LabelArray{ParseLabel("a"), ParseLabel("b"), ParseLabel("c=d")}, NewLabelArrayFromSortedList("unspec:a=;unspec:b;unspec:c=d"))
+	require.Equal(t, LabelArray{ParseLabel("a"), ParseLabel("b"), ParseLabel("c=d")}, NewLabelArrayFromSortedList("unspec:a=;unspec:b;unspec:c=d"))
 }
 
 func TestHas(t *testing.T) {
@@ -46,7 +46,7 @@ func TestHas(t *testing.T) {
 		NewLabel("env", "devel", LabelSourceAny),
 		NewLabel("user", "bob", LabelSourceContainer),
 	}
-	var hasTests = []struct {
+	hasTests := []struct {
 		input    string // input
 		expected bool   // expected result
 	}{
@@ -250,7 +250,7 @@ func TestOutputConversions(t *testing.T) {
 	sort.StringSlice(expectMdl).Sort()
 	mdl := lbls.GetModel()
 	sort.StringSlice(mdl).Sort()
-	require.Equal(t, len(expectMdl), len(mdl))
+	require.Len(t, mdl, len(expectMdl))
 	for i := range mdl {
 		require.Equal(t, expectMdl[i], mdl[i])
 	}
@@ -265,9 +265,10 @@ func TestOutputConversions(t *testing.T) {
 		"container:user":                "bob",
 		"k8s:something":                 "somethingelse",
 		LabelSourceUnspec + ":nosource": "value",
-		"actuallyASource:nosource":      "value"}
+		"actuallyASource:nosource":      "value",
+	}
 	mp := lbls.StringMap()
-	require.Equal(t, len(expectMap), len(mp))
+	require.Len(t, mp, len(expectMap))
 	for k, v := range mp {
 		require.Equal(t, expectMap[k], v)
 	}
@@ -378,5 +379,4 @@ func TestLabelArray_Intersects(t *testing.T) {
 	la := GetCIDRLabels(netip.MustParsePrefix("11.11.11.11/32")).LabelArray()
 	lb := ParseLabelArray("cidr:110.0.0.0/8", "cidr:8.0.0.0/5")
 	assert.True(t, la.Intersects(lb))
-
 }

@@ -562,7 +562,8 @@ func TestManager_AddrMatcherConfigMultiplePorts(t *testing.T) {
 	configAddrType.backendPorts = []bePortInfo{beP1, beP2}
 	configAddrType.backendPortsByPortName = map[string]*bePortInfo{
 		beP1.name: &configAddrType.backendPorts[0],
-		beP2.name: &configAddrType.backendPorts[1]}
+		beP2.name: &configAddrType.backendPorts[1],
+	}
 	podIPs := utils.ValidIPs(pod1.Status)
 	expectedbes := make([]backend, 0, len(podIPs))
 	for i := range podIPs {
@@ -651,7 +652,8 @@ func TestManager_AddrMatcherConfigMultiplePortsMulPods(t *testing.T) {
 	configAddrType.backendPorts = []bePortInfo{beP1, beP2}
 	configAddrType.backendPortsByPortName = map[string]*bePortInfo{
 		beP1.name: &configAddrType.backendPorts[0],
-		beP2.name: &configAddrType.backendPorts[1]}
+		beP2.name: &configAddrType.backendPorts[1],
+	}
 
 	pod1IPs := utils.ValidIPs(pod1.Status)
 	pod2IPs := utils.ValidIPs(newPod2.Status)
@@ -755,7 +757,7 @@ func TestManager_AddrMatcherConfigDualStack(t *testing.T) {
 
 	require.True(t, added)
 	require.NoError(t, err)
-	require.Equal(t, len(expectedbes4), len(configAddrType.frontendMappings[0].podBackends))
+	require.Len(t, configAddrType.frontendMappings[0].podBackends, len(expectedbes4))
 	for i := range configAddrType.frontendMappings[0].podBackends {
 		require.Equal(t, expectedbes4[i], configAddrType.frontendMappings[0].podBackends[i])
 	}
@@ -772,7 +774,7 @@ func TestManager_AddrMatcherConfigDualStack(t *testing.T) {
 
 	require.True(t, added)
 	require.NoError(t, err)
-	require.Equal(t, len(expectedbes6), len(configAddrType.frontendMappings[0].podBackends))
+	require.Len(t, configAddrType.frontendMappings[0].podBackends, len(expectedbes6))
 
 	for i := range configAddrType.frontendMappings[0].podBackends {
 		require.Equal(t, expectedbes6[i], configAddrType.frontendMappings[0].podBackends[i])
@@ -1069,9 +1071,11 @@ func TestManager_OnDeletePod(t *testing.T) {
 	}
 	beAddrs := sets.New[lb.L3n4Addr]()
 	beAddrs.Insert(lb.L3n4Addr{
-		AddrCluster: cmtypes.MustParseAddrCluster(podUDP.Status.PodIP), L4Addr: beUDPP1.l4Addr})
+		AddrCluster: cmtypes.MustParseAddrCluster(podUDP.Status.PodIP), L4Addr: beUDPP1.l4Addr,
+	})
 	beAddrs.Insert(lb.L3n4Addr{
-		AddrCluster: cmtypes.MustParseAddrCluster(podUDP.Status.PodIP), L4Addr: beUDPP2.l4Addr})
+		AddrCluster: cmtypes.MustParseAddrCluster(podUDP.Status.PodIP), L4Addr: beUDPP2.l4Addr,
+	})
 	pc := LRPConfig{
 		id: k8s.ServiceID{
 			Name:      "test-foo",
