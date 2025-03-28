@@ -16,12 +16,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/mac"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/policy"
 	testidentity "github.com/cilium/cilium/pkg/testutils/identity"
 	testipcache "github.com/cilium/cilium/pkg/testutils/ipcache"
 )
@@ -131,7 +133,7 @@ func TestReadEPsFromDirNames(t *testing.T) {
 			epsNames = append(epsNames, ep.DirectoryPath())
 		}
 	}
-	eps := ReadEPsFromDirNames(context.TODO(), nil, nil, nil, s.orchestrator, nil, nil, nil, nil, nil, nil, s.repo, nil, tmpDir, epsNames)
+	eps := ReadEPsFromDirNames(context.TODO(), &fakeParser{orchestrator: s.orchestrator, policyRepo: s.repo}, tmpDir, epsNames)
 	require.Equal(t, len(epsWanted), len(eps))
 
 	sort.Slice(epsWanted, func(i, j int) bool { return epsWanted[i].ID < epsWanted[j].ID })
@@ -193,7 +195,7 @@ func TestReadEPsFromDirNamesWithRestoreFailure(t *testing.T) {
 		ep.DirectoryPath(), ep.NextDirectoryPath(),
 	}
 
-	epResult := ReadEPsFromDirNames(context.TODO(), nil, nil, nil, s.orchestrator, nil, nil, nil, nil, nil, nil, s.repo, nil, tmpDir, epNames)
+	epResult := ReadEPsFromDirNames(context.TODO(), &fakeParser{orchestrator: s.orchestrator, policyRepo: s.repo}, tmpDir, epNames)
 	require.Len(t, epResult, 1)
 
 	restoredEP := epResult[ep.ID]
@@ -248,7 +250,7 @@ func BenchmarkReadEPsFromDirNames(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		eps := ReadEPsFromDirNames(context.TODO(), nil, nil, nil, s.orchestrator, nil, nil, nil, nil, nil, nil, s.repo, nil, tmpDir, epsNames)
+		eps := ReadEPsFromDirNames(context.TODO(), &fakeParser{orchestrator: s.orchestrator, policyRepo: s.repo}, tmpDir, epsNames)
 		require.Equal(b, len(epsWanted), len(eps))
 	}
 }
@@ -275,3 +277,14 @@ func TestPartitionEPDirNamesByRestoreStatus(t *testing.T) {
 	require.EqualValues(t, completeWanted, complete)
 	require.EqualValues(t, incompleteWanted, incomplete)
 }
+
+type fakeParser struct {
+	orchestrator datapath.Orchestrator
+	policyRepo   policy.PolicyRepository
+}
+
+func (f *fakeParser) ParseEndpoint(epJSON []byte) (*Endpoint, error) {
+	return ParseEndpoint(nil, nil, nil, f.orchestrator, nil, nil, nil, nil, nil, nil, f.policyRepo, nil, epJSON)
+}
+
+var _ EndpointParser = &fakeParser{}
