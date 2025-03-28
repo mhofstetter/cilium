@@ -42,7 +42,6 @@ import (
 	"github.com/cilium/cilium/pkg/envoy"
 	"github.com/cilium/cilium/pkg/fqdn/defaultdns"
 	"github.com/cilium/cilium/pkg/fqdn/namemanager"
-	fqdnRules "github.com/cilium/cilium/pkg/fqdn/rules"
 	hubblecell "github.com/cilium/cilium/pkg/hubble/cell"
 	"github.com/cilium/cilium/pkg/identity"
 	identitycell "github.com/cilium/cilium/pkg/identity/cache/cell"
@@ -94,7 +93,6 @@ type Daemon struct {
 	logger            *slog.Logger
 	clientset         k8sClient.Clientset
 	db                *statedb.DB
-	epBuildQueue      endpoint.EndpointBuildQueue
 	l7Proxy           *proxy.Proxy
 	proxyAccessLogger accesslog.ProxyAccessLogger
 	envoyXdsServer    envoy.XDSServer
@@ -117,10 +115,6 @@ type Daemon struct {
 	// dnsNameManager tracks which api.FQDNSelector are present in policy which
 	// apply to locally running endpoints.
 	dnsNameManager namemanager.NameManager
-
-	// Used to synchronize generation of daemon's BPF programs and endpoint BPF
-	// programs.
-	compilationLock datapath.CompilationLock
 
 	clusterInfo cmtypes.ClusterInfo
 	clustermesh *clustermesh.ClusterMesh
@@ -189,10 +183,9 @@ type Daemon struct {
 	tunnelConfig tunnel.Config
 	bwManager    datapath.BandwidthManager
 
-	wireguardAgent  *wireguard.Agent
-	orchestrator    datapath.Orchestrator
-	iptablesManager datapath.IptablesManager
-	hubble          hubblecell.HubbleIntegration
+	wireguardAgent *wireguard.Agent
+	orchestrator   datapath.Orchestrator
+	hubble         hubblecell.HubbleIntegration
 
 	lrpManager   *redirectpolicy.Manager
 	ctMapGC      ctmap.GCRunner
@@ -200,8 +193,7 @@ type Daemon struct {
 
 	explbConfig experimental.Config
 
-	dnsProxy    defaultdns.Proxy
-	dnsRulesAPI fqdnRules.DNSRulesService
+	dnsProxy defaultdns.Proxy
 }
 
 func (d *Daemon) init() error {
@@ -363,8 +355,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		logger:            params.Logger,
 		clientset:         params.Clientset,
 		db:                params.DB,
-		epBuildQueue:      params.EndpointBuildQueue,
-		compilationLock:   params.CompilationLock,
 		mtuConfig:         params.MTU,
 		directRoutingDev:  params.DirectRoutingDevice,
 		loader:            params.Loader,
@@ -406,7 +396,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		ipam:              params.IPAM,
 		wireguardAgent:    params.WGAgent,
 		orchestrator:      params.Orchestrator,
-		iptablesManager:   params.IPTablesManager,
 		hubble:            params.Hubble,
 		lrpManager:        params.LRPManager,
 		ctMapGC:           params.CTNATMapGC,
@@ -414,7 +403,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		dnsNameManager:    params.NameManager,
 		explbConfig:       params.ExpLBConfig,
 		dnsProxy:          params.DNSProxy,
-		dnsRulesAPI:       params.DNSRulesAPI,
 	}
 
 	// initialize endpointRestoreComplete channel as soon as possible so that subsystems

@@ -61,7 +61,6 @@ import (
 	"github.com/cilium/cilium/pkg/flowdebug"
 	"github.com/cilium/cilium/pkg/fqdn/defaultdns"
 	"github.com/cilium/cilium/pkg/fqdn/namemanager"
-	fqdnRules "github.com/cilium/cilium/pkg/fqdn/rules"
 	"github.com/cilium/cilium/pkg/hive"
 	hubblecell "github.com/cilium/cilium/pkg/hubble/cell"
 	"github.com/cilium/cilium/pkg/identity"
@@ -1567,7 +1566,6 @@ type daemonParams struct {
 	CTNATMapGC          ctmap.GCRunner
 	StoreFactory        store.Factory
 	EndpointRegenerator *endpoint.Regenerator
-	EndpointBuildQueue  endpoint.EndpointBuildQueue
 	ClusterInfo         cmtypes.ClusterInfo
 	BigTCPConfig        *bigtcp.Configuration
 	TunnelConfig        tunnel.Config
@@ -1577,20 +1575,17 @@ type daemonParams struct {
 	Sysctl              sysctl.Sysctl
 	SyncHostIPs         *syncHostIPs
 	NodeDiscovery       *nodediscovery.NodeDiscovery
-	CompilationLock     datapath.CompilationLock
 	ServiceResolver     *dial.ServiceResolver
 	IPAM                *ipam.IPAM
 	CRDSyncPromise      promise.Promise[k8sSynced.CRDSync]
 	IdentityManager     identitymanager.IDManager
 	Orchestrator        datapath.Orchestrator
-	IPTablesManager     datapath.IptablesManager
 	Hubble              hubblecell.HubbleIntegration
 	LRPManager          *redirectpolicy.Manager
 	MaglevConfig        maglev.Config
 	NameManager         namemanager.NameManager
 	ExpLBConfig         experimental.Config
 	DNSProxy            defaultdns.Proxy
-	DNSRulesAPI         fqdnRules.DNSRulesService
 }
 
 func newDaemonPromise(params daemonParams) promise.Promise[*Daemon] {
