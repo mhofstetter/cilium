@@ -834,14 +834,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	return &d, restoredEndpoints, nil
 }
 
-// Close shuts down a daemon
-func (d *Daemon) Close() {
-	d.idmgr.RemoveAll()
-
-	// Ensures all controllers are stopped!
-	d.controllers.RemoveAllAndWait()
-}
-
 type endpointMetadataFetcher interface {
 	FetchNamespace(nsName string) (*slim_corev1.Namespace, error)
 	FetchPod(nsName, podName string) (*slim_corev1.Pod, error)

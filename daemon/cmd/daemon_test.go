@@ -182,8 +182,6 @@ func setupDaemonSuite(tb testing.TB) *DaemonSuite {
 
 		err := ds.hive.Stop(ds.log, ctx)
 		require.NoError(tb, err)
-
-		ds.d.Close()
 	})
 
 	return ds

@@ -62,10 +62,6 @@ func (h *agentHandle) tearDown() {
 			h.t.Fatalf("Failed to stop the agent: %s", err)
 		}
 	}
-
-	if h.d != nil {
-		h.d.Close()
-	}
 }
 
 func (h *agentHandle) setupCiliumAgentHive(clientset k8sClient.Clientset, extraCell cell.Cell) {
