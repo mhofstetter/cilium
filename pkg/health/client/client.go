@@ -111,23 +111,11 @@ func NewClient(host string) (*Client, error) {
 	return &Client{*clientapi.New(clientTrans, strfmt.Default)}, nil
 }
 
-// Hint tries to improve the error message displayed to the user.
-func Hint(err error) error {
-	if err == nil {
-		return err
-	}
-	e, _ := url.PathUnescape(err.Error())
-	if strings.Contains(err.Error(), defaults.SockPath) {
-		return fmt.Errorf("%s\nIs the agent running?", e)
-	}
-	return fmt.Errorf("%s", e)
-}
-
 func GetConnectivityStatusType(cs *models.ConnectivityStatus) ConnectivityStatusType {
 	// If the connecticity status is nil, it means that there was no
 	// successful probe, but also no failed probe with a concrete reason. In
 	// that case, the status is unknown and it usually means that the new
-	// is still in the beginning of the bootstraping process.
+	// is still in the beginning of the bootstrapping process.
 	if cs == nil {
 		return ConnStatusUnknown
 	}
