@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
 
-package cmd
+package sync
 
 import (
 	"context"
@@ -83,7 +83,7 @@ func TestLocalNodeSync(t *testing.T) {
 			Annotations: map[string]string{"ex": "annot"},
 		}}
 		fln  = newFakeLocalNode()
-		sync = newLocalNodeSynchronizer(localNodeSynchronizerParams{
+		sync = NewLocalNodeSynchronizer(localNodeSynchronizerParams{
 			Logger: hivetest.Logger(t),
 			Config: &option.DaemonConfig{
 				IPv4NodeAddr:               "1.2.3.4",
