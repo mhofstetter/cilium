@@ -22,7 +22,6 @@ import (
 	"github.com/cilium/cilium/pkg/controller"
 	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
 	"github.com/cilium/cilium/pkg/datapath/linux/probes"
-	linuxrouting "github.com/cilium/cilium/pkg/datapath/linux/routing"
 	"github.com/cilium/cilium/pkg/datapath/linux/safenetlink"
 	datapathTables "github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
@@ -55,7 +54,6 @@ import (
 	"github.com/cilium/cilium/pkg/maps/lbmap"
 	"github.com/cilium/cilium/pkg/metrics"
 	monitoragent "github.com/cilium/cilium/pkg/monitor/agent"
-	"github.com/cilium/cilium/pkg/mtu"
 	"github.com/cilium/cilium/pkg/node"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/nodediscovery"
@@ -84,23 +82,18 @@ type Daemon struct {
 
 	monitorAgent monitoragent.Agent
 
-	directRoutingDev datapathTables.DirectRoutingDevice
-	routes           statedb.Table[*datapathTables.Route]
-	devices          statedb.Table[*datapathTables.Device]
-	nodeAddrs        statedb.Table[datapathTables.NodeAddress]
+	routes  statedb.Table[*datapathTables.Route]
+	devices statedb.Table[*datapathTables.Device]
 
 	clustermesh *clustermesh.ClusterMesh
-
-	mtuConfig mtu.MTU
-
-	nodeAddressing datapath.NodeAddressing
 
 	// nodeDiscovery defines the node discovery logic of the agent
 	nodeDiscovery  *nodediscovery.NodeDiscovery
 	nodeLocalStore *node.LocalNodeStore
 
 	// ipam is the IP address manager of the agent
-	ipam *ipam.IPAM
+	ipam            *ipam.IPAM
+	ipamInitializer *IPAMInitializer
 
 	endpointCreator endpointcreator.EndpointCreator
 	endpointManager endpointmanager.EndpointManager
@@ -116,10 +109,6 @@ type Daemon struct {
 	k8sSvcCache k8s.ServiceCache
 
 	endpointMetadata endpointmetadata.EndpointMetadataFetcher
-
-	// healthEndpointRouting is the information required to set up the health
-	// endpoint's routing in ENI or Azure IPAM mode
-	healthEndpointRouting *linuxrouting.RoutingInfo
 
 	ciliumHealth health.CiliumHealthManager
 
@@ -281,20 +270,16 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	})
 
 	d := Daemon{
-		ctx:              ctx,
-		logger:           params.Logger,
-		clientset:        params.Clientset,
-		db:               params.DB,
-		mtuConfig:        params.MTU,
-		directRoutingDev: params.DirectRoutingDevice,
-		nodeAddressing:   params.NodeAddressing,
-		routes:           params.Routes,
-		devices:          params.Devices,
-		nodeAddrs:        params.NodeAddrs,
-		nodeDiscovery:    params.NodeDiscovery,
-		nodeLocalStore:   params.LocalNodeStore,
-		controllers:      controller.NewManager(),
-		jobGroup:         params.JobGroup,
+		ctx:            ctx,
+		logger:         params.Logger,
+		clientset:      params.Clientset,
+		db:             params.DB,
+		routes:         params.Routes,
+		devices:        params.Devices,
+		nodeDiscovery:  params.NodeDiscovery,
+		nodeLocalStore: params.LocalNodeStore,
+		controllers:    controller.NewManager(),
+		jobGroup:       params.JobGroup,
 		// **NOTE** The global identity allocator is not yet initialized here; that
 		// happens below via InitIdentityAllocator(). Only the local identity
 		// allocator is initialized here.
@@ -312,6 +297,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 		k8sWatcher:        params.K8sWatcher,
 		k8sSvcCache:       params.K8sSvcCache,
 		ipam:              params.IPAM,
+		ipamInitializer:   params.IPAMInitializer,
 		lrpManager:        params.LRPManager,
 		maglevConfig:      params.MaglevConfig,
 		lbConfig:          params.LBConfig,
@@ -628,10 +614,10 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	restoredRouterIPs.IPv4FromFS, restoredRouterIPs.IPv6FromFS = node.ExtractCiliumHostIPFromFS()
 
 	// Configure IPAM without using the configuration yet.
-	d.configureIPAM()
+	d.ipamInitializer.configureIPAM(ctx)
 
 	// Start IPAM
-	d.startIPAM()
+	d.ipamInitializer.startIPAM()
 
 	bootstrapStats.restore.Start()
 	// restore endpoints before any IPs are allocated to avoid eventual IP
@@ -642,7 +628,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 	// We must do this after IPAM because we must wait until the
 	// K8s resources have been synced.
-	if err := d.allocateIPs(ctx, restoredRouterIPs); err != nil { // will log errors/fatal internally
+	if err := d.ipamInitializer.allocateIPs(ctx, restoredRouterIPs); err != nil { // will log errors/fatal internally
 		return nil, nil, err
 	}
 
