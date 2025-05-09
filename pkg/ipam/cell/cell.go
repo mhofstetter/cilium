@@ -31,6 +31,7 @@ var Cell = cell.Module(
 
 	cell.Provide(newIPAddressManager),
 	cell.Provide(newIPAMAPIHandler),
+	cell.Provide(ipam.NewIPAMInitializer),
 
 	// IPAM metadata manager, determines which IPAM pool a pod should allocate from
 	ipamMetadata.Cell,

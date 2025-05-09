@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
 
-package cmd
+package ipam
 
 import (
 	"fmt"
@@ -14,7 +14,6 @@ import (
 
 	"github.com/cilium/cilium/pkg/cidr"
 	"github.com/cilium/cilium/pkg/defaults"
-	"github.com/cilium/cilium/pkg/ipam"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/mac"
 	"github.com/cilium/cilium/pkg/testutils"
@@ -79,9 +78,9 @@ func TestCoalesceCIDRs(t *testing.T) {
 	}
 }
 
-type mockAllocateIP func(ip net.IP, owner string, pool ipam.Pool) (*ipam.AllocationResult, error)
+type mockAllocateIP func(ip net.IP, owner string, pool Pool) (*AllocationResult, error)
 
-func (m mockAllocateIP) AllocateIPWithoutSyncUpstream(ip net.IP, owner string, pool ipam.Pool) (*ipam.AllocationResult, error) {
+func (m mockAllocateIP) AllocateIPWithoutSyncUpstream(ip net.IP, owner string, pool Pool) (*AllocationResult, error) {
 	return m(ip, owner, pool)
 }
 
@@ -94,11 +93,11 @@ func TestDaemon_reallocateDatapathIPs(t *testing.T) {
 	})
 
 	allocCIDR := cidr.MustParseCIDR("10.20.30.0/24")
-	alloc := mockAllocateIP(func(ip net.IP, owner string, pool ipam.Pool) (*ipam.AllocationResult, error) {
+	alloc := mockAllocateIP(func(ip net.IP, owner string, pool Pool) (*AllocationResult, error) {
 		if !allocCIDR.Contains(ip) {
 			return nil, fmt.Errorf("cannot allocate IP %s", ip)
 		}
-		return &ipam.AllocationResult{IP: ip}, nil
+		return &AllocationResult{IP: ip}, nil
 	})
 
 	fromFS := net.ParseIP("10.20.30.42")

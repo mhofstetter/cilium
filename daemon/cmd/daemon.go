@@ -87,7 +87,7 @@ type Daemon struct {
 
 	// ipam is the IP address manager of the agent
 	ipam            *ipam.IPAM
-	ipamInitializer *IPAMInitializer
+	ipamInitializer *ipam.IPAMInitializer
 
 	endpointCreator endpointcreator.EndpointCreator
 	endpointManager endpointmanager.EndpointManager
@@ -535,16 +535,16 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 	// the Kubernetes or CiliumNode resource in the K8s subsystem from call
 	// k8s.WaitForNodeInformation(). These will be used later after starting
 	// IPAM initialization to finish off the `cilium_host` IP restoration.
-	var restoredRouterIPs restoredIPs
+	var restoredRouterIPs ipam.RestoredIPs
 	restoredRouterIPs.IPv4FromK8s, restoredRouterIPs.IPv6FromK8s = node.GetInternalIPv4Router(), node.GetIPv6Router()
 	// Fetch the router IPs from the filesystem in case they were set a priori
 	restoredRouterIPs.IPv4FromFS, restoredRouterIPs.IPv6FromFS = node.ExtractCiliumHostIPFromFS()
 
 	// Configure IPAM without using the configuration yet.
-	d.ipamInitializer.configureIPAM(ctx)
+	d.ipamInitializer.ConfigureIPAM(ctx)
 
 	// Start IPAM
-	d.ipamInitializer.startIPAM()
+	d.ipamInitializer.StartIPAM()
 
 	bootstrapStats.restore.Start()
 	// restore endpoints before any IPs are allocated to avoid eventual IP
@@ -555,7 +555,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params *daemonParams
 
 	// We must do this after IPAM because we must wait until the
 	// K8s resources have been synced.
-	if err := d.ipamInitializer.allocateIPs(ctx, restoredRouterIPs); err != nil { // will log errors/fatal internally
+	if err := d.ipamInitializer.AllocateIPs(ctx, restoredRouterIPs); err != nil { // will log errors/fatal internally
 		return nil, nil, err
 	}
 

@@ -1441,7 +1441,6 @@ var daemonCell = cell.Module(
 		promise.New[*option.DaemonConfig],
 		newSyncHostIPs,
 	),
-	cell.Provide(NewIPAMInitializer),
 	cell.Invoke(registerEndpointStateResolver),
 	cell.Invoke(func(promise.Promise[*Daemon]) {}), // Force instantiation.
 )
@@ -1501,7 +1500,7 @@ type daemonParams struct {
 	NodeDiscovery       *nodediscovery.NodeDiscovery
 	ServiceResolver     *dial.ServiceResolver
 	IPAM                *ipam.IPAM
-	IPAMInitializer     *IPAMInitializer
+	IPAMInitializer     *ipam.IPAMInitializer
 	CRDSyncPromise      promise.Promise[k8sSynced.CRDSync]
 	IdentityManager     identitymanager.IDManager
 	LRPManager          *redirectpolicy.Manager
