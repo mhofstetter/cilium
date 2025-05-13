@@ -36,7 +36,8 @@ func NewEnvoyAdminClientForSocket(logger *slog.Logger, envoySocketDir string, de
 	}
 }
 
-func (a *EnvoyAdminClient) transact(query string) error {
+// Post sends a POST request with the given query to the Envoy Admin API.
+func (a *EnvoyAdminClient) Post(query string) error {
 	// Use a custom dialer to use a Unix domain socket for an HTTP connection.
 	var conn net.Conn
 	var err error
@@ -78,7 +79,7 @@ func (a *EnvoyAdminClient) ChangeLogLevel(agentLogLevel slog.Level) error {
 		return nil
 	}
 
-	if err := a.transact("logging?level=" + envoyLevel); err != nil {
+	if err := a.Post("logging?level=" + envoyLevel); err != nil {
 		a.logger.Warn("Envoy: Failed to set log level",
 			logfields.Value, envoyLevel,
 			logfields.Error, err,
@@ -91,7 +92,7 @@ func (a *EnvoyAdminClient) ChangeLogLevel(agentLogLevel slog.Level) error {
 }
 
 func (a *EnvoyAdminClient) quit() error {
-	return a.transact("quitquitquit")
+	return a.Post("quitquitquit")
 }
 
 // GetEnvoyVersion returns the envoy binary version string
