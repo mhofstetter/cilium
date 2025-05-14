@@ -17,6 +17,7 @@ import (
 	ctrlRuntime "sigs.k8s.io/controller-runtime"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	"github.com/cilium/cilium/pkg/k8s/apis"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
 	"github.com/cilium/cilium/pkg/k8s/client"
 )
@@ -53,6 +54,9 @@ type managerParams struct {
 	Lifecycle cell.Lifecycle
 	JobGroup  job.Group
 	Health    cell.Health
+
+	// wait for CRD creation
+	CRDsCreated *apis.CRDsCreated
 
 	K8sClient client.Clientset
 	Scheme    *runtime.Scheme

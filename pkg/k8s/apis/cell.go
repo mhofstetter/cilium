@@ -25,7 +25,7 @@ var RegisterCRDsCell = cell.Module(
 
 	cell.Config(defaultConfig),
 
-	cell.Invoke(createCRDs),
+	cell.Provide(createCRDs),
 
 	cell.ProvidePrivate(
 		newCiliumGroupCRDs,
@@ -59,7 +59,10 @@ type params struct {
 	RegisterCRDsFuncs []RegisterCRDsFunc `group:"register-crd-funcs"`
 }
 
-func createCRDs(p params) {
+// CRDsCreated can be used to depend on the CRD creation from other modules
+type CRDsCreated struct{}
+
+func createCRDs(p params) *CRDsCreated {
 	p.Lifecycle.Append(cell.Hook{
 		OnStart: func(ctx cell.HookContext) error {
 			// Register the CRDs after validating that we are running on a supported
@@ -78,6 +81,8 @@ func createCRDs(p params) {
 			return nil
 		},
 	})
+
+	return &CRDsCreated{}
 }
 
 type registerCRDsFuncOut struct {
