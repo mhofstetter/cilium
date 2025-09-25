@@ -231,8 +231,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params daemonParams)
 	if option.Config.RestoreState && !option.Config.DryMode {
 		// this *must* be called before initMaps(), which will "hide"
 		// the "old" ipcache.
-		err := params.IdentityRestorer.RestoreLocalIdentities()
-		if err != nil {
+		if err := params.IdentityRestorer.RestoreLocalIdentities(); err != nil {
 			params.Logger.Warn("Failed to restore existing identities from the previous ipcache. This may cause policy interruptions during restart.", logfields.Error, err)
 		}
 	}
