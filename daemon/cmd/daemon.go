@@ -239,23 +239,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params daemonParams)
 	bootstrapStats.daemonInit.End(true)
 
 	// Stop all endpoints (its goroutines) on exit.
-	cleaner.cleanupFuncs.Add(func() {
-		params.Logger.Info("Waiting for all endpoints' goroutines to be stopped.")
-		var wg sync.WaitGroup
-
-		eps := params.EndpointManager.GetEndpoints()
-		wg.Add(len(eps))
-
-		for _, ep := range eps {
-			go func(ep *endpoint.Endpoint) {
-				ep.Stop()
-				wg.Done()
-			}(ep)
-		}
-
-		wg.Wait()
-		params.Logger.Info("All endpoints' goroutines stopped.")
-	})
+	cleaner.cleanupFuncs.Add(d.stopAllEndpoints)
 
 	// Open or create BPF maps.
 	bootstrapStats.mapsInit.Start()
@@ -618,4 +602,22 @@ func annotateLocalK8sNode(ctx context.Context, params daemonParams) {
 		params.Logger.Warn("Cannot annotate k8s node with CIDR range", logfields.Error, err)
 		return
 	}
+}
+
+func (d *Daemon) stopAllEndpoints() {
+	d.params.Logger.Info("Waiting for all endpoints' goroutines to be stopped.")
+	var wg sync.WaitGroup
+
+	eps := d.params.EndpointManager.GetEndpoints()
+	wg.Add(len(eps))
+
+	for _, ep := range eps {
+		go func(ep *endpoint.Endpoint) {
+			ep.Stop()
+			wg.Done()
+		}(ep)
+	}
+
+	wg.Wait()
+	d.params.Logger.Info("All endpoints' goroutines stopped.")
 }
