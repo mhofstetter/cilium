@@ -521,36 +521,7 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params daemonParams)
 
 	// Annotation of the k8s node must happen after discovery of the
 	// PodCIDR range and allocation of the health IPs.
-	if params.Clientset.IsEnabled() && option.Config.AnnotateK8sNode {
-		bootstrapStats.k8sInit.Start()
-		params.Logger.Info("Annotating k8s node",
-			logfields.V4Prefix, node.GetIPv4AllocRange(params.Logger),
-			logfields.V6Prefix, node.GetIPv6AllocRange(params.Logger),
-			logfields.V4HealthIP, node.GetEndpointHealthIPv4(params.Logger),
-			logfields.V6HealthIP, node.GetEndpointHealthIPv6(params.Logger),
-			logfields.V4IngressIP, node.GetIngressIPv4(params.Logger),
-			logfields.V6IngressIP, node.GetIngressIPv6(params.Logger),
-			logfields.V4CiliumHostIP, node.GetInternalIPv4Router(params.Logger),
-			logfields.V6CiliumHostIP, node.GetIPv6Router(params.Logger),
-		)
-
-		latestLocalNode, err := params.LocalNodeStore.Get(ctx)
-		if err == nil {
-			_, err = k8s.AnnotateNode(
-				params.Logger,
-				params.Clientset,
-				nodeTypes.GetName(),
-				latestLocalNode.Node,
-				params.IPsecAgent.SPI())
-		}
-		if err != nil {
-			params.Logger.Warn("Cannot annotate k8s node with CIDR range", logfields.Error, err)
-		}
-
-		bootstrapStats.k8sInit.End(true)
-	} else if !option.Config.AnnotateK8sNode {
-		params.Logger.Debug("Annotate k8s node is disabled.")
-	}
+	annotateLocalK8sNode(ctx, params)
 
 	// Trigger refresh and update custom resource in the apiserver with all restored endpoints.
 	// Trigger after nodeDiscovery.StartDiscovery to avoid custom resource update conflict.
@@ -605,4 +576,46 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params daemonParams)
 	}
 
 	return &d, restoredEndpoints, nil
+}
+
+func annotateLocalK8sNode(ctx context.Context, params daemonParams) {
+	if !option.Config.AnnotateK8sNode {
+		params.Logger.Debug("Annotate k8s node is disabled.")
+		return
+	}
+
+	if !params.Clientset.IsEnabled() {
+		return
+	}
+
+	bootstrapStats.k8sInit.Start()
+	defer bootstrapStats.k8sInit.End(true)
+
+	params.Logger.Info("Annotating k8s node",
+		logfields.V4Prefix, node.GetIPv4AllocRange(params.Logger),
+		logfields.V6Prefix, node.GetIPv6AllocRange(params.Logger),
+		logfields.V4HealthIP, node.GetEndpointHealthIPv4(params.Logger),
+		logfields.V6HealthIP, node.GetEndpointHealthIPv6(params.Logger),
+		logfields.V4IngressIP, node.GetIngressIPv4(params.Logger),
+		logfields.V6IngressIP, node.GetIngressIPv6(params.Logger),
+		logfields.V4CiliumHostIP, node.GetInternalIPv4Router(params.Logger),
+		logfields.V6CiliumHostIP, node.GetIPv6Router(params.Logger),
+	)
+
+	latestLocalNode, err := params.LocalNodeStore.Get(ctx)
+	if err != nil {
+		params.Logger.Warn("Cannot annotate k8s node with CIDR range", logfields.Error, err)
+		return
+	}
+
+	_, err = k8s.AnnotateNode(
+		params.Logger,
+		params.Clientset,
+		nodeTypes.GetName(),
+		latestLocalNode.Node,
+		params.IPsecAgent.SPI())
+	if err != nil {
+		params.Logger.Warn("Cannot annotate k8s node with CIDR range", logfields.Error, err)
+		return
+	}
 }
