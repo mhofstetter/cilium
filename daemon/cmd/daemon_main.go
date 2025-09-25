@@ -28,10 +28,8 @@ import (
 	"github.com/cilium/cilium/pkg/aws/eni"
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/cgroups"
-	"github.com/cilium/cilium/pkg/clustermesh"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/common"
-	"github.com/cilium/cilium/pkg/crypto/certificatemanager"
 	"github.com/cilium/cilium/pkg/datapath/linux/probes"
 	linuxrouting "github.com/cilium/cilium/pkg/datapath/linux/routing"
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
@@ -53,7 +51,6 @@ import (
 	"github.com/cilium/cilium/pkg/fqdn/namemanager"
 	"github.com/cilium/cilium/pkg/health"
 	"github.com/cilium/cilium/pkg/healthconfig"
-	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/identity"
 	identitycell "github.com/cilium/cilium/pkg/identity/cache/cell"
 	"github.com/cilium/cilium/pkg/identity/identitymanager"
@@ -73,7 +70,6 @@ import (
 	"github.com/cilium/cilium/pkg/loadinfo"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
-	"github.com/cilium/cilium/pkg/maglev"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
 	"github.com/cilium/cilium/pkg/maps/nat"
 	"github.com/cilium/cilium/pkg/maps/neighborsmap"
@@ -1250,7 +1246,6 @@ type daemonParams struct {
 	KVStoreClient       kvstore.Client
 	WGAgent             wgTypes.WireguardAgent
 	LocalNodeStore      *node.LocalNodeStore
-	Shutdowner          hive.Shutdowner
 	Resources           agentK8s.Resources
 	K8sWatcher          *watchers.K8sWatcher
 	CacheStatus         k8sSynced.CacheStatus
@@ -1261,8 +1256,6 @@ type daemonParams struct {
 	EndpointCreator     endpointcreator.EndpointCreator
 	EndpointManager     endpointmanager.EndpointManager
 	EndpointMetadata    endpointmetadata.EndpointMetadataFetcher
-	CertManager         certificatemanager.CertificateManager
-	SecretManager       certificatemanager.SecretManager
 	IdentityAllocator   identitycell.CachingIdentityAllocator
 	IdentityRestorer    *identityrestoration.LocalIdentityRestorer
 	JobGroup            job.Group
@@ -1270,10 +1263,8 @@ type daemonParams struct {
 	IPCache             *ipcache.IPCache
 	DirReadStatus       policyDirectory.DirectoryWatcherReadStatus
 	CiliumHealth        health.CiliumHealthManager
-	ClusterMesh         *clustermesh.ClusterMesh
 	MonitorAgent        monitorAgent.Agent
 	DB                  *statedb.DB
-	Namespaces          statedb.Table[agentK8s.Namespace]
 	Routes              statedb.Table[*datapathTables.Route]
 	Devices             statedb.Table[*datapathTables.Device]
 	NodeAddrs           statedb.Table[datapathTables.NodeAddress]
@@ -1295,7 +1286,6 @@ type daemonParams struct {
 	IPAM                *ipam.IPAM
 	CRDSyncPromise      promise.Promise[k8sSynced.CRDSync]
 	IdentityManager     identitymanager.IDManager
-	MaglevConfig        maglev.Config
 	LBConfig            loadbalancer.Config
 	DNSProxy            bootstrap.FQDNProxyBootstrapper
 	DNSNameManager      namemanager.NameManager
