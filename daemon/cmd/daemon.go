@@ -149,51 +149,8 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params daemonParams)
 
 	bootstrapStats.daemonInit.Start()
 
-	// WireGuard and IPSec are mutually exclusive.
-	if params.IPsecAgent.Enabled() && params.WGAgent.Enabled() {
-		return nil, nil, fmt.Errorf("WireGuard (--%s) cannot be used with IPsec (--%s)", wgTypes.EnableWireguard, datapath.EnableIPSec)
-	}
-
-	if !params.IPSecConfig.DNSProxyInsecureSkipTransparentModeCheckEnabled() {
-		if params.IPsecAgent.Enabled() && option.Config.EnableL7Proxy && !option.Config.DNSProxyEnableTransparentMode {
-			return nil, nil, fmt.Errorf("IPSec requires DNS proxy transparent mode to be enabled (--dnsproxy-enable-transparent-mode=\"true\")")
-		}
-	}
-
-	if params.IPsecAgent.Enabled() && option.Config.TunnelingEnabled() {
-		if err := ipsec.ProbeXfrmStateOutputMask(); err != nil {
-			return nil, nil, fmt.Errorf("IPSec with tunneling requires support for xfrm state output masks (Linux 4.19 or later): %w", err)
-		}
-	}
-
-	if option.Config.EnableHostFirewall {
-		if params.IPsecAgent.Enabled() {
-			return nil, nil, fmt.Errorf("IPSec cannot be used with the host firewall.")
-		}
-	}
-
-	if option.Config.LocalRouterIPv4 != "" || option.Config.LocalRouterIPv6 != "" {
-		if params.IPsecAgent.Enabled() {
-			return nil, nil, fmt.Errorf("Cannot specify %s or %s with %s.", option.LocalRouterIPv4, option.LocalRouterIPv6, datapath.EnableIPSec)
-		}
-	}
-
-	// IPAMENI IPSec is configured from Reinitialize() to pull in devices
-	// that may be added or removed at runtime.
-	if params.IPsecAgent.Enabled() &&
-		!option.Config.TunnelingEnabled() &&
-		len(option.Config.EncryptInterface) == 0 &&
-		// If devices are required, we don't look at the EncryptInterface, as we
-		// don't load bpf_network in loader.reinitializeIPSec. Instead, we load
-		// bpf_host onto physical devices as chosen by configuration.
-		!option.Config.AreDevicesRequired(params.KPRConfig, params.WGAgent.Enabled(), params.IPsecAgent.Enabled()) &&
-		option.Config.IPAM != ipamOption.IPAMENI {
-		link, err := linuxdatapath.NodeDeviceNameWithDefaultRoute(params.Logger)
-		if err != nil {
-			return nil, nil,
-				fmt.Errorf("Ipsec default interface lookup failed, consider \"encrypt-interface\" to manually configure interface. Err: %w", err)
-		}
-		option.Config.EncryptInterface = append(option.Config.EncryptInterface, link)
+	if err := validateIPSecOptions(params); err != nil {
+		return nil, nil, fmt.Errorf("failed during  IPSec option validation: %w", err)
 	}
 
 	// Do the partial kube-proxy replacement initialization before creating BPF
@@ -624,6 +581,56 @@ func (d *Daemon) validateMasqueradingOptions() error {
 			fmt.Sprintf("BPF ip-masq-agent requires (--%s=\"true\" or --%s=\"true\") and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableIPv6Masquerade, option.EnableBPFMasquerade),
 		)
 		return fmt.Errorf("BPF ip-masq-agent requires (--%s=\"true\" or --%s=\"true\") and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableIPv6Masquerade, option.EnableBPFMasquerade)
+	}
+
+	return nil
+}
+
+func validateIPSecOptions(params daemonParams) error {
+	// WireGuard and IPSec are mutually exclusive.
+	if params.IPsecAgent.Enabled() && params.WGAgent.Enabled() {
+		return fmt.Errorf("WireGuard (--%s) cannot be used with IPsec (--%s)", wgTypes.EnableWireguard, datapath.EnableIPSec)
+	}
+
+	if !params.IPSecConfig.DNSProxyInsecureSkipTransparentModeCheckEnabled() {
+		if params.IPsecAgent.Enabled() && option.Config.EnableL7Proxy && !option.Config.DNSProxyEnableTransparentMode {
+			return fmt.Errorf("IPSec requires DNS proxy transparent mode to be enabled (--dnsproxy-enable-transparent-mode=\"true\")")
+		}
+	}
+
+	if params.IPsecAgent.Enabled() && option.Config.TunnelingEnabled() {
+		if err := ipsec.ProbeXfrmStateOutputMask(); err != nil {
+			return fmt.Errorf("IPSec with tunneling requires support for xfrm state output masks (Linux 4.19 or later): %w", err)
+		}
+	}
+
+	if option.Config.EnableHostFirewall {
+		if params.IPsecAgent.Enabled() {
+			return fmt.Errorf("IPSec cannot be used with the host firewall.")
+		}
+	}
+
+	if option.Config.LocalRouterIPv4 != "" || option.Config.LocalRouterIPv6 != "" {
+		if params.IPsecAgent.Enabled() {
+			return fmt.Errorf("Cannot specify %s or %s with %s.", option.LocalRouterIPv4, option.LocalRouterIPv6, datapath.EnableIPSec)
+		}
+	}
+
+	// IPAMENI IPSec is configured from Reinitialize() to pull in devices
+	// that may be added or removed at runtime.
+	if params.IPsecAgent.Enabled() &&
+		!option.Config.TunnelingEnabled() &&
+		len(option.Config.EncryptInterface) == 0 &&
+		// If devices are required, we don't look at the EncryptInterface, as we
+		// don't load bpf_network in loader.reinitializeIPSec. Instead, we load
+		// bpf_host onto physical devices as chosen by configuration.
+		!option.Config.AreDevicesRequired(params.KPRConfig, params.WGAgent.Enabled(), params.IPsecAgent.Enabled()) &&
+		option.Config.IPAM != ipamOption.IPAMENI {
+		link, err := linuxdatapath.NodeDeviceNameWithDefaultRoute(params.Logger)
+		if err != nil {
+			return fmt.Errorf("Ipsec default interface lookup failed, consider \"encrypt-interface\" to manually configure interface. Err: %w", err)
+		}
+		option.Config.EncryptInterface = append(option.Config.EncryptInterface, link)
 	}
 
 	return nil
