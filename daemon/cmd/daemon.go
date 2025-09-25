@@ -344,32 +344,10 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params daemonParams)
 
 	// BPF masquerade depends on BPF NodePort, so the following checks should
 	// happen after invoking initKubeProxyReplacementOptions().
-	if option.Config.MasqueradingEnabled() && option.Config.EnableBPFMasquerade {
-
-		var err error
-		switch {
-		case len(option.Config.MasqueradeInterfaces) > 0:
-			err = fmt.Errorf("BPF masquerade does not allow to specify devices via --%s (use --%s instead)",
-				option.MasqueradeInterfaces, option.Devices)
-		}
-		if err != nil {
-			params.Logger.Error("unable to initialize BPF masquerade support", logfields.Error, err)
-			return nil, nil, fmt.Errorf("unable to initialize BPF masquerade support: %w", err)
-		}
-		if option.Config.EnableMasqueradeRouteSource {
-			params.Logger.Error("BPF masquerading does not yet support masquerading to source IP from routing layer")
-			return nil, nil, fmt.Errorf("BPF masquerading to route source (--%s=\"true\") currently not supported with BPF-based masquerading (--%s=\"true\")", option.EnableMasqueradeRouteSource, option.EnableBPFMasquerade)
-		}
-	} else if option.Config.EnableIPMasqAgent {
-		params.Logger.Error(
-			fmt.Sprintf("BPF ip-masq-agent requires (--%s=\"true\" or --%s=\"true\") and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableIPv6Masquerade, option.EnableBPFMasquerade),
-			logfields.Error, err,
-		)
-		return nil, nil, fmt.Errorf("BPF ip-masq-agent requires (--%s=\"true\" or --%s=\"true\") and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableIPv6Masquerade, option.EnableBPFMasquerade)
-	} else if !option.Config.MasqueradingEnabled() && option.Config.EnableBPFMasquerade {
-		params.Logger.Error("IPv4 and IPv6 masquerading are both disabled, BPF masquerading requires at least one to be enabled")
-		return nil, nil, fmt.Errorf("BPF masquerade requires (--%s=\"true\" or --%s=\"true\")", option.EnableIPv4Masquerade, option.EnableIPv6Masquerade)
+	if err := d.validateMasqueradingOptions(); err != nil {
+		return nil, nil, fmt.Errorf("failed to validate masquerading options: %w", err)
 	}
+
 	if len(nativeDevices) == 0 {
 		if option.Config.EnableHostFirewall {
 			const msg = "Host firewall's external facing device could not be determined. Use --%s to specify."
@@ -622,4 +600,32 @@ func (d *Daemon) unloadDNSPolicies() {
 	wg := d.params.EndpointManager.RegenerateAllEndpoints(regenerationMetadata)
 	wg.Wait()
 	d.params.Logger.Info("All endpoints regenerated after unloading DNS rules on graceful shutdown")
+}
+
+func (d *Daemon) validateMasqueradingOptions() error {
+	switch {
+	case option.Config.MasqueradingEnabled() && option.Config.EnableBPFMasquerade:
+		if len(option.Config.MasqueradeInterfaces) > 0 {
+			err := fmt.Errorf("BPF masquerade does not allow to specify devices via --%s (use --%s instead)", option.MasqueradeInterfaces, option.Devices)
+			d.params.Logger.Error("unable to initialize BPF masquerade support", logfields.Error, err)
+			return fmt.Errorf("unable to initialize BPF masquerade support: %w", err)
+		}
+
+		if option.Config.EnableMasqueradeRouteSource {
+			d.params.Logger.Error("BPF masquerading does not yet support masquerading to source IP from routing layer")
+			return fmt.Errorf("BPF masquerading to route source (--%s=\"true\") currently not supported with BPF-based masquerading (--%s=\"true\")", option.EnableMasqueradeRouteSource, option.EnableBPFMasquerade)
+		}
+
+	case !option.Config.MasqueradingEnabled() && option.Config.EnableBPFMasquerade:
+		d.params.Logger.Error("IPv4 and IPv6 masquerading are both disabled, BPF masquerading requires at least one to be enabled")
+		return fmt.Errorf("BPF masquerade requires (--%s=\"true\" or --%s=\"true\")", option.EnableIPv4Masquerade, option.EnableIPv6Masquerade)
+
+	case option.Config.EnableIPMasqAgent:
+		d.params.Logger.Error(
+			fmt.Sprintf("BPF ip-masq-agent requires (--%s=\"true\" or --%s=\"true\") and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableIPv6Masquerade, option.EnableBPFMasquerade),
+		)
+		return fmt.Errorf("BPF ip-masq-agent requires (--%s=\"true\" or --%s=\"true\") and --%s=\"true\"", option.EnableIPv4Masquerade, option.EnableIPv6Masquerade, option.EnableBPFMasquerade)
+	}
+
+	return nil
 }
