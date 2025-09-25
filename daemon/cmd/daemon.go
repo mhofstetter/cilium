@@ -18,6 +18,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/ipsec"
 	linuxrouting "github.com/cilium/cilium/pkg/datapath/linux/routing"
 	"github.com/cilium/cilium/pkg/datapath/linux/safenetlink"
+	"github.com/cilium/cilium/pkg/datapath/tables"
 	datapathTables "github.com/cilium/cilium/pkg/datapath/tables"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/debug"
@@ -276,35 +277,12 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params daemonParams)
 	// establishing a connection to kube-apiserver, but before starting a k8s watcher.
 	// This is because the device detection requires self (Cilium)Node object.
 
-	rxn := params.DB.ReadTxn()
-	drdName := ""
-	directRoutingDevice, _ := params.DirectRoutingDevice.Get(ctx, rxn)
-	if directRoutingDevice == nil {
-		if option.Config.AreDevicesRequired(params.KPRConfig, params.WGAgent.Enabled(), params.IPsecAgent.Enabled()) {
-			// Fail hard if devices are required to function.
-			return nil, nil, fmt.Errorf("unable to determine direct routing device. Use --%s to specify it",
-				option.DirectRoutingDevice)
-		}
-	} else {
-		drdName = directRoutingDevice.Name
-		params.Logger.Info(
-			"Direct routing device detected",
-			option.DirectRoutingDevice, drdName,
-		)
+	directRoutingDeviceName, nativeDevices, err := loadDevices(ctx, params)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to load devices: %w", err)
 	}
 
-	nativeDevices, _ := datapathTables.SelectedDevices(params.Devices, rxn)
-
-	if option.Config.EnableHostFirewall && len(nativeDevices) == 0 {
-		const msg = "Host firewall's external facing device could not be determined. Use --%s to specify."
-		params.Logger.Error(
-			fmt.Sprintf(msg, option.Devices),
-			logfields.Error, err,
-		)
-		return nil, nil, fmt.Errorf(msg, option.Devices)
-	}
-
-	if err := finishKubeProxyReplacementInit(params.Logger, params.Sysctl, nativeDevices, drdName, params.LBConfig, params.KPRConfig, params.IPsecAgent.Enabled()); err != nil {
+	if err := finishKubeProxyReplacementInit(params.Logger, params.Sysctl, nativeDevices, directRoutingDeviceName, params.LBConfig, params.KPRConfig, params.IPsecAgent.Enabled()); err != nil {
 		params.Logger.Error("failed to finalise LB initialization", logfields.Error, err)
 		return nil, nil, fmt.Errorf("failed to finalise LB initialization: %w", err)
 	}
@@ -634,4 +612,37 @@ func validateIPSecOptions(params daemonParams) error {
 	}
 
 	return nil
+}
+
+func loadDevices(ctx context.Context, params daemonParams) (string, []*tables.Device, error) {
+	rxn := params.DB.ReadTxn()
+
+	directRoutingDevice, _ := params.DirectRoutingDevice.Get(ctx, rxn)
+
+	if directRoutingDevice == nil && option.Config.AreDevicesRequired(params.KPRConfig, params.WGAgent.Enabled(), params.IPsecAgent.Enabled()) {
+		// Fail hard if devices are required to function.
+		return "", nil, fmt.Errorf("unable to determine direct routing device. Use --%s to specify it",
+			option.DirectRoutingDevice)
+	}
+
+	drdName := ""
+	if directRoutingDevice != nil {
+		drdName = directRoutingDevice.Name
+		params.Logger.Info(
+			"Direct routing device detected",
+			option.DirectRoutingDevice, drdName,
+		)
+	}
+
+	nativeDevices, _ := datapathTables.SelectedDevices(params.Devices, rxn)
+
+	if option.Config.EnableHostFirewall && len(nativeDevices) == 0 {
+		const msg = "Host firewall's external facing device could not be determined. Use --%s to specify."
+		params.Logger.Error(
+			fmt.Sprintf(msg, option.Devices),
+		)
+		return "", nil, fmt.Errorf(msg, option.Devices)
+	}
+
+	return drdName, nativeDevices, nil
 }
