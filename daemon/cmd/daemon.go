@@ -337,6 +337,16 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params daemonParams)
 	}
 
 	nativeDevices, _ := datapathTables.SelectedDevices(params.Devices, rxn)
+
+	if option.Config.EnableHostFirewall && len(nativeDevices) == 0 {
+		const msg = "Host firewall's external facing device could not be determined. Use --%s to specify."
+		params.Logger.Error(
+			fmt.Sprintf(msg, option.Devices),
+			logfields.Error, err,
+		)
+		return nil, nil, fmt.Errorf(msg, option.Devices)
+	}
+
 	if err := finishKubeProxyReplacementInit(params.Logger, params.Sysctl, nativeDevices, drdName, params.LBConfig, params.KPRConfig, params.IPsecAgent.Enabled()); err != nil {
 		params.Logger.Error("failed to finalise LB initialization", logfields.Error, err)
 		return nil, nil, fmt.Errorf("failed to finalise LB initialization: %w", err)
@@ -346,17 +356,6 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params daemonParams)
 	// happen after invoking initKubeProxyReplacementOptions().
 	if err := d.validateMasqueradingOptions(); err != nil {
 		return nil, nil, fmt.Errorf("failed to validate masquerading options: %w", err)
-	}
-
-	if len(nativeDevices) == 0 {
-		if option.Config.EnableHostFirewall {
-			const msg = "Host firewall's external facing device could not be determined. Use --%s to specify."
-			params.Logger.Error(
-				fmt.Sprintf(msg, option.Devices),
-				logfields.Error, err,
-			)
-			return nil, nil, fmt.Errorf(msg, option.Devices)
-		}
 	}
 
 	// Some of the k8s watchers rely on option flags set above (specifically
