@@ -59,12 +59,10 @@ type Daemon struct {
 	healthEndpointRouting *linuxrouting.RoutingInfo
 }
 
-func (d *Daemon) init() error {
-	if !option.Config.DryMode {
-		if option.Config.EnableL7Proxy {
-			if err := linuxdatapath.NodeEnsureLocalRoutingRule(); err != nil {
-				return fmt.Errorf("ensuring local routing rule: %w", err)
-			}
+func (d *Daemon) initLocalRoutingRule() error {
+	if !option.Config.DryMode && option.Config.EnableL7Proxy {
+		if err := linuxdatapath.NodeEnsureLocalRoutingRule(); err != nil {
+			return fmt.Errorf("ensuring local routing rule: %w", err)
 		}
 	}
 	return nil
@@ -375,10 +373,10 @@ func newDaemon(ctx context.Context, cleaner *daemonCleanup, params daemonParams)
 	// Must be done at least after initializing BPF LB-related maps
 	// (lbmap.Init()).
 	bootstrapStats.bpfBase.Start()
-	err = d.init()
+	err = d.initLocalRoutingRule()
 	bootstrapStats.bpfBase.EndError(err)
 	if err != nil {
-		return nil, restoredEndpoints, fmt.Errorf("error while initializing daemon: %w", err)
+		return nil, restoredEndpoints, err
 	}
 
 	// Start the host IP synchronization. Blocks until the initial synchronization
