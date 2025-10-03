@@ -41,7 +41,6 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
-	"github.com/cilium/cilium/pkg/endpoint"
 	endpointcreator "github.com/cilium/cilium/pkg/endpoint/creator"
 	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/endpointstate"
@@ -1280,27 +1279,26 @@ type daemonParams struct {
 	// Grab the GC object so that we can start the CT/NAT map garbage collection.
 	// This is currently necessary because these maps have not yet been modularized,
 	// and because it depends on parameters which are not provided through hive.
-	CTNATMapGC          ctmap.GCRunner
-	IPIdentityWatcher   *ipcache.LocalIPIdentityWatcher
-	EndpointRegenerator *endpoint.Regenerator
-	ClusterInfo         cmtypes.ClusterInfo
-	TunnelConfig        tunnel.Config
-	BandwidthManager    datapath.BandwidthManager
-	IPsecAgent          datapath.IPsecAgent
-	MTU                 mtu.MTU
-	Sysctl              sysctl.Sysctl
-	SyncHostIPs         *syncHostIPs
-	NodeDiscovery       *nodediscovery.NodeDiscovery
-	IPAM                *ipam.IPAM
-	CRDSyncPromise      promise.Promise[k8sSynced.CRDSync]
-	IdentityManager     identitymanager.IDManager
-	MaglevConfig        maglev.Config
-	LBConfig            loadbalancer.Config
-	DNSProxy            bootstrap.FQDNProxyBootstrapper
-	DNSNameManager      namemanager.NameManager
-	KPRConfig           kpr.KPRConfig
-	IPSecConfig         datapath.IPsecConfig
-	HealthConfig        healthconfig.CiliumHealthConfig
+	CTNATMapGC        ctmap.GCRunner
+	IPIdentityWatcher *ipcache.LocalIPIdentityWatcher
+	ClusterInfo       cmtypes.ClusterInfo
+	TunnelConfig      tunnel.Config
+	BandwidthManager  datapath.BandwidthManager
+	IPsecAgent        datapath.IPsecAgent
+	MTU               mtu.MTU
+	Sysctl            sysctl.Sysctl
+	SyncHostIPs       *syncHostIPs
+	NodeDiscovery     *nodediscovery.NodeDiscovery
+	IPAM              *ipam.IPAM
+	CRDSyncPromise    promise.Promise[k8sSynced.CRDSync]
+	IdentityManager   identitymanager.IDManager
+	MaglevConfig      maglev.Config
+	LBConfig          loadbalancer.Config
+	DNSProxy          bootstrap.FQDNProxyBootstrapper
+	DNSNameManager    namemanager.NameManager
+	KPRConfig         kpr.KPRConfig
+	IPSecConfig       datapath.IPsecConfig
+	HealthConfig      healthconfig.CiliumHealthConfig
 }
 
 func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], legacy.DaemonInitialization) {
@@ -1410,7 +1408,7 @@ func startDaemon(ctx context.Context, d *Daemon, cleaner *daemonCleanup, params 
 		params.Logger.Error("Failed to wait for initial IPCache revision", logfields.Error, err)
 	}
 
-	d.params.EndpointRestorer.InitRestore(params.EndpointRegenerator)
+	d.params.EndpointRestorer.InitRestore()
 
 	bootstrapStats.enableConntrack.Start()
 	params.Logger.Info("Starting connection tracking garbage collector")
