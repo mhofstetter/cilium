@@ -1323,7 +1323,7 @@ func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], legacy.Dae
 				}
 			}()
 
-			d, restoredEndpoints, err := newDaemon(daemonCtx, cleaner, params)
+			d, err := newDaemon(daemonCtx, cleaner, params)
 			if err != nil {
 				cancelDaemonCtx()
 				cleaner.Clean()
@@ -1363,7 +1363,7 @@ func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], legacy.Dae
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					if err := startDaemon(daemonCtx, daemon, restoredEndpoints, cleaner, params); err != nil {
+					if err := startDaemon(daemonCtx, daemon, cleaner, params); err != nil {
 						params.Logger.Error("Daemon start failed", logfields.Error, err)
 						daemonResolver.Reject(err)
 					} else {
@@ -1386,7 +1386,7 @@ func newDaemonPromise(params daemonParams) (promise.Promise[*Daemon], legacy.Dae
 // startDaemon starts the old unmodular part of the cilium-agent.
 // option.Config has already been exposed via *option.DaemonConfig promise,
 // so it may not be modified here
-func startDaemon(ctx context.Context, d *Daemon, restoredEndpoints *endpointRestoreState, cleaner *daemonCleanup, params daemonParams) error {
+func startDaemon(ctx context.Context, d *Daemon, cleaner *daemonCleanup, params daemonParams) error {
 	bootstrapStats.k8sInit.Start()
 	if params.Clientset.IsEnabled() {
 		// Wait only for certain caches, but not all!
@@ -1410,7 +1410,7 @@ func startDaemon(ctx context.Context, d *Daemon, restoredEndpoints *endpointRest
 		params.Logger.Error("Failed to wait for initial IPCache revision", logfields.Error, err)
 	}
 
-	d.params.EndpointRestorer.InitRestore(restoredEndpoints, params.EndpointRegenerator)
+	d.params.EndpointRestorer.InitRestore(params.EndpointRegenerator)
 
 	bootstrapStats.enableConntrack.Start()
 	params.Logger.Info("Starting connection tracking garbage collector")
