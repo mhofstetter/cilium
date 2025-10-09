@@ -205,6 +205,11 @@ include:
     cliFocus: "K8sKafkaPolicyTest|K8sSpecificMACAddressTests"
 
 exclude:
+  # Temporary disable until fixed
+  # https://github.com/cilium/cilium/issues/41980
+  - k8s-version: "1.34"
+    focus: "f14-datapath-service-ns-xdp-2"
+
   # The bandwidth test is disabled and hubble tests are not meant
   # to run on net-next.
   - k8s-version: "1.34"
