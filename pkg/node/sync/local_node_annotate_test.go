@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
 
-package k8s
+package sync
 
 import (
 	"encoding/json"
@@ -19,6 +19,7 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/cilium/cilium/pkg/annotation"
+	"github.com/cilium/cilium/pkg/k8s"
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	"github.com/cilium/cilium/pkg/node"
@@ -69,14 +70,18 @@ func TestPatchingCIDRAnnotation(t *testing.T) {
 				return true, n1copy, nil
 			})
 
-		node1Cilium := ParseNode(logger, toSlimNode(node1.DeepCopy()), source.Unspec)
+		node1Cilium := k8s.ParseNode(logger, toSlimNode(node1.DeepCopy()), source.Unspec)
 		node1Cilium.SetCiliumInternalIP(net.ParseIP("10.254.0.1"))
 		node.SetIPv4AllocRange(node1Cilium.IPv4AllocCIDR)
 
 		require.Equal(t, "10.2.0.0/16", node.GetIPv4AllocRange(logger).String())
 		// IPv6 Node range is not checked because it shouldn't be changed.
 
-		err := AnnotateNode(logger, fakeK8sClient, *node1Cilium)
+		annotater1 := &localNodeAnnotater{
+			logger:    logger,
+			k8sClient: fakeK8sClient,
+		}
+		err := annotater1.annotate(t.Context(), node.LocalNode{Node: *node1Cilium})
 
 		require.NoError(t, err)
 
@@ -101,16 +106,10 @@ func TestPatchingCIDRAnnotation(t *testing.T) {
 			},
 		}
 
-		failAttempts := 0
-
 		fakeK8sClient = &fake.Clientset{}
 		fakeK8sClient.AddReactor("patch", "nodes",
 			func(action k8stesting.Action) (bool, runtime.Object, error) {
 				// first call will be a patch for annotations
-				if failAttempts == 0 {
-					failAttempts++
-					return true, nil, fmt.Errorf("failing on purpose")
-				}
 				n2Copy := node2.DeepCopy()
 				n2Copy.Annotations[annotation.V4CIDRName] = "10.254.0.0/16"
 				n2Copy.Annotations[annotation.V6CIDRName] = "aaaa:aaaa:aaaa:aaaa:beef:beef::/96"
@@ -126,7 +125,7 @@ func TestPatchingCIDRAnnotation(t *testing.T) {
 				return true, n2Copy, nil
 			})
 
-		node2Cilium := ParseNode(hivetest.Logger(t), toSlimNode(node2.DeepCopy()), source.Unspec)
+		node2Cilium := k8s.ParseNode(hivetest.Logger(t), toSlimNode(node2.DeepCopy()), source.Unspec)
 		node2Cilium.SetCiliumInternalIP(net.ParseIP("10.254.0.1"))
 		node.SetIPv4AllocRange(node2Cilium.IPv4AllocCIDR)
 		node.SetIPv6NodeRange(node2Cilium.IPv6AllocCIDR)
@@ -136,7 +135,11 @@ func TestPatchingCIDRAnnotation(t *testing.T) {
 		require.Equal(t, "10.254.0.0/16", node.GetIPv4AllocRange(logger).String())
 		require.Equal(t, "aaaa:aaaa:aaaa:aaaa:beef:beef::/96", node.GetIPv6AllocRange(logger).String())
 
-		err = AnnotateNode(hivetest.Logger(t), fakeK8sClient, *node2Cilium)
+		annotater2 := &localNodeAnnotater{
+			logger:    logger,
+			k8sClient: fakeK8sClient,
+		}
+		err = annotater2.annotate(t.Context(), node.LocalNode{Node: *node2Cilium})
 
 		require.NoError(t, err)
 
