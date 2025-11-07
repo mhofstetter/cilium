@@ -48,7 +48,7 @@ func registerLocalNodeAnnotator(params localNodeAnnotaterParams) {
 }
 
 func (r *localNodeAnnotater) annotate(ctx context.Context, n node.LocalNode) error {
-	if _, err := k8s.AnnotateNode(r.Logger, r.Clientset, n.Node); err != nil {
+	if err := k8s.AnnotateNode(r.Logger, r.Clientset, n.Node); err != nil {
 		return fmt.Errorf("failed to annotate k8s node with local node information: %w", err)
 	}
 

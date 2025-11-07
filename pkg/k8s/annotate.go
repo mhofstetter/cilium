@@ -16,14 +16,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/cilium/cilium/pkg/annotation"
-	"github.com/cilium/cilium/pkg/controller"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 )
 
 type nodeAnnotation = map[string]string
-
-var nodeAnnotationControllerGroup = controller.NewGroup("update-k8s-node-annotations")
 
 func prepareNodeAnnotation(node nodeTypes.Node) nodeAnnotation {
 	annotationMap := map[string]fmt.Stringer{
@@ -68,7 +65,7 @@ func updateNodeAnnotation(c kubernetes.Interface, nodeName string, annotation no
 // AnnotateNode writes v4 and v6 CIDRs and health IPs in the given k8s node name.
 // In case of failure while updating the node, this function while spawn a go
 // routine to retry the node update indefinitely.
-func AnnotateNode(logger *slog.Logger, cs kubernetes.Interface, node nodeTypes.Node) (nodeAnnotation, error) {
+func AnnotateNode(logger *slog.Logger, cs kubernetes.Interface, node nodeTypes.Node) error {
 	scopedLog := logger.With(
 		logfields.NodeName, node.Name,
 		logfields.V4Prefix, node.IPv4AllocCIDR,
@@ -83,18 +80,11 @@ func AnnotateNode(logger *slog.Logger, cs kubernetes.Interface, node nodeTypes.N
 	)
 	scopedLog.Info("Updating node annotations with node CIDRs")
 
-	annotation := prepareNodeAnnotation(node)
-	controller.NewManager().UpdateController("update-k8s-node-annotations",
-		controller.ControllerParams{
-			Group: nodeAnnotationControllerGroup,
-			DoFunc: func(_ context.Context) error {
-				err := updateNodeAnnotation(cs, node.Name, annotation)
-				if err != nil {
-					scopedLog.Warn("Unable to patch node resource with annotation", logfields.Error, err)
-				}
-				return err
-			},
-		})
+	annotations := prepareNodeAnnotation(node)
 
-	return annotation, nil
+	if err := updateNodeAnnotation(cs, node.Name, annotations); err != nil {
+		return fmt.Errorf("failed to patch node resource with annotations: %w", err)
+	}
+
+	return nil
 }
