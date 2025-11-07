@@ -10,7 +10,6 @@ import (
 	"log/slog"
 	"reflect"
 	"strconv"
-	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
@@ -26,16 +25,16 @@ type nodeAnnotation = map[string]string
 
 var nodeAnnotationControllerGroup = controller.NewGroup("update-k8s-node-annotations")
 
-func prepareNodeAnnotation(nd nodeTypes.Node, encryptKey uint8) nodeAnnotation {
+func prepareNodeAnnotation(node nodeTypes.Node) nodeAnnotation {
 	annotationMap := map[string]fmt.Stringer{
-		annotation.V4CIDRName:     nd.IPv4AllocCIDR,
-		annotation.V6CIDRName:     nd.IPv6AllocCIDR,
-		annotation.V4HealthName:   nd.IPv4HealthIP,
-		annotation.V6HealthName:   nd.IPv6HealthIP,
-		annotation.V4IngressName:  nd.IPv4IngressIP,
-		annotation.V6IngressName:  nd.IPv6IngressIP,
-		annotation.CiliumHostIP:   nd.GetCiliumInternalIP(false),
-		annotation.CiliumHostIPv6: nd.GetCiliumInternalIP(true),
+		annotation.V4CIDRName:     node.IPv4AllocCIDR,
+		annotation.V6CIDRName:     node.IPv6AllocCIDR,
+		annotation.V4HealthName:   node.IPv4HealthIP,
+		annotation.V6HealthName:   node.IPv6HealthIP,
+		annotation.V4IngressName:  node.IPv4IngressIP,
+		annotation.V6IngressName:  node.IPv6IngressIP,
+		annotation.CiliumHostIP:   node.GetCiliumInternalIP(false),
+		annotation.CiliumHostIPv6: node.GetCiliumInternalIP(true),
 	}
 
 	annotations := map[string]string{}
@@ -44,8 +43,8 @@ func prepareNodeAnnotation(nd nodeTypes.Node, encryptKey uint8) nodeAnnotation {
 			annotations[k] = v.String()
 		}
 	}
-	if encryptKey != 0 {
-		annotations[annotation.CiliumEncryptionKey] = strconv.FormatUint(uint64(encryptKey), 10)
+	if node.EncryptionKey != 0 {
+		annotations[annotation.CiliumEncryptionKey] = strconv.FormatUint(uint64(node.EncryptionKey), 10)
 	}
 	return annotations
 }
@@ -84,7 +83,7 @@ func AnnotateNode(logger *slog.Logger, cs kubernetes.Interface, node nodeTypes.N
 	)
 	scopedLog.Info("Updating node annotations with node CIDRs")
 
-	annotation := prepareNodeAnnotation(node, node.EncryptionKey)
+	annotation := prepareNodeAnnotation(node)
 	controller.NewManager().UpdateController("update-k8s-node-annotations",
 		controller.ControllerParams{
 			Group: nodeAnnotationControllerGroup,
@@ -98,30 +97,4 @@ func AnnotateNode(logger *slog.Logger, cs kubernetes.Interface, node nodeTypes.N
 		})
 
 	return annotation, nil
-}
-
-func prepareRemoveNodeAnnotationsPayload(annotation nodeAnnotation) ([]byte, error) {
-	deleteAnnotations := []JSONPatch{}
-
-	for key := range annotation {
-		deleteAnnotations = append(deleteAnnotations, JSONPatch{
-			OP:   "remove",
-			Path: "/metadata/annotations/" + encodeJsonElement(key),
-		})
-	}
-
-	return json.Marshal(deleteAnnotations)
-}
-
-func RemoveNodeAnnotations(c kubernetes.Interface, nodeName string, annotation nodeAnnotation) error {
-	patch, err := prepareRemoveNodeAnnotationsPayload(annotation)
-	if err != nil {
-		return err
-	}
-	_, err = c.CoreV1().Nodes().Patch(context.TODO(), nodeName, k8sTypes.JSONPatchType, patch, metav1.PatchOptions{}, "status")
-	return err
-}
-
-func encodeJsonElement(element string) string {
-	return strings.ReplaceAll(element, "/", "~1")
 }
