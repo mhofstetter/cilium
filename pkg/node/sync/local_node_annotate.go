@@ -14,7 +14,6 @@ import (
 	"github.com/cilium/cilium/pkg/k8s"
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/node"
-	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
 )
 
@@ -49,7 +48,7 @@ func registerLocalNodeAnnotator(params localNodeAnnotaterParams) {
 }
 
 func (r *localNodeAnnotater) annotate(ctx context.Context, n node.LocalNode) error {
-	if _, err := k8s.AnnotateNode(r.Logger, r.Clientset, nodeTypes.GetName(), n.Node, n.EncryptionKey); err != nil {
+	if _, err := k8s.AnnotateNode(r.Logger, r.Clientset, n.Node); err != nil {
 		return fmt.Errorf("failed to annotate k8s node with local node information: %w", err)
 	}
 

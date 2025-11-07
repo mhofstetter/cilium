@@ -103,7 +103,7 @@ func TestPatchingCIDRAnnotation(t *testing.T) {
 		require.Equal(t, "10.2.0.0/16", node.GetIPv4AllocRange(logger).String())
 		// IPv6 Node range is not checked because it shouldn't be changed.
 
-		_, err := AnnotateNode(logger, fakeK8sClient, "node1", *node1Cilium, 0)
+		_, err := AnnotateNode(logger, fakeK8sClient, *node1Cilium)
 
 		require.NoError(t, err)
 
@@ -163,7 +163,7 @@ func TestPatchingCIDRAnnotation(t *testing.T) {
 		require.Equal(t, "10.254.0.0/16", node.GetIPv4AllocRange(logger).String())
 		require.Equal(t, "aaaa:aaaa:aaaa:aaaa:beef:beef::/96", node.GetIPv6AllocRange(logger).String())
 
-		_, err = AnnotateNode(hivetest.Logger(t), fakeK8sClient, "node2", *node2Cilium, 0)
+		_, err = AnnotateNode(hivetest.Logger(t), fakeK8sClient, *node2Cilium)
 
 		require.NoError(t, err)
 

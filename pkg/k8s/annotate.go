@@ -69,27 +69,27 @@ func updateNodeAnnotation(c kubernetes.Interface, nodeName string, annotation no
 // AnnotateNode writes v4 and v6 CIDRs and health IPs in the given k8s node name.
 // In case of failure while updating the node, this function while spawn a go
 // routine to retry the node update indefinitely.
-func AnnotateNode(logger *slog.Logger, cs kubernetes.Interface, nodeName string, nd nodeTypes.Node, encryptKey uint8) (nodeAnnotation, error) {
+func AnnotateNode(logger *slog.Logger, cs kubernetes.Interface, node nodeTypes.Node) (nodeAnnotation, error) {
 	scopedLog := logger.With(
-		logfields.NodeName, nodeName,
-		logfields.V4Prefix, nd.IPv4AllocCIDR,
-		logfields.V6Prefix, nd.IPv6AllocCIDR,
-		logfields.V4HealthIP, nd.IPv4HealthIP,
-		logfields.V6HealthIP, nd.IPv6HealthIP,
-		logfields.V4IngressIP, nd.IPv4IngressIP,
-		logfields.V6IngressIP, nd.IPv6IngressIP,
-		logfields.V4CiliumHostIP, nd.GetCiliumInternalIP(false),
-		logfields.V6CiliumHostIP, nd.GetCiliumInternalIP(true),
-		logfields.Key, encryptKey,
+		logfields.NodeName, node.Name,
+		logfields.V4Prefix, node.IPv4AllocCIDR,
+		logfields.V6Prefix, node.IPv6AllocCIDR,
+		logfields.V4HealthIP, node.IPv4HealthIP,
+		logfields.V6HealthIP, node.IPv6HealthIP,
+		logfields.V4IngressIP, node.IPv4IngressIP,
+		logfields.V6IngressIP, node.IPv6IngressIP,
+		logfields.V4CiliumHostIP, node.GetCiliumInternalIP(false),
+		logfields.V6CiliumHostIP, node.GetCiliumInternalIP(true),
+		logfields.Key, node.EncryptionKey,
 	)
-	scopedLog.Debug("Updating node annotations with node CIDRs")
+	scopedLog.Info("Updating node annotations with node CIDRs")
 
-	annotation := prepareNodeAnnotation(nd, encryptKey)
+	annotation := prepareNodeAnnotation(node, node.EncryptionKey)
 	controller.NewManager().UpdateController("update-k8s-node-annotations",
 		controller.ControllerParams{
 			Group: nodeAnnotationControllerGroup,
 			DoFunc: func(_ context.Context) error {
-				err := updateNodeAnnotation(cs, nodeName, annotation)
+				err := updateNodeAnnotation(cs, node.Name, annotation)
 				if err != nil {
 					scopedLog.Warn("Unable to patch node resource with annotation", logfields.Error, err)
 				}
