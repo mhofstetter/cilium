@@ -173,7 +173,7 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 			params.NodeDiscovery.UpdateCiliumNodeResource()
 		}
 
-		if err := agentK8s.WaitForNodeInformation(ctx, params.Logger, params.Resources.LocalNode, params.Resources.LocalCiliumNode); err != nil {
+		if err := agentK8s.WaitForNodeInformation(ctx, params.Logger, params.Resources.LocalNode, params.Resources.LocalCiliumNode, params.NodeSyncConfig.AnnotateK8sNode()); err != nil {
 			params.Logger.Error("unable to connect to get node spec from apiserver", logfields.Error, err)
 			return fmt.Errorf("unable to connect to get node spec from apiserver: %w", err)
 		}

@@ -22,7 +22,7 @@ import (
 	"github.com/cilium/cilium/pkg/time"
 )
 
-func retrieveNodeInformation(ctx context.Context, log *slog.Logger, localNodeResource LocalNodeResource, localCiliumNodeResource LocalCiliumNodeResource) *nodeTypes.Node {
+func retrieveNodeInformation(ctx context.Context, log *slog.Logger, localNodeResource LocalNodeResource, localCiliumNodeResource LocalCiliumNodeResource, includeAnnotations bool) *nodeTypes.Node {
 	var n *nodeTypes.Node
 	waitForCIDR := func() error {
 		if option.Config.K8sRequireIPv4PodCIDR && n.IPv4AllocCIDR == nil {
@@ -61,7 +61,7 @@ func retrieveNodeInformation(ctx context.Context, log *slog.Logger, localNodeRes
 				break
 			}
 			if event.Kind == resource.Upsert {
-				n = k8s.ParseNode(log, event.Object, source.Unspec)
+				n = k8s.ParseNode(log, event.Object, source.Unspec, includeAnnotations)
 				log.Info("Retrieved node information from kubernetes node", logfields.NodeName, n.Name)
 				if err := waitForCIDR(); err != nil {
 					log.Warn("Waiting for k8s node information", logfields.Error, err)
@@ -91,7 +91,7 @@ func useNodeCIDR(n *nodeTypes.Node) {
 // WaitForNodeInformation retrieves the node information via the CiliumNode or
 // Kubernetes Node resource. This function will block until the information is
 // received.
-func WaitForNodeInformation(ctx context.Context, log *slog.Logger, localNode LocalNodeResource, localCiliumNode LocalCiliumNodeResource) error {
+func WaitForNodeInformation(ctx context.Context, log *slog.Logger, localNode LocalNodeResource, localCiliumNode LocalCiliumNodeResource, includeAnnotations bool) error {
 	// Use of the environment variable overwrites the node-name
 	// automatically derived
 	nodeName := nodeTypes.GetName()
@@ -120,7 +120,7 @@ func WaitForNodeInformation(ctx context.Context, log *slog.Logger, localNode Loc
 		defer cancel()
 	}
 
-	if n := retrieveNodeInformation(ctx, log, localNode, localCiliumNode); n != nil {
+	if n := retrieveNodeInformation(ctx, log, localNode, localCiliumNode, includeAnnotations); n != nil {
 		nodeIP4 := n.GetNodeIP(false)
 		nodeIP6 := n.GetNodeIP(true)
 		k8sNodeIP := n.GetK8sNodeIP()

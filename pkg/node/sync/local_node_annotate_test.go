@@ -23,19 +23,12 @@ import (
 	slim_corev1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/api/core/v1"
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	"github.com/cilium/cilium/pkg/node"
-	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/source"
 )
 
 func TestPatchingCIDRAnnotation(t *testing.T) {
 	logger := hivetest.Logger(t)
 	node.WithTestLocalNodeStore(func() {
-		prevAnnotateK8sNode := option.Config.AnnotateK8sNode
-		option.Config.AnnotateK8sNode = true
-		defer func() {
-			option.Config.AnnotateK8sNode = prevAnnotateK8sNode
-		}()
-
 		// Test IPv4
 		node1 := v1.Node{
 			ObjectMeta: metav1.ObjectMeta{
@@ -70,7 +63,7 @@ func TestPatchingCIDRAnnotation(t *testing.T) {
 				return true, n1copy, nil
 			})
 
-		node1Cilium := k8s.ParseNode(logger, toSlimNode(node1.DeepCopy()), source.Unspec)
+		node1Cilium := k8s.ParseNode(logger, toSlimNode(node1.DeepCopy()), source.Unspec, true)
 		node1Cilium.SetCiliumInternalIP(net.ParseIP("10.254.0.1"))
 		node.SetIPv4AllocRange(node1Cilium.IPv4AllocCIDR)
 
@@ -125,7 +118,7 @@ func TestPatchingCIDRAnnotation(t *testing.T) {
 				return true, n2Copy, nil
 			})
 
-		node2Cilium := k8s.ParseNode(hivetest.Logger(t), toSlimNode(node2.DeepCopy()), source.Unspec)
+		node2Cilium := k8s.ParseNode(hivetest.Logger(t), toSlimNode(node2.DeepCopy()), source.Unspec, true)
 		node2Cilium.SetCiliumInternalIP(net.ParseIP("10.254.0.1"))
 		node.SetIPv4AllocRange(node2Cilium.IPv4AllocCIDR)
 		node.SetIPv6NodeRange(node2Cilium.IPv6AllocCIDR)

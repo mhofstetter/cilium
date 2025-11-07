@@ -14,17 +14,10 @@ import (
 	slim_metav1 "github.com/cilium/cilium/pkg/k8s/slim/k8s/apis/meta/v1"
 	"github.com/cilium/cilium/pkg/loadbalancer"
 	nodeAddressing "github.com/cilium/cilium/pkg/node/addressing"
-	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/source"
 )
 
 func TestParseNode(t *testing.T) {
-	prevAnnotateK8sNode := option.Config.AnnotateK8sNode
-	option.Config.AnnotateK8sNode = true
-	defer func() {
-		option.Config.AnnotateK8sNode = prevAnnotateK8sNode
-	}()
-
 	// PodCIDR takes precedence over annotations
 	k8sNode := &slim_corev1.Node{
 		ObjectMeta: slim_metav1.ObjectMeta{
@@ -48,7 +41,7 @@ func TestParseNode(t *testing.T) {
 		},
 	}
 
-	n := ParseNode(hivetest.Logger(t), k8sNode, source.Local)
+	n := ParseNode(hivetest.Logger(t), k8sNode, source.Local, true)
 	require.Equal(t, "node1", n.Name)
 	require.NotNil(t, n.IPv4AllocCIDR)
 	require.Equal(t, "10.1.0.0/16", n.IPv4AllocCIDR.String())
@@ -79,7 +72,7 @@ func TestParseNode(t *testing.T) {
 		},
 	}
 
-	n = ParseNode(hivetest.Logger(t), k8sNode, source.Local)
+	n = ParseNode(hivetest.Logger(t), k8sNode, source.Local, true)
 	require.Equal(t, "node2", n.Name)
 	require.NotNil(t, n.IPv4AllocCIDR)
 	require.Equal(t, "10.1.0.0/16", n.IPv4AllocCIDR.String())
@@ -98,7 +91,7 @@ func TestParseNode(t *testing.T) {
 		},
 	}
 
-	n = ParseNode(hivetest.Logger(t), k8sNode, source.Local)
+	n = ParseNode(hivetest.Logger(t), k8sNode, source.Local, true)
 	require.Equal(t, "node2", n.Name)
 	require.NotNil(t, n.IPv4AllocCIDR)
 	require.Equal(t, "10.254.0.0/16", n.IPv4AllocCIDR.String())
@@ -119,7 +112,7 @@ func TestParseNode(t *testing.T) {
 		},
 	}
 
-	n = ParseNode(hivetest.Logger(t), k8sNode, source.Local)
+	n = ParseNode(hivetest.Logger(t), k8sNode, source.Local, true)
 	require.Equal(t, "node2", n.Name)
 	require.NotNil(t, n.IPv4AllocCIDR)
 	require.Equal(t, "10.1.0.0/16", n.IPv4AllocCIDR.String())
@@ -175,7 +168,7 @@ func TestParseNode(t *testing.T) {
 		},
 	}
 
-	n = ParseNode(hivetest.Logger(t), k8sNode, source.Local)
+	n = ParseNode(hivetest.Logger(t), k8sNode, source.Local, true)
 	require.Equal(t, "node2", n.Name)
 	require.NotNil(t, n.IPv4AllocCIDR)
 	require.Equal(t, "10.1.0.0/16", n.IPv4AllocCIDR.String())
@@ -192,12 +185,6 @@ func TestParseNode(t *testing.T) {
 }
 
 func TestParseNodeWithoutAnnotations(t *testing.T) {
-	prevAnnotateK8sNode := option.Config.AnnotateK8sNode
-	option.Config.AnnotateK8sNode = false
-	defer func() {
-		option.Config.AnnotateK8sNode = prevAnnotateK8sNode
-	}()
-
 	// PodCIDR takes precedence over annotations
 	k8sNode := &slim_corev1.Node{
 		ObjectMeta: slim_metav1.ObjectMeta{
@@ -219,7 +206,7 @@ func TestParseNodeWithoutAnnotations(t *testing.T) {
 		},
 	}
 
-	n := ParseNode(hivetest.Logger(t), k8sNode, source.Local)
+	n := ParseNode(hivetest.Logger(t), k8sNode, source.Local, false)
 	require.Equal(t, "node1", n.Name)
 	require.NotNil(t, n.IPv4AllocCIDR)
 	require.Equal(t, "10.1.0.0/16", n.IPv4AllocCIDR.String())
@@ -244,7 +231,7 @@ func TestParseNodeWithoutAnnotations(t *testing.T) {
 		},
 	}
 
-	n = ParseNode(hivetest.Logger(t), k8sNode, source.Local)
+	n = ParseNode(hivetest.Logger(t), k8sNode, source.Local, false)
 	require.Equal(t, "node2", n.Name)
 	require.Nil(t, n.IPv4AllocCIDR)
 	require.NotNil(t, n.IPv6AllocCIDR)
@@ -341,15 +328,9 @@ func Test_ParseNodeAddressType(t *testing.T) {
 }
 
 func TestParseNodeWithService(t *testing.T) {
-	oldAnnotateK8sNode := option.Config.AnnotateK8sNode
-
 	var lbConfig loadbalancer.Config
-	option.Config.AnnotateK8sNode = false
 	lbConfig.LBMode = loadbalancer.LBModeSNAT
 	lbConfig.LBAlgorithm = loadbalancer.LBAlgorithmRandom
-	defer func() {
-		option.Config.AnnotateK8sNode = oldAnnotateK8sNode
-	}()
 
 	k8sNode := &slim_corev1.Node{
 		ObjectMeta: slim_metav1.ObjectMeta{
@@ -363,7 +344,7 @@ func TestParseNodeWithService(t *testing.T) {
 		},
 	}
 
-	n1 := ParseNode(hivetest.Logger(t), k8sNode, source.Local)
+	n1 := ParseNode(hivetest.Logger(t), k8sNode, source.Local, false)
 	require.Equal(t, "node1", n1.Name)
 	require.NotNil(t, n1.IPv4AllocCIDR)
 	require.Equal(t, "10.1.0.0/16", n1.IPv4AllocCIDR.String())
@@ -378,7 +359,7 @@ func TestParseNodeWithService(t *testing.T) {
 		},
 	}
 
-	n2 := ParseNode(hivetest.Logger(t), k8sNode, source.Local)
+	n2 := ParseNode(hivetest.Logger(t), k8sNode, source.Local, false)
 	require.Equal(t, "node2", n2.Name)
 	require.NotNil(t, n2.IPv4AllocCIDR)
 	require.Equal(t, "10.2.0.0/16", n2.IPv4AllocCIDR.String())

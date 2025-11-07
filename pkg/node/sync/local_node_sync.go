@@ -11,6 +11,7 @@ import (
 	"net"
 
 	"github.com/cilium/hive/cell"
+	"github.com/spf13/pflag"
 
 	agentK8s "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
@@ -32,6 +33,11 @@ var LocalNodeSyncCell = cell.Module(
 	"local-node-sync",
 	"Provides LocalNodeSynchronizer that syncs the LocalNodeStore with the K8s Node",
 
+	cell.Config(config{
+		AnnotateK8sNode: false,
+	}),
+	cell.Provide(newNodeSyncConfig),
+
 	// Provides a newLocalNodeSynchronizer that is invoked when LocalNodeStore is started.
 	// This fills in the initial state before it is accessed by other sub-systems.
 	// Then, it takes care of keeping selected fields (e.g., labels, annotations)
@@ -41,11 +47,35 @@ var LocalNodeSyncCell = cell.Module(
 	cell.Invoke(registerLocalNodeAnnotator),
 )
 
+type config struct {
+	AnnotateK8sNode bool
+}
+
+func (r config) Flags(flags *pflag.FlagSet) {
+	flags.Bool("annotate-k8s-node", r.AnnotateK8sNode, "Specifies whether to annotate the kubernetes nodes or not")
+}
+
+// NodeSyncConfig provides the config to other modules
+type NodeSyncConfig struct {
+	annotateK8sNode bool
+}
+
+func newNodeSyncConfig(config config) NodeSyncConfig {
+	return NodeSyncConfig{
+		annotateK8sNode: config.AnnotateK8sNode,
+	}
+}
+
+func (r *NodeSyncConfig) AnnotateK8sNode() bool {
+	return r.annotateK8sNode
+}
+
 type localNodeSynchronizerParams struct {
 	cell.In
 
 	Logger             *slog.Logger
 	Config             *option.DaemonConfig
+	SyncConfig         config
 	TunnelConfig       tunnel.Config
 	K8sLocalNode       agentK8s.LocalNodeResource
 	K8sCiliumLocalNode agentK8s.LocalCiliumNodeResource
@@ -98,7 +128,7 @@ func (ini *localNodeSynchronizer) SyncLocalNode(ctx context.Context, store *node
 					ln.Local.IsBeingDeleted = true
 				})
 			}
-			new := parseNode(ini.Logger, ev.Object)
+			new := ini.parseNode(ev.Object)
 			if !ini.mutableFieldsEqual(new) {
 				store.Update(func(ln *node.LocalNode) {
 					ini.syncFromK8s(ln, new)
@@ -195,7 +225,7 @@ func (ini *localNodeSynchronizer) initFromK8s(ctx context.Context, node *node.Lo
 	if err != nil {
 		return err
 	}
-	parsedNode := parseNode(ini.Logger, k8sNode)
+	parsedNode := ini.parseNode(k8sNode)
 
 	// Initialize the fields in local node where the source of truth is in Kubernetes.
 	// Later stages will deal with updating rest of the fields depending on configuration.
@@ -295,9 +325,9 @@ func (ini *localNodeSynchronizer) syncFromK8s(ln, new *node.LocalNode) {
 	)
 }
 
-func parseNode(logger *slog.Logger, k8sNode *slim_corev1.Node) *node.LocalNode {
+func (ini *localNodeSynchronizer) parseNode(k8sNode *slim_corev1.Node) *node.LocalNode {
 	return &node.LocalNode{
-		Node: *k8s.ParseNode(logger, k8sNode, source.Kubernetes),
+		Node: *k8s.ParseNode(ini.Logger, k8sNode, source.Kubernetes, ini.SyncConfig.AnnotateK8sNode),
 		Local: &node.LocalNodeInfo{
 			UID:        k8sNode.GetUID(),
 			ProviderID: k8sNode.Spec.ProviderID,

@@ -305,11 +305,6 @@ const (
 	// It is disabled by default for backwards compatibility.
 	EnableEndpointRoutes = false
 
-	// AnnotateK8sNode is the default value for option.AnnotateK8sNode. It is
-	// disabled by default to annotate kubernetes node and can be enabled using
-	// the provided option.
-	AnnotateK8sNode = false
-
 	// MonitorBufferPages is the default number of pages to use for the
 	// ring buffer interacting with the kernel
 	MonitorBufferPages = 64

@@ -42,7 +42,7 @@ type nodeAddressGroup struct {
 }
 
 // ParseNode parses a kubernetes node to a cilium node
-func ParseNode(logger *slog.Logger, k8sNode *slim_corev1.Node, source source.Source) *nodeTypes.Node {
+func ParseNode(logger *slog.Logger, k8sNode *slim_corev1.Node, source source.Source, includeAnnotations bool) *nodeTypes.Node {
 	addrGroups := make(map[nodeAddressGroup]struct{})
 	scopedLog := logger.With(
 		logfields.NodeName, k8sNode.Name,
@@ -159,7 +159,7 @@ func ParseNode(logger *slog.Logger, k8sNode *slim_corev1.Node, source source.Sou
 		}
 	}
 
-	if !option.Config.AnnotateK8sNode {
+	if !includeAnnotations {
 		return newNode
 	}
 

@@ -87,10 +87,6 @@ const (
 	// disabled.
 	AllowLocalhostPolicy = "policy"
 
-	// AnnotateK8sNode enables annotating a kubernetes node while bootstrapping
-	// the daemon, which can also be disabled using this option.
-	AnnotateK8sNode = "annotate-k8s-node"
-
 	// BPFDistributedLRU enables per-CPU distributed backend memory
 	BPFDistributedLRU = "bpf-distributed-lru"
 
@@ -1591,9 +1587,6 @@ type DaemonConfig struct {
 	// EnableEndpointRoutes enables use of per endpoint routes
 	EnableEndpointRoutes bool
 
-	// Specifies whether to annotate the kubernetes nodes or not
-	AnnotateK8sNode bool
-
 	// EnableHealthDatapath enables IPIP health probes data path
 	EnableHealthDatapath bool
 
@@ -1933,7 +1926,6 @@ var (
 		ServiceLoopbackIPv4:             defaults.ServiceLoopbackIPv4,
 		ServiceLoopbackIPv6:             defaults.ServiceLoopbackIPv6,
 		EnableEndpointRoutes:            defaults.EnableEndpointRoutes,
-		AnnotateK8sNode:                 defaults.AnnotateK8sNode,
 		AutoCreateCiliumNodeResource:    defaults.AutoCreateCiliumNodeResource,
 		IdentityAllocationMode:          IdentityAllocationModeKVstore,
 		AllowICMPFragNeeded:             defaults.AllowICMPFragNeeded,
@@ -2469,7 +2461,6 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.ClusterMeshHealthPort = vp.GetInt(ClusterMeshHealthPort)
 	c.AllowICMPFragNeeded = vp.GetBool(AllowICMPFragNeeded)
 	c.AllowLocalhost = vp.GetString(AllowLocalhost)
-	c.AnnotateK8sNode = vp.GetBool(AnnotateK8sNode)
 	c.AutoCreateCiliumNodeResource = vp.GetBool(AutoCreateCiliumNodeResource)
 	c.BPFRoot = vp.GetString(BPFRoot)
 	c.CGroupRoot = vp.GetString(CGroupRoot)

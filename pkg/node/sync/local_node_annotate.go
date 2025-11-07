@@ -23,8 +23,17 @@ import (
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/node"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
-	"github.com/cilium/cilium/pkg/option"
 )
+
+type localNodeAnnotaterParams struct {
+	cell.In
+
+	Config         config
+	Logger         *slog.Logger
+	JobGroup       job.Group
+	Clientset      k8sClient.Clientset
+	LocalNodeStore *node.LocalNodeStore
+}
 
 type localNodeAnnotater struct {
 	logger         *slog.Logger
@@ -32,17 +41,8 @@ type localNodeAnnotater struct {
 	localNodeStore *node.LocalNodeStore
 }
 
-type localNodeAnnotaterParams struct {
-	cell.In
-
-	Logger         *slog.Logger
-	JobGroup       job.Group
-	Clientset      k8sClient.Clientset
-	LocalNodeStore *node.LocalNodeStore
-}
-
 func registerLocalNodeAnnotator(params localNodeAnnotaterParams) {
-	if !params.Clientset.IsEnabled() || !option.Config.AnnotateK8sNode {
+	if !params.Clientset.IsEnabled() || !params.Config.AnnotateK8sNode {
 		params.Logger.Debug("Annotating k8s node is disabled")
 		return
 	}
