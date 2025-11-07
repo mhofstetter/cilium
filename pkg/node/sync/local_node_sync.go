@@ -11,7 +11,6 @@ import (
 	"net"
 
 	"github.com/cilium/hive/cell"
-	"github.com/spf13/pflag"
 
 	agentK8s "github.com/cilium/cilium/daemon/k8s"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
@@ -28,47 +27,6 @@ import (
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/source"
 )
-
-var LocalNodeSyncCell = cell.Module(
-	"local-node-sync",
-	"Provides LocalNodeSynchronizer that syncs the LocalNodeStore with the K8s Node",
-
-	cell.Config(config{
-		AnnotateK8sNode: false,
-	}),
-	cell.Provide(newNodeSyncConfig),
-
-	// Provides a newLocalNodeSynchronizer that is invoked when LocalNodeStore is started.
-	// This fills in the initial state before it is accessed by other sub-systems.
-	// Then, it takes care of keeping selected fields (e.g., labels, annotations)
-	// synchronized with the corresponding kubernetes object.
-	cell.Provide(newLocalNodeSynchronizer),
-
-	cell.Invoke(registerLocalNodeAnnotator),
-)
-
-type config struct {
-	AnnotateK8sNode bool
-}
-
-func (r config) Flags(flags *pflag.FlagSet) {
-	flags.Bool("annotate-k8s-node", r.AnnotateK8sNode, "Specifies whether to annotate the kubernetes nodes or not")
-}
-
-// NodeSyncConfig provides the config to other modules
-type NodeSyncConfig struct {
-	annotateK8sNode bool
-}
-
-func newNodeSyncConfig(config config) NodeSyncConfig {
-	return NodeSyncConfig{
-		annotateK8sNode: config.AnnotateK8sNode,
-	}
-}
-
-func (r *NodeSyncConfig) AnnotateK8sNode() bool {
-	return r.annotateK8sNode
-}
 
 type localNodeSynchronizerParams struct {
 	cell.In
