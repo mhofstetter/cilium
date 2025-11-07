@@ -13,6 +13,7 @@ import (
 
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/job"
+	"github.com/cilium/stream"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -52,7 +53,8 @@ func registerLocalNodeAnnotator(params localNodeAnnotaterParams) {
 		localNodeStore: params.LocalNodeStore,
 	}
 
-	params.JobGroup.Add(job.Observer("annotate-k8s-node", annotater.annotate, params.LocalNodeStore))
+	retryObservable := stream.Retry(params.LocalNodeStore, stream.LimitRetries(stream.AlwaysRetry, 5))
+	params.JobGroup.Add(job.Observer("annotate-k8s-node", annotater.annotate, retryObservable))
 }
 
 // Annotate writes v4 and v6 CIDRs and health IPs in the given k8s node name.
