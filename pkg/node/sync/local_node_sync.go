@@ -37,6 +37,8 @@ var LocalNodeSyncCell = cell.Module(
 	// Then, it takes care of keeping selected fields (e.g., labels, annotations)
 	// synchronized with the corresponding kubernetes object.
 	cell.Provide(newLocalNodeSynchronizer),
+
+	cell.Invoke(registerLocalNodeAnnotator),
 )
 
 type localNodeSynchronizerParams struct {
