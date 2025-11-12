@@ -10,7 +10,6 @@ import (
 
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/k8s"
-	k8sConst "github.com/cilium/cilium/pkg/k8s/constants"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/node"
@@ -90,17 +89,6 @@ func (ini *localNodeSynchronizer) useNodeCIDR(n *nodeTypes.Node) {
 // Kubernetes Node resource. This function will block until the information is
 // received.
 func (ini *localNodeSynchronizer) waitForNodeInformationFromK8s(ctx context.Context) error {
-	// Use of the environment variable overwrites the node-name
-	// automatically derived
-	nodeName := nodeTypes.GetName()
-	if nodeName == "" {
-		if option.Config.K8sRequireIPv4PodCIDR || option.Config.K8sRequireIPv6PodCIDR {
-			return fmt.Errorf("node name must be specified via environment variable '%s' to retrieve Kubernetes PodCIDR range", k8sConst.EnvNodeNameSpec)
-		}
-		ini.Logger.Info("K8s node name is empty. BPF NodePort might not be able to auto detect all devices")
-		return nil
-	}
-
 	requireIPv4CIDR := option.Config.K8sRequireIPv4PodCIDR
 	requireIPv6CIDR := option.Config.K8sRequireIPv6PodCIDR
 	// If no CIDR is required, retrieving the node information is
