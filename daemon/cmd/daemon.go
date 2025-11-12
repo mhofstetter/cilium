@@ -196,17 +196,6 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 	bootstrapStats.fqdn.End(true)
 
 	if params.Clientset.IsEnabled() {
-		bootstrapStats.k8sInit.Start()
-		// Errors are handled inside WaitForCRDsToRegister. It will fatal on a
-		// context deadline or if the context has been cancelled, the context's
-		// error will be returned. Otherwise, it succeeded.
-		if !params.DaemonConfig.DryMode {
-			_, err := params.CRDSyncPromise.Await(ctx)
-			if err != nil {
-				return err
-			}
-		}
-
 		if params.DaemonConfig.IPAM == ipamOption.IPAMClusterPool ||
 			params.DaemonConfig.IPAM == ipamOption.IPAMMultiPool {
 			// Create the CiliumNode custom resource. This call will block until
