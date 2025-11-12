@@ -133,7 +133,7 @@ func TestLocalNodeSync(t *testing.T) {
 	)
 
 	require.NoError(t, sync.InitLocalNode(t.Context(), &local))
-	require.EqualValues(t, 1, fln.done)
+	require.EqualValues(t, 2, fln.done) // 1x wait initFromK8s & 1x waitForNodeInformationFromK8s
 	require.Equal(t, "foo", local.Name)
 	require.Equal(t, "10.0.0.1", local.GetNodeInternalIPv4().String())
 	require.Equal(t, "fc00::11", local.GetNodeInternalIPv6().String())
