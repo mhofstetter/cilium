@@ -1258,7 +1258,6 @@ type daemonParams struct {
 	LocalNodeStore      *node.LocalNodeStore
 	Resources           agentK8s.Resources
 	K8sWatcher          *watchers.K8sWatcher
-	CacheStatus         k8sSynced.CacheStatus
 	NodeHandler         datapath.NodeHandler
 	EndpointCreator     endpointcreator.EndpointCreator
 	EndpointManager     endpointmanager.EndpointManager
