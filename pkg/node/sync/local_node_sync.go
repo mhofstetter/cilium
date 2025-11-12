@@ -87,7 +87,8 @@ func (ini *localNodeSynchronizer) SyncLocalNode(ctx context.Context, store *node
 	}
 
 	for ev := range ini.K8sLocalNode.Events(ctx) {
-		if ev.Kind == resource.Upsert {
+		switch ev.Kind {
+		case resource.Upsert:
 			ini.Logger.Debug("Received Local Node upsert event", logfields.Node, ev.Object)
 			isBeingDeleted := ev.Object.DeletionTimestamp != nil
 			if isBeingDeleted {
@@ -102,7 +103,8 @@ func (ini *localNodeSynchronizer) SyncLocalNode(ctx context.Context, store *node
 					ini.syncFromK8s(ln, new)
 				})
 			}
-		} else if ev.Kind == resource.Delete {
+
+		case resource.Delete:
 			ini.Logger.Info("Received Local node Delete event", logfields.Node, ev.Object)
 			// Mark as being deleted on explicit delete events too
 			store.Update(func(ln *node.LocalNode) {
@@ -135,14 +137,14 @@ func (ini *localNodeSynchronizer) initFromConfig(n *node.LocalNode) error {
 			return fmt.Errorf("invalid IPv6 node address: %q", ini.Config.IPv6NodeAddr)
 		} else {
 			if !ip.IsGlobalUnicast() {
-				return fmt.Errorf("Invalid IPv6 node address: %q not a global unicast address", ip)
+				return fmt.Errorf("invalid IPv6 node address: %q not a global unicast address", ip)
 			}
 			n.SetNodeInternalIP(ip)
 		}
 	}
 	if ini.Config.IPv4NodeAddr != "auto" {
 		if ip := net.ParseIP(ini.Config.IPv4NodeAddr); ip == nil {
-			return fmt.Errorf("Invalid IPv4 node address: %q", ini.Config.IPv4NodeAddr)
+			return fmt.Errorf("invalid IPv4 node address: %q", ini.Config.IPv4NodeAddr)
 		} else {
 			n.SetNodeInternalIP(ip)
 		}
@@ -207,12 +209,14 @@ func (ini *localNodeSynchronizer) initFromK8s(ctx context.Context, node *node.Lo
 	//   - alloc CIDRs (depends on IPAM mode; restored from Node or CiliumNode)
 	node.Name = parsedNode.Name
 	for _, addr := range parsedNode.IPAddresses {
-		if addr.Type == addressing.NodeInternalIP {
+		switch addr.Type {
+		case addressing.NodeInternalIP:
 			node.SetNodeInternalIP(addr.IP)
-		} else if addr.Type == addressing.NodeExternalIP {
+		case addressing.NodeExternalIP:
 			node.SetNodeExternalIP(addr.IP)
 		}
 	}
+
 	ini.syncFromK8s(node, parsedNode)
 
 	// In cases where no local CiliumNode exists (such as on a fresh node) we skip restoring
