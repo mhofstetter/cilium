@@ -20,8 +20,7 @@ import (
 )
 
 func (ini *localNodeSynchronizer) retrieveNodeInformation(ctx context.Context) *nodeTypes.Node {
-	var n *nodeTypes.Node
-	waitForCIDR := func() error {
+	validateCIDRConfigured := func(n *nodeTypes.Node) error {
 		if option.Config.K8sRequireIPv4PodCIDR && n.IPv4AllocCIDR == nil {
 			return fmt.Errorf("required IPv4 PodCIDR not available")
 		}
@@ -39,14 +38,13 @@ func (ini *localNodeSynchronizer) retrieveNodeInformation(ctx context.Context) *
 				break
 			}
 			if event.Kind == resource.Upsert {
-				no := nodeTypes.ParseCiliumNode(event.Object)
-				n = &no
+				n := nodeTypes.ParseCiliumNode(event.Object)
 				ini.Logger.Info("Retrieved node information from cilium node", logfields.NodeName, n.Name)
-				if err := waitForCIDR(); err != nil {
+				if err := validateCIDRConfigured(&n); err != nil {
 					ini.Logger.Warn("Waiting for k8s node information", logfields.Error, err)
 				} else {
 					event.Done(nil)
-					break
+					return &n
 				}
 			}
 			event.Done(nil)
@@ -58,20 +56,20 @@ func (ini *localNodeSynchronizer) retrieveNodeInformation(ctx context.Context) *
 				break
 			}
 			if event.Kind == resource.Upsert {
-				n = k8s.ParseNode(ini.Logger, event.Object, source.Unspec)
+				n := k8s.ParseNode(ini.Logger, event.Object, source.Unspec)
 				ini.Logger.Info("Retrieved node information from kubernetes node", logfields.NodeName, n.Name)
-				if err := waitForCIDR(); err != nil {
+				if err := validateCIDRConfigured(n); err != nil {
 					ini.Logger.Warn("Waiting for k8s node information", logfields.Error, err)
 				} else {
 					event.Done(nil)
-					break
+					return n
 				}
 			}
 			event.Done(nil)
 		}
 	}
 
-	return n
+	return nil
 }
 
 // useNodeCIDR sets the ipv4-range and ipv6-range values values from the
