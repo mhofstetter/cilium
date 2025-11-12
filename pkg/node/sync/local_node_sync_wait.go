@@ -75,20 +75,20 @@ func (ini *localNodeSynchronizer) retrieveNodeInformation(ctx context.Context) *
 }
 
 // useNodeCIDR sets the ipv4-range and ipv6-range values values from the
-// addresses defined in the given node.
-func (ini *localNodeSynchronizer) useNodeCIDR(n *nodeTypes.Node) {
+// addresses defined in the given k8s node on the local node.
+func (ini *localNodeSynchronizer) useNodeCIDR(localNode *node.LocalNode, n *nodeTypes.Node) {
 	if n.IPv4AllocCIDR != nil && option.Config.EnableIPv4 {
-		node.SetIPv4AllocRange(n.IPv4AllocCIDR)
+		localNode.IPv4AllocCIDR = n.IPv4AllocCIDR
 	}
 	if n.IPv6AllocCIDR != nil && option.Config.EnableIPv6 {
-		node.SetIPv6NodeRange(n.IPv6AllocCIDR)
+		localNode.IPv6AllocCIDR = n.IPv6AllocCIDR
 	}
 }
 
 // WaitForNodeInformationFromK8s retrieves the node information via the CiliumNode or
 // Kubernetes Node resource. This function will block until the information is
 // received.
-func (ini *localNodeSynchronizer) waitForNodeInformationFromK8s(ctx context.Context) error {
+func (ini *localNodeSynchronizer) waitForNodeInformationFromK8s(ctx context.Context, localNode *node.LocalNode) error {
 	requireIPv4CIDR := option.Config.K8sRequireIPv4PodCIDR
 	requireIPv6CIDR := option.Config.K8sRequireIPv6PodCIDR
 	// If no CIDR is required, retrieving the node information is
@@ -106,19 +106,19 @@ func (ini *localNodeSynchronizer) waitForNodeInformationFromK8s(ctx context.Cont
 		defer cancel()
 	}
 
-	if n := ini.retrieveNodeInformation(ctx); n != nil {
-		nodeIP4 := n.GetNodeIP(false)
-		nodeIP6 := n.GetNodeIP(true)
-		k8sNodeIP := n.GetK8sNodeIP()
+	if k8sNode := ini.retrieveNodeInformation(ctx); k8sNode != nil {
+		nodeIP4 := k8sNode.GetNodeIP(false)
+		nodeIP6 := k8sNode.GetNodeIP(true)
+		k8sNodeIP := k8sNode.GetK8sNodeIP()
 
 		ini.Logger.Info(
 			"Received own node information from API server",
-			logfields.NodeName, n.Name,
-			logfields.Labels, n.Labels,
+			logfields.NodeName, k8sNode.Name,
+			logfields.Labels, k8sNode.Labels,
 			logfields.IPv4, nodeIP4,
 			logfields.IPv6, nodeIP6,
-			logfields.V4Prefix, n.IPv4AllocCIDR,
-			logfields.V6Prefix, n.IPv6AllocCIDR,
+			logfields.V4Prefix, k8sNode.IPv4AllocCIDR,
+			logfields.V6Prefix, k8sNode.IPv6AllocCIDR,
 			logfields.K8sNodeIP, k8sNodeIP,
 		)
 
@@ -127,7 +127,7 @@ func (ini *localNodeSynchronizer) waitForNodeInformationFromK8s(ctx context.Cont
 				"This may cause connectivity disruption for Endpoints that attempt to communicate using IPv6")
 		}
 
-		ini.useNodeCIDR(n)
+		ini.useNodeCIDR(localNode, k8sNode)
 	} else {
 		// if node resource could not be received, fail if
 		// PodCIDR requirement has been requested

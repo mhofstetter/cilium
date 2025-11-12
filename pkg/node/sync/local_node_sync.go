@@ -73,7 +73,7 @@ func (ini *localNodeSynchronizer) InitLocalNode(ctx context.Context, n *node.Loc
 		return err
 	}
 
-	if err := ini.waitForNodeInformationFromK8s(ctx); err != nil {
+	if err := ini.waitForNodeInformationFromK8s(ctx, n); err != nil {
 		return err
 	}
 
