@@ -73,6 +73,10 @@ func (ini *localNodeSynchronizer) InitLocalNode(ctx context.Context, n *node.Loc
 		return err
 	}
 
+	if err := ini.waitForNodeInformationFromK8s(ctx); err != nil {
+		return err
+	}
+
 	n.BootID = node.GetBootID(ini.Logger)
 	if ini.IPsecConfig.Enabled() && n.BootID == "" {
 		return fmt.Errorf("IPSec requires a valid BootID")
@@ -187,10 +191,6 @@ func (ini *localNodeSynchronizer) getK8sLocalCiliumNode(ctx context.Context) *v2
 }
 
 func (ini *localNodeSynchronizer) initFromK8s(ctx context.Context, node *node.LocalNode) error {
-	if ini.K8sLocalNode == nil {
-		return nil
-	}
-
 	k8sNode, err := ini.getK8sLocalNode(ctx)
 	if err != nil {
 		return err
