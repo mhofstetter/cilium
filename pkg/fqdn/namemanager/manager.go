@@ -5,6 +5,7 @@ package namemanager
 
 import (
 	"context"
+	"fmt"
 	"hash/fnv"
 	"log/slog"
 	"net/netip"
@@ -92,6 +93,20 @@ func New(params ManagerParams) *manager {
 	if params.PolicyRepo != nil {
 		params.PolicyRepo.GetSelectorCache().SetLocalIdentityNotifier(n)
 	}
+
+	params.Lifecycle.Append(cell.Hook{
+		OnStart: func(ctx cell.HookContext) error {
+			// save to wait for promise in lifecycle hook because promise is already resolved in config phase
+			epRestorer, err := params.RestorerPromise.Await(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to wait for endpoint restorer promise: %w", err)
+			}
+
+			// Load cached information from restored endpoints into FQDN NameManager
+			n.RestoreCache(epRestorer.GetRestoredEndpoints())
+			return nil
+		},
+	})
 
 	// Set up jobs:
 	// - gc

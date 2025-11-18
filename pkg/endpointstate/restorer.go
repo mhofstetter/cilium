@@ -3,7 +3,11 @@
 
 package endpointstate
 
-import "context"
+import (
+	"context"
+
+	"github.com/cilium/cilium/pkg/endpoint"
+)
 
 // Restorer wraps a method to wait for endpoints restoration.
 type Restorer interface {
@@ -18,4 +22,8 @@ type Restorer interface {
 	// WaitForInitialPolicy blocks the caller until either the context is
 	// cancelled or initial policies of all restored endpoints have been computed.
 	WaitForInitialPolicy(ctx context.Context) error
+
+	// GetRestoredEndpoints returns the endpoints that have been restored
+	// from disk - but haven't been successfully validated yet.
+	GetRestoredEndpoints() map[uint16]*endpoint.Endpoint
 }

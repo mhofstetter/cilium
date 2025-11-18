@@ -72,7 +72,8 @@ type NameManagerLocalConfig struct {
 type ManagerParams struct {
 	cell.In
 
-	JobGroup job.Group
+	Lifecycle cell.Lifecycle
+	JobGroup  job.Group
 
 	PolicyRepo      policy.PolicyRepository
 	Logger          *slog.Logger

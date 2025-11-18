@@ -21,6 +21,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/datapath/tables"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
+	"github.com/cilium/cilium/pkg/endpoint"
 	"github.com/cilium/cilium/pkg/endpointstate"
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/node/manager"
@@ -28,17 +29,15 @@ import (
 	"github.com/cilium/cilium/pkg/promise"
 )
 
-var (
-	localNodeConfig = datapath.LocalNodeConfiguration{
-		NodeIPv4:            templateIPv4[:],
-		CiliumInternalIPv4:  templateIPv4[:],
-		AllocCIDRIPv4:       cidr.MustParseCIDR("10.147.0.0/16"),
-		ServiceLoopbackIPv4: templateIPv4[:],
-		ServiceLoopbackIPv6: templateIPv6[:],
-		HostEndpointID:      1,
-		EnableIPv4:          true,
-	}
-)
+var localNodeConfig = datapath.LocalNodeConfiguration{
+	NodeIPv4:            templateIPv4[:],
+	CiliumInternalIPv4:  templateIPv4[:],
+	AllocCIDRIPv4:       cidr.MustParseCIDR("10.147.0.0/16"),
+	ServiceLoopbackIPv4: templateIPv4[:],
+	ServiceLoopbackIPv6: templateIPv6[:],
+	HostEndpointID:      1,
+	EnableIPv4:          true,
+}
 
 func setupCompilationDirectories(tb testing.TB) {
 	option.Config.DryMode = true
@@ -104,6 +103,8 @@ func (fr *FakeRestorer) WaitForEndpointRestoreWithoutRegeneration(ctx context.Co
 func (fr *FakeRestorer) WaitForEndpointRestore(ctx context.Context) error { return nil }
 
 func (fr *FakeRestorer) WaitForInitialPolicy(ctx context.Context) error { return nil }
+
+func (fr *FakeRestorer) GetRestoredEndpoints() map[uint16]*endpoint.Endpoint { return nil }
 
 type FakePreFilter struct{}
 

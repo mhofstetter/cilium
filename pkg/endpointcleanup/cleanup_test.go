@@ -281,3 +281,7 @@ func (r *fakeRestorer) WaitForEndpointRestore(_ context.Context) error {
 func (r *fakeRestorer) WaitForInitialPolicy(_ context.Context) error {
 	return nil
 }
+
+func (r *fakeRestorer) GetRestoredEndpoints() map[uint16]*endpoint.Endpoint {
+	return nil
+}

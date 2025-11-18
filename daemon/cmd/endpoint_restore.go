@@ -199,6 +199,10 @@ func (r *endpointRestorer) WaitForInitialPolicy(ctx context.Context) error {
 	return nil
 }
 
+func (r *endpointRestorer) GetRestoredEndpoints() map[uint16]*endpoint.Endpoint {
+	return r.restoreState.possible
+}
+
 type endpointRestoreState struct {
 	possible map[uint16]*endpoint.Endpoint
 	restored []*endpoint.Endpoint
