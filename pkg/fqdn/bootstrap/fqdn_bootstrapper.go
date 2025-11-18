@@ -12,17 +12,15 @@ import (
 	"github.com/cilium/hive/job"
 
 	"github.com/cilium/cilium/pkg/endpoint"
+	"github.com/cilium/cilium/pkg/endpointstate"
 	"github.com/cilium/cilium/pkg/fqdn/messagehandler"
 	"github.com/cilium/cilium/pkg/fqdn/proxy"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/proxy/proxyports"
 	proxytypes "github.com/cilium/cilium/pkg/proxy/types"
 )
-
-type FQDNProxyBootstrapper interface {
-	BootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint)
-}
 
 type fqdnProxyBootstrapperParams struct {
 	cell.In
@@ -31,6 +29,7 @@ type fqdnProxyBootstrapperParams struct {
 	Lifecycle cell.Lifecycle
 	Logger    *slog.Logger
 
+	RestorerPromise   promise.Promise[endpointstate.Restorer]
 	ProxyPorts        *proxyports.ProxyPorts
 	DNSProxy          proxy.DNSProxier
 	Health            cell.Health
@@ -47,9 +46,8 @@ type fqdnProxyBootstrapper struct {
 	restored chan struct{}
 }
 
-// newFQDNProxyBootstrapper handles initializing the DNS proxy in concert with the daemon.
-func newFQDNProxyBootstrapper(params fqdnProxyBootstrapperParams) FQDNProxyBootstrapper {
-
+// bootstrapFQDNProxy handles initializing the DNS proxy in concert with the daemon.
+func bootstrapFQDNProxy(params fqdnProxyBootstrapperParams) {
 	b := &fqdnProxyBootstrapper{
 		logger: params.Logger,
 
@@ -64,26 +62,33 @@ func newFQDNProxyBootstrapper(params fqdnProxyBootstrapperParams) FQDNProxyBoots
 	// The proxy would not get any traffic in the dry mode anyway, and some of the socket
 	// operations require privileges not available in all unit tests.
 	if option.Config.DryMode || !option.Config.EnableL7Proxy {
-		return b
+		return
 	}
 
 	params.JobGroup.Add(job.OneShot("proxy-bootstrapper", b.startProxy, job.WithShutdown()))
 
 	params.Lifecycle.Append(cell.Hook{
+		OnStart: func(ctx cell.HookContext) error {
+			// save to wait for promise in lifecycle hook because promise is already resolved in config phase
+			epRestorer, err := params.RestorerPromise.Await(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to wait for endpoint restorer promise: %w", err)
+			}
+
+			// Load cached information from restored endpoints into DNS proxies
+			b.restoreEndpoints(epRestorer.GetRestoredEndpoints())
+			return nil
+		},
 		OnStop: func(_ cell.HookContext) error {
 			b.proxy.Cleanup()
 			return nil
 		},
 	})
-
-	return b
 }
 
-var _ FQDNProxyBootstrapper = (*fqdnProxyBootstrapper)(nil)
-
-// BootstrapFQDN restores per-endpoint cached FQDN L7 rules to the proxy,
+// restoreEndpoints restores per-endpoint cached FQDN L7 rules to the proxy,
 // so it may immediately listen and start serving.
-func (b *fqdnProxyBootstrapper) BootstrapFQDN(possibleEndpoints map[uint16]*endpoint.Endpoint) {
+func (b *fqdnProxyBootstrapper) restoreEndpoints(possibleEndpoints map[uint16]*endpoint.Endpoint) {
 	// was proxy disabled?
 	if b.proxy == nil {
 		return

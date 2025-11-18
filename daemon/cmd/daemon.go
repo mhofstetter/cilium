@@ -177,11 +177,6 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 
 	policyAPI.InitEntities(params.ClusterInfo.Name)
 
-	// Load cached information from restored endpoints in to FQDN NameManager and DNS proxies
-	bootstrapStats.fqdn.Start()
-	params.DNSProxy.BootstrapFQDN(params.EndpointRestorer.GetState().possible)
-	bootstrapStats.fqdn.End(true)
-
 	if params.Clientset.IsEnabled() {
 		bootstrapStats.k8sInit.Start()
 		// Errors are handled inside WaitForCRDsToRegister. It will fatal on a

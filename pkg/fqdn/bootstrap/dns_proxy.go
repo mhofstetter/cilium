@@ -22,7 +22,7 @@ var Cell = cell.Module(
 	"dns-proxy",
 	"Starts the DNS proxy",
 
-	cell.Provide(newFQDNProxyBootstrapper),
+	cell.Invoke(bootstrapFQDNProxy),
 	cell.Provide(newDNSProxy),
 )
 
