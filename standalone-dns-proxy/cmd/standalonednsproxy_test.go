@@ -64,8 +64,8 @@ func setupTestEnv(t *testing.T) *StandaloneDNSProxy {
 			"Test standalone DNS proxy",
 			cell.Config(service.DefaultConfig),
 			client.Cell,
-			bootstrap.Cell,
 			lookup.Cell,
+			cell.Provide(bootstrap.NewDNSProxy),
 			messagehandler.Cell,
 			cell.Provide(
 				func() *option.DaemonConfig {

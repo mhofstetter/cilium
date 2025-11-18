@@ -23,7 +23,7 @@ var Cell = cell.Module(
 	"Starts the DNS proxy",
 
 	cell.Invoke(bootstrapFQDNProxy),
-	cell.Provide(newDNSProxy),
+	cell.Provide(NewDNSProxy),
 )
 
 type dnsProxyParams struct {
@@ -36,8 +36,8 @@ type dnsProxyParams struct {
 	ProxyLookupHandler lookup.ProxyLookupHandler
 }
 
-// newDNSProxy initializes the DNS l7 proxy.
-func newDNSProxy(params dnsProxyParams) (proxy.DNSProxier, error) {
+// NewDNSProxy initializes the DNS l7 proxy.
+func NewDNSProxy(params dnsProxyParams) (proxy.DNSProxier, error) {
 	re.Resize(params.Logger, option.Config.FQDNRegexCompileLRUSize)
 
 	// Do not start the proxy in dry mode or if L7 proxy is disabled.

@@ -36,12 +36,12 @@ var (
 		"Provides the standalone DNS proxy functionality",
 
 		// includes the dns proxy
-		bootstrap.Cell,
+		cell.Provide(bootstrap.NewDNSProxy),
 
 		// includes the gRPC client for communication with the cilium agent
 		client.Cell,
 
-		//includes the endpoint/identity lookup functionality needed by the DNS proxy
+		// includes the endpoint/identity lookup functionality needed by the DNS proxy
 		lookup.Cell,
 
 		// includes the message handler for receiving messages from the proxy and sending messages to the gRPC client which in turn sends them to the cilium agent
