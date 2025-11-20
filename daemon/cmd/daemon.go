@@ -13,7 +13,6 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/ipsec"
 	datapathTables "github.com/cilium/cilium/pkg/datapath/tables"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
-	"github.com/cilium/cilium/pkg/endpoint/regeneration"
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -21,8 +20,6 @@ import (
 	"github.com/cilium/cilium/pkg/node"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
-	policyAPI "github.com/cilium/cilium/pkg/policy/api"
-	policytypes "github.com/cilium/cilium/pkg/policy/types"
 	wgTypes "github.com/cilium/cilium/pkg/wireguard/types"
 )
 
@@ -366,78 +363,4 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 	bootstrapStats.updateMetrics()
 
 	return nil
-}
-
-func unloadDNSPolicies(params daemonParams) {
-	if params.DaemonConfig.DNSPolicyUnloadOnShutdown {
-		// Stop k8s watchers
-		params.Logger.Info("Stopping k8s watcher")
-		params.K8sWatcher.StopWatcher()
-
-		params.Logger.Info("Unload DNS policies")
-
-		// Iterate over the policy repository and remove L7 DNS part
-		needsPolicyRegen := false
-		removeL7DNSRules := func(pr policyAPI.Ports) error {
-			portProtocols := pr.GetPortProtocols()
-			if len(portProtocols) == 0 {
-				return nil
-			}
-			portRule := pr.GetPortRule()
-			if portRule == nil || portRule.Rules == nil {
-				return nil
-			}
-			dnsRules := portRule.Rules.DNS
-			params.Logger.Debug(
-				"Found egress L7 DNS rules",
-				logfields.PortProtocol, portProtocols[0],
-				logfields.DNSRules, dnsRules,
-			)
-
-			// For security reasons, the L7 DNS policy must be a
-			// wildcard in order to trigger this logic.
-			// Otherwise we could invalidate the L7 security
-			// rules. This means if any of the DNS L7 rules
-			// have a matchPattern of * then it is OK to delete
-			// the L7 portion of those rules.
-			hasWildcard := false
-			for _, dns := range dnsRules {
-				if dns.MatchPattern == "*" {
-					hasWildcard = true
-					break
-				}
-			}
-			if hasWildcard {
-				portRule.Rules = nil
-				needsPolicyRegen = true
-			}
-			return nil
-		}
-
-		params.Policy.Iterate(func(rule *policytypes.PolicyEntry) {
-			_ = rule.L4.Iterate(removeL7DNSRules)
-		})
-
-		if !needsPolicyRegen {
-			params.Logger.Info(
-				"No policy recalculation needed to remove DNS rules due to option",
-				logfields.Option, option.DNSPolicyUnloadOnShutdown,
-			)
-			return
-		}
-
-		// Bump revision to trigger policy recalculation
-		params.Logger.Info(
-			"Triggering policy recalculation to remove DNS rules due to option",
-			logfields.Option, option.DNSPolicyUnloadOnShutdown,
-		)
-		params.Policy.BumpRevision()
-		regenerationMetadata := &regeneration.ExternalRegenerationMetadata{
-			Reason:            "unloading DNS rules on graceful shutdown",
-			RegenerationLevel: regeneration.RegenerateWithoutDatapath,
-		}
-		wg := params.EndpointManager.RegenerateAllEndpoints(regenerationMetadata)
-		wg.Wait()
-		params.Logger.Info("All endpoints regenerated after unloading DNS rules on graceful shutdown")
-	}
 }

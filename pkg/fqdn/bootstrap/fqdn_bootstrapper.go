@@ -12,11 +12,17 @@ import (
 	"github.com/cilium/hive/job"
 
 	"github.com/cilium/cilium/pkg/endpoint"
+	"github.com/cilium/cilium/pkg/endpoint/regeneration"
+	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/endpointstate"
 	"github.com/cilium/cilium/pkg/fqdn/messagehandler"
 	"github.com/cilium/cilium/pkg/fqdn/proxy"
+	"github.com/cilium/cilium/pkg/k8s/watchers"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/policy"
+	policyapi "github.com/cilium/cilium/pkg/policy/api"
+	policytypes "github.com/cilium/cilium/pkg/policy/types"
 	"github.com/cilium/cilium/pkg/proxy/proxyports"
 	proxytypes "github.com/cilium/cilium/pkg/proxy/types"
 )
@@ -28,6 +34,11 @@ type fqdnProxyBootstrapperParams struct {
 	Lifecycle cell.Lifecycle
 	Logger    *slog.Logger
 
+	DaemonConfig    *option.DaemonConfig
+	K8sWatcher      *watchers.K8sWatcher
+	PolicyRepo      policy.PolicyRepository
+	EndpointManager endpointmanager.EndpointManager
+
 	ProxyPorts        *proxyports.ProxyPorts
 	DNSProxy          proxy.DNSProxier
 	Health            cell.Health
@@ -36,6 +47,11 @@ type fqdnProxyBootstrapperParams struct {
 
 type fqdnProxyBootstrapper struct {
 	logger *slog.Logger
+
+	unloadDNSPoliciesOnShutdown bool
+	k8sWatcher                  *watchers.K8sWatcher
+	policyRepo                  policy.PolicyRepository
+	endpointManager             endpointmanager.EndpointManager
 
 	proxy      proxy.DNSProxier
 	proxyPorts *proxyports.ProxyPorts
@@ -48,6 +64,11 @@ type fqdnProxyBootstrapper struct {
 func newFQDNProxyBootstrapper(params fqdnProxyBootstrapperParams) endpointstate.RestorableOut {
 	b := &fqdnProxyBootstrapper{
 		logger: params.Logger,
+
+		unloadDNSPoliciesOnShutdown: params.DaemonConfig.DNSPolicyUnloadOnShutdown,
+		k8sWatcher:                  params.K8sWatcher,
+		policyRepo:                  params.PolicyRepo,
+		endpointManager:             params.EndpointManager,
 
 		proxy:      params.DNSProxy,
 		proxyPorts: params.ProxyPorts,
@@ -63,10 +84,11 @@ func newFQDNProxyBootstrapper(params fqdnProxyBootstrapperParams) endpointstate.
 		return endpointstate.RestorableOut{}
 	}
 
-	params.JobGroup.Add(job.OneShot("proxy-bootstrapper", b.startProxy, job.WithShutdown()))
+	params.JobGroup.Add(job.OneShot("fqdn-proxy-start", b.startProxy, job.WithShutdown()))
 
 	params.Lifecycle.Append(cell.Hook{
 		OnStop: func(_ cell.HookContext) error {
+			b.unloadDNSPolicies()
 			b.proxy.Cleanup()
 			return nil
 		},
@@ -159,4 +181,72 @@ func (b *fqdnProxyBootstrapper) startProxy(ctx context.Context, health cell.Heal
 
 	health.OK(fmt.Sprintf("DNS proxy successfully initialized on port %d", bindPort))
 	return nil
+}
+
+func (b *fqdnProxyBootstrapper) unloadDNSPolicies() {
+	if b.unloadDNSPoliciesOnShutdown {
+		// Stop k8s watchers
+		b.logger.Info("Stopping k8s watcher to remove DNS rules before agent shutdown")
+		b.k8sWatcher.StopWatcher()
+
+		b.logger.Info("Unload DNS policies")
+
+		// Iterate over the policy repository and remove L7 DNS part
+		needsPolicyRegen := false
+		removeL7DNSRules := func(pr policyapi.Ports) error {
+			portProtocols := pr.GetPortProtocols()
+			if len(portProtocols) == 0 {
+				return nil
+			}
+			portRule := pr.GetPortRule()
+			if portRule == nil || portRule.Rules == nil {
+				return nil
+			}
+			dnsRules := portRule.Rules.DNS
+			b.logger.Debug(
+				"Found egress L7 DNS rules",
+				logfields.PortProtocol, portProtocols[0],
+				logfields.DNSRules, dnsRules,
+			)
+
+			// For security reasons, the L7 DNS policy must be a
+			// wildcard in order to trigger this logic.
+			// Otherwise we could invalidate the L7 security
+			// rules. This means if any of the DNS L7 rules
+			// have a matchPattern of * then it is OK to delete
+			// the L7 portion of those rules.
+			hasWildcard := false
+			for _, dns := range dnsRules {
+				if dns.MatchPattern == "*" {
+					hasWildcard = true
+					break
+				}
+			}
+			if hasWildcard {
+				portRule.Rules = nil
+				needsPolicyRegen = true
+			}
+			return nil
+		}
+
+		b.policyRepo.Iterate(func(rule *policytypes.PolicyEntry) {
+			_ = rule.L4.Iterate(removeL7DNSRules)
+		})
+
+		if !needsPolicyRegen {
+			b.logger.Info("No policy recalculation needed to remove DNS rules before agent shutdown")
+			return
+		}
+
+		// Bump revision to trigger policy recalculation
+		b.logger.Info("Triggering policy recalculation to remove DNS rules before agent shutdown")
+		b.policyRepo.BumpRevision()
+		regenerationMetadata := &regeneration.ExternalRegenerationMetadata{
+			Reason:            "unloading DNS rules on graceful shutdown",
+			RegenerationLevel: regeneration.RegenerateWithoutDatapath,
+		}
+		wg := b.endpointManager.RegenerateAllEndpoints(regenerationMetadata)
+		wg.Wait()
+		b.logger.Info("All endpoints regenerated after unloading DNS rules on graceful shutdown")
+	}
 }
