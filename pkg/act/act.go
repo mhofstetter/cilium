@@ -27,6 +27,7 @@ import (
 	"github.com/cilium/cilium/pkg/metrics/metric"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/time"
+	"github.com/cilium/cilium/pkg/tuple"
 )
 
 const (
@@ -36,7 +37,7 @@ const (
 	// metricsTimeout specifies when a stale entry will be removed from the metrics endpoint
 	// (it will be no longer available to scrape).
 	metricsTimeout = 10 * time.Minute
-	// metricsCountSoftLimit specifies when metric series will be deleted more aggresively.
+	// metricsCountSoftLimit specifies when metric series will be deleted more aggressively.
 	metricsCountSoftLimit = 300
 	// metricsCountHardLimit specifies when new metrics series won't be allocated.
 	metricsCountHardLimit = 500
@@ -46,8 +47,8 @@ var Cell = cell.Module(
 	"act-metrics",
 	"Metrics with counts of new and active connections for each service-zone pair",
 
-	metrics.Metric(NewActiveConnectionTrackingMetrics),
-	cell.Invoke(NewACT),
+	metrics.Metric(newActiveConnectionTrackingMetrics),
+	cell.Invoke(newACT),
 )
 
 type ActiveConnectionTrackingMetrics struct {
@@ -56,7 +57,7 @@ type ActiveConnectionTrackingMetrics struct {
 	Errors              metric.Vec[metric.Counter]
 }
 
-func NewActiveConnectionTrackingMetrics() ActiveConnectionTrackingMetrics {
+func newActiveConnectionTrackingMetrics() ActiveConnectionTrackingMetrics {
 	return ActiveConnectionTrackingMetrics{
 		New: metric.NewGaugeVec(metric.GaugeOpts{
 			ConfigName: metrics.Namespace + "_act_new_connections_total",
@@ -121,7 +122,7 @@ type ACT struct {
 	tracker map[uint8]map[uint16]*actMetric
 }
 
-func NewACT(in struct {
+func newACT(in struct {
 	cell.In
 
 	Conf      act.Config
@@ -133,10 +134,12 @@ func NewACT(in struct {
 	LBMaps    lbmaps.LBMaps
 	DB        *statedb.DB
 	Frontends statedb.Table[*loadbalancer.Frontend]
-}) *ACT {
+	CTGC      ctmap.GCRunner
+},
+) {
 	if !in.Conf.EnableActiveConnectionTracking {
 		// Active Connection Tracking is disabled.
-		return nil
+		return
 	}
 	a := newAct(in.Log, in.Jobs, in.Source, in.Metrics, in.DB, in.Frontends, option.Config)
 	a.trig = job.NewTrigger()
@@ -144,6 +147,8 @@ func NewACT(in struct {
 	in.Jobs.Add(job.Timer("act-metrics-update", a.update, metricsUpdateInterval))
 	in.Jobs.Add(job.Timer("act-metrics-cleanup", a.cleanup, metricsTimeout))
 	in.Jobs.Add(job.Timer("act-metrics-remove-overflow", a.removeOverflow, time.Hour, job.WithTrigger(a.trig)))
+	in.Jobs.Add(job.Observer("act-metrics-observe-gc-4", a.handleGCEvent(a.countFailed4), in.CTGC.Observe4()))
+	in.Jobs.Add(job.Observer("act-metrics-observe-gc-6", a.handleGCEvent(a.countFailed6), in.CTGC.Observe6()))
 	in.Jobs.Add(job.OneShot("act-metrics-init",
 		func(ctx context.Context, health cell.Health) error { return a.update(ctx) },
 	))
@@ -152,8 +157,6 @@ func NewACT(in struct {
 			return a.saveFailed()
 		},
 	})
-	ctmap.ACT = a
-	return a
 }
 
 func newAct(log *slog.Logger, jg job.Group, src act.ActiveConnectionTrackingMap, metrics ActiveConnectionTrackingMetrics, db *statedb.DB, frontends statedb.Table[*loadbalancer.Frontend], opts *option.DaemonConfig) *ACT {
@@ -167,7 +170,7 @@ func newAct(log *slog.Logger, jg job.Group, src act.ActiveConnectionTrackingMap,
 
 	if db != nil && frontends != nil {
 		jg.Add(
-			job.Observer[statedb.Change[*loadbalancer.Frontend]](
+			job.Observer(
 				"service-ids",
 				func(ctx context.Context, change statedb.Change[*loadbalancer.Frontend]) error {
 					if change.Deleted {
@@ -366,16 +369,26 @@ func (a *ACT) cleanup(ctx context.Context) error {
 	return cmp.Or(a.reconcileServices(ctx), a._cleanup(ctx, cutoff))
 }
 
-// CountFailed4 increments a counter of new failed connections
+func (a *ACT) handleGCEvent(countFunc func(svc uint16, backend uint32)) func(ctx context.Context, event ctmap.GCEvent) error {
+	return func(ctx context.Context, event ctmap.GCEvent) error {
+		if event.Key.GetTupleKey().GetFlags() == tuple.TUPLE_F_SERVICE {
+			countFunc(event.Entry.RevNAT, uint32(event.Entry.BackendID))
+		}
+
+		return nil
+	}
+}
+
+// countFailed4 increments a counter of new failed connections
 // for a given (svc, backend) pair.
-func (a *ACT) CountFailed4(svc uint16, backend uint32) {
+func (a *ACT) countFailed4(svc uint16, backend uint32) {
 	key := lbmaps.NewBackend4KeyV3(loadbalancer.BackendID(backend))
 	a.countFailed(svc, key)
 }
 
-// CountFailed6 increments a counter of new failed connections
+// countFailed6 increments a counter of new failed connections
 // for a given (svc, backend) pair.
-func (a *ACT) CountFailed6(svc uint16, backend uint32) {
+func (a *ACT) countFailed6(svc uint16, backend uint32) {
 	key := lbmaps.NewBackend6KeyV3(loadbalancer.BackendID(backend))
 	a.countFailed(svc, key)
 }

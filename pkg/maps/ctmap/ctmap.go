@@ -158,14 +158,6 @@ type GCFilter struct {
 // EmitCTEntryCBFunc is the type used for the EmitCTEntryCB callback in GCFilter
 type EmitCTEntryCBFunc func(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, nextHdr, flags uint8, entry *CtEntry)
 
-// TODO: GH-33557: Remove this hack once ctmap is migrated to a cell.
-type PurgeHook interface {
-	CountFailed4(uint16, uint32)
-	CountFailed6(uint16, uint32)
-}
-
-var ACT PurgeHook
-
 type GCEvent struct {
 	Key    CtKey
 	Entry  *CtEntry
@@ -341,10 +333,10 @@ func (m *Map) doGCForFamily(filter GCFilter, next4, next6 func(GCEvent), ipv6 bo
 	// to happen concurrently.
 	globalDeleteLock[m.mapType].Lock()
 	if ipv6 {
-		filterCallback := m.cleanup(filter, natMap, &stats, next6, ipv6)
+		filterCallback := m.cleanup(filter, natMap, &stats, next6)
 		stats.dumpError = iterate[CtKey6Global, CtEntry](m, &stats, filterCallback)
 	} else {
-		filterCallback := m.cleanup(filter, natMap, &stats, next4, ipv6)
+		filterCallback := m.cleanup(filter, natMap, &stats, next4)
 		stats.dumpError = iterate[CtKey4Global, CtEntry](m, &stats, filterCallback)
 	}
 	globalDeleteLock[m.mapType].Unlock()
@@ -352,17 +344,10 @@ func (m *Map) doGCForFamily(filter GCFilter, next4, next6 func(GCEvent), ipv6 bo
 	return stats
 }
 
-func (m *Map) purgeCtEntry(key CtKey, entry *CtEntry, natMap *nat.Map, next func(event GCEvent), actCountFailed func(uint16, uint32)) error {
+func (m *Map) purgeCtEntry(key CtKey, entry *CtEntry, natMap *nat.Map, next func(event GCEvent)) error {
 	err := m.DeleteLocked(key)
 	if err != nil {
 		return err
-	}
-
-	t := key.GetTupleKey()
-	tupleType := t.GetFlags()
-
-	if tupleType == tuple.TUPLE_F_SERVICE && ACT != nil {
-		actCountFailed(entry.RevNAT, uint32(entry.BackendID))
 	}
 
 	next(GCEvent{
@@ -397,14 +382,7 @@ type tupleKeyAccessor interface {
 	GetFlags() uint8
 }
 
-func (m *Map) cleanup(filter GCFilter, natMap *nat.Map, stats *gcStats, next func(GCEvent), ipv6 bool) func(key bpf.MapKey, value bpf.MapValue) {
-	var countFailedFn func(uint16, uint32)
-	if ACT != nil {
-		countFailedFn = ACT.CountFailed4
-		if ipv6 {
-			countFailedFn = ACT.CountFailed6
-		}
-	}
+func (m *Map) cleanup(filter GCFilter, natMap *nat.Map, stats *gcStats, next func(GCEvent)) func(key bpf.MapKey, value bpf.MapValue) {
 	return func(key bpf.MapKey, value bpf.MapValue) {
 		// TODO: These type assertions are a bit dangerous, make more of this well typed
 		// to avoid having to make these assertions.
@@ -421,7 +399,7 @@ func (m *Map) cleanup(filter GCFilter, natMap *nat.Map, stats *gcStats, next fun
 
 		switch action {
 		case deleteEntry:
-			err := m.purgeCtEntry(ctKey, entry, natMap, next, countFailedFn)
+			err := m.purgeCtEntry(ctKey, entry, natMap, next)
 			if err != nil {
 				if errors.Is(err, ebpf.ErrKeyNotExist) {
 					m.Logger.Debug("key is missing, likely due to lru eviction - skipping",

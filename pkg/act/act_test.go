@@ -32,6 +32,7 @@ func (m *mapMock) Delete(key *act.ActiveConnectionTrackerKey) error {
 	m.deletedKeys = append(m.deletedKeys, *key)
 	return nil
 }
+
 func (m *mapMock) SaveFailed(*act.ActiveConnectionTrackerKey, uint64) error {
 	return nil
 }
@@ -51,7 +52,7 @@ func TestCallback(t *testing.T) {
 			234: "zone-b",
 		},
 	}
-	a := newAct(hivetest.Logger(t), nil, new(mapMock), NewActiveConnectionTrackingMetrics(), nil, nil, opts)
+	a := newAct(hivetest.Logger(t), nil, new(mapMock), newActiveConnectionTrackingMetrics(), nil, nil, opts)
 
 	// Initialize
 	a.keyToStrings = func(key *act.ActiveConnectionTrackerKey) (zone string, svc string, err error) {
@@ -142,7 +143,7 @@ func TestCleanup(t *testing.T) {
 		},
 	}
 	m := new(mapMock)
-	a := newAct(hivetest.Logger(t), nil, m, NewActiveConnectionTrackingMetrics(), nil, nil, opts)
+	a := newAct(hivetest.Logger(t), nil, m, newActiveConnectionTrackingMetrics(), nil, nil, opts)
 
 	// Initialize entry with updates
 	a.keyToStrings = func(key *act.ActiveConnectionTrackerKey) (zone string, svc string, err error) {
@@ -221,7 +222,7 @@ func TestCleanup(t *testing.T) {
 
 func TestOverflow(t *testing.T) {
 	m := new(mapMock)
-	a := newAct(hivetest.Logger(t), nil, m, NewActiveConnectionTrackingMetrics(), nil, nil, &option.DaemonConfig{})
+	a := newAct(hivetest.Logger(t), nil, m, newActiveConnectionTrackingMetrics(), nil, nil, &option.DaemonConfig{})
 
 	zones := []uint8{123, 124, 125, 126, 127}
 	services := make([]uint16, metricsCountSoftLimit/2)
@@ -273,7 +274,7 @@ func TestCallback_WithFailed(t *testing.T) {
 			234: "zone-b",
 		},
 	}
-	a := newAct(hivetest.Logger(t), nil, &mapMock{failed: 101}, NewActiveConnectionTrackingMetrics(), nil, nil, opts)
+	a := newAct(hivetest.Logger(t), nil, &mapMock{failed: 101}, newActiveConnectionTrackingMetrics(), nil, nil, opts)
 
 	// Initialize
 	a.keyToStrings = func(key *act.ActiveConnectionTrackerKey) (zone string, svc string, err error) {
@@ -293,12 +294,11 @@ func TestCallback_WithFailed(t *testing.T) {
 	require.Equal(t, 4.0, a.metrics.Active.WithLabelValues("zone-a", "svc-a").Get())
 	require.Equal(t, 1.0, a.metrics.New.WithLabelValues("zone-a", "svc-a").Get())
 	require.Equal(t, 0.0, a.metrics.Failed.WithLabelValues("zone-a", "svc-a").Get())
-
 }
 
 func TestReconcileServices(t *testing.T) {
 	m := new(mapMock)
-	a := newAct(hivetest.Logger(t), nil, m, NewActiveConnectionTrackingMetrics(), nil, nil, &option.DaemonConfig{})
+	a := newAct(hivetest.Logger(t), nil, m, newActiveConnectionTrackingMetrics(), nil, nil, &option.DaemonConfig{})
 
 	nl := new(actMetric)
 	a.tracker = map[uint8]map[uint16]*actMetric{
