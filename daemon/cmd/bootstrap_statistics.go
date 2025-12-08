@@ -17,7 +17,6 @@ type bootstrapStatistics struct {
 	cleanup     spanstat.SpanStat
 	bpfBase     spanstat.SpanStat
 	ipam        spanstat.SpanStat
-	daemonInit  spanstat.SpanStat
 	mapsInit    spanstat.SpanStat
 	fqdn        spanstat.SpanStat
 	kvstore     spanstat.SpanStat
@@ -48,7 +47,6 @@ func (b *bootstrapStatistics) getMap() map[string]*spanstat.SpanStat {
 		"cleanup":     &b.cleanup,
 		"bpfBase":     &b.bpfBase,
 		"ipam":        &b.ipam,
-		"daemonInit":  &b.daemonInit,
 		"mapsInit":    &b.mapsInit,
 		"fqdn":        &b.fqdn,
 		"kvstore":     &b.kvstore,

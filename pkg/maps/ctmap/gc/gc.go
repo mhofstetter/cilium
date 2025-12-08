@@ -55,6 +55,7 @@ type parameters struct {
 	EndpointManager         EndpointManager
 	NodeAddressing          types.NodeAddressing
 	SignalManager           SignalHandler
+	CTMaps                  ctmap.CTMaps
 
 	PerClusterCTMapsRetriever PerClusterCTMapsRetriever `optional:"true"`
 }
@@ -75,6 +76,8 @@ type GC struct {
 
 	perClusterCTMapsRetriever PerClusterCTMapsRetriever
 	controllerManager         *controller.Manager
+
+	ctMaps ctmap.CTMaps
 
 	observable4 stream.Observable[ctmap.GCEvent]
 	next4       func(ctmap.GCEvent)
@@ -98,6 +101,7 @@ func New(params parameters) *GC {
 
 		endpointsManager: params.EndpointManager,
 		signalHandler:    params.SignalManager,
+		ctMaps:           params.CTMaps,
 
 		controllerManager: controller.NewManager(),
 	}

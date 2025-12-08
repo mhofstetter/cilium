@@ -17,7 +17,6 @@ import (
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/k8s"
 	"github.com/cilium/cilium/pkg/logging/logfields"
-	"github.com/cilium/cilium/pkg/maps/ctmap"
 	"github.com/cilium/cilium/pkg/node"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/option"
@@ -142,12 +141,6 @@ func initAndValidateDaemonConfig(params daemonConfigParams) error {
 
 func configureDaemon(ctx context.Context, params daemonParams) error {
 	var err error
-
-	bootstrapStats.daemonInit.Start()
-
-	ctmap.InitMapInfo(params.MetricsRegistry, params.DaemonConfig.EnableIPv4, params.DaemonConfig.EnableIPv6, params.KPRConfig.KubeProxyReplacement || params.DaemonConfig.EnableBPFMasquerade)
-
-	bootstrapStats.daemonInit.End(true)
 
 	// Open or create BPF maps.
 	bootstrapStats.mapsInit.Start()

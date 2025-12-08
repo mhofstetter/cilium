@@ -654,6 +654,8 @@ func DeleteIfUpgradeNeeded() {
 // If ipv4 or ipv6 are false, the maps for that protocol will not be returned.
 //
 // The returned maps are not yet opened.
+//
+// This should only be used from components which aren't capable of using hive - mainly the Cilium CLI.
 func Maps(ipv4, ipv6 bool) []*Map {
 	result := make([]*Map, 0, mapCount)
 	if ipv4 {

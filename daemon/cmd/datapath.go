@@ -12,7 +12,6 @@ import (
 
 	"github.com/cilium/cilium/pkg/datapath/linux/safenetlink"
 	"github.com/cilium/cilium/pkg/logging/logfields"
-	"github.com/cilium/cilium/pkg/maps/ctmap"
 	"github.com/cilium/cilium/pkg/maps/nat"
 	"github.com/cilium/cilium/pkg/option"
 )
@@ -83,13 +82,6 @@ func clearCiliumVeths(logger *slog.Logger) error {
 func initMaps(params daemonParams) error {
 	if option.Config.DryMode {
 		return nil
-	}
-
-	for _, m := range ctmap.Maps(option.Config.EnableIPv4,
-		option.Config.EnableIPv6) {
-		if err := m.Create(); err != nil {
-			return fmt.Errorf("initializing conntrack map %s: %w", m.Name(), err)
-		}
 	}
 
 	ipv4Nat, ipv6Nat := nat.GlobalMaps(params.MetricsRegistry, option.Config.EnableIPv4,
