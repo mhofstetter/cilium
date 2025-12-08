@@ -39,7 +39,7 @@ func setupCTMap(tb testing.TB) {
 }
 
 func BenchmarkMapBatchLookup(b *testing.B) {
-	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal)
+	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal, nil)
 	err := m.OpenOrCreate()
 	assert.NoError(b, m.Map.Unpin())
 	assert.NoError(b, err)
@@ -58,7 +58,7 @@ func BenchmarkMapBatchLookup(b *testing.B) {
 func BenchmarkPrivileged_MapUpdate(b *testing.B) {
 	setupCTMap(b)
 
-	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal)
+	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal, nil)
 	err := m.OpenOrCreate()
 	defer m.Map.Unpin()
 	require.NoError(b, err)
@@ -136,7 +136,7 @@ func TestPrivilegedCtGcIcmp(t *testing.T) {
 		natMap: natMap, natMapLock: mapInfo[mapTypeIPv4AnyGlobal].natMapLock,
 	}
 
-	ctMap := newMap(ctMapName, mapTypeIPv4AnyGlobal)
+	ctMap := newMap(ctMapName, mapTypeIPv4AnyGlobal, nil)
 	err = ctMap.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMap.Map.Unpin()
@@ -250,7 +250,7 @@ func TestPrivilegedCtGcTcp(t *testing.T) {
 		natMap: natMap, natMapLock: mapInfo[mapTypeIPv4TCPGlobal].natMapLock,
 	}
 
-	ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal)
+	ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal, nil)
 	err = ctMap.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMap.Map.Unpin()
@@ -365,7 +365,7 @@ func TestPrivilegedCtGcDsr(t *testing.T) {
 		natMap: natMap, natMapLock: mapInfo[mapTypeIPv4TCPGlobal].natMapLock,
 	}
 
-	ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal)
+	ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal, nil)
 	err = ctMap.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMap.Map.Unpin()
@@ -457,7 +457,7 @@ func TestPrivilegedOrphanNatGC(t *testing.T) {
 	mapInfo[mapTypeIPv4AnyGlobal] = mapAttributes{
 		natMap: natMap, natMapLock: mapInfo[mapTypeIPv4AnyGlobal].natMapLock,
 	}
-	ctMapAny := newMap(ctMapAnyName, mapTypeIPv4AnyGlobal)
+	ctMapAny := newMap(ctMapAnyName, mapTypeIPv4AnyGlobal, nil)
 	err = ctMapAny.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMapAny.Map.Unpin()
@@ -466,7 +466,7 @@ func TestPrivilegedOrphanNatGC(t *testing.T) {
 	mapInfo[mapTypeIPv4TCPGlobal] = mapAttributes{
 		natMap: natMap, natMapLock: mapInfo[mapTypeIPv4TCPGlobal].natMapLock,
 	}
-	ctMapTCP := newMap(ctMapTCPName, mapTypeIPv4TCPGlobal)
+	ctMapTCP := newMap(ctMapTCPName, mapTypeIPv4TCPGlobal, nil)
 	err = ctMapTCP.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMapTCP.Map.Unpin()
@@ -698,7 +698,7 @@ func TestPrivilegedOrphanNatGC(t *testing.T) {
 	mapInfo[mapTypeIPv6AnyGlobal] = mapAttributes{
 		natMap: natMapV6, natMapLock: mapInfo[mapTypeIPv6AnyGlobal].natMapLock,
 	}
-	ctMapAnyV6 := newMap(ctMapAnyName, mapTypeIPv6AnyGlobal)
+	ctMapAnyV6 := newMap(ctMapAnyName, mapTypeIPv6AnyGlobal, nil)
 	err = ctMapAnyV6.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMapAnyV6.Map.Unpin()
@@ -707,7 +707,7 @@ func TestPrivilegedOrphanNatGC(t *testing.T) {
 	mapInfo[mapTypeIPv6TCPGlobal] = mapAttributes{
 		natMap: natMapV6, natMapLock: mapInfo[mapTypeIPv6TCPGlobal].natMapLock,
 	}
-	ctMapTCPV6 := newMap(ctMapTCPName, mapTypeIPv6TCPGlobal)
+	ctMapTCPV6 := newMap(ctMapTCPName, mapTypeIPv6TCPGlobal, nil)
 	err = ctMapTCP.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMapTCPV6.Map.Unpin()
@@ -755,7 +755,7 @@ func TestPrivilegedCount(t *testing.T) {
 	option.Config.CTMapEntriesGlobalTCP = 524288
 	size := 8192 // choose a reasonbly large map that does not make test time too long.
 
-	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal)
+	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal, nil)
 	err := m.OpenOrCreate()
 	assert.NoError(t, err)
 	assert.NoError(t, m.Map.Unpin())
@@ -873,7 +873,7 @@ func benchmarkCtGc(t *testing.B, size int) {
 		defer func() {
 			option.Config.CTMapEntriesGlobalTCP = prev
 		}()
-		ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal)
+		ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal, nil)
 		err = ctMap.OpenOrCreate()
 		assert.NoError(t, err)
 		defer ctMap.Map.Unpin()

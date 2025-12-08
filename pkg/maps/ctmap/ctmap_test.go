@@ -60,10 +60,10 @@ func TestGetInterval(t *testing.T) {
 
 func TestFilterMapsByProto(t *testing.T) {
 	maps := []*Map{
-		newMap("tcp4", mapTypeIPv4TCPGlobal),
-		newMap("any4", mapTypeIPv4AnyGlobal),
-		newMap("tcp6", mapTypeIPv6TCPGlobal),
-		newMap("any6", mapTypeIPv6AnyGlobal),
+		newMap("tcp4", mapTypeIPv4TCPGlobal, nil),
+		newMap("any4", mapTypeIPv4AnyGlobal, nil),
+		newMap("tcp6", mapTypeIPv6TCPGlobal, nil),
+		newMap("any6", mapTypeIPv6AnyGlobal, nil),
 	}
 
 	ctMapTCP, ctMapAny := FilterMapsByProto(maps, CTMapIPv4)
