@@ -11,7 +11,9 @@ cilium-dbg bpf ct flush [flags]
 ### Options
 
 ```
-  -h, --help   help for flush
+  -d, --direct                   Directly flushing the CT BPF map (without Agent)
+  -h, --help                     help for flush
+      --shell-sock-path string   Path to the shell UNIX socket (default "/var/run/cilium/shell.sock")
 ```
 
 ### Options inherited from parent commands

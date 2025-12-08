@@ -164,42 +164,6 @@ type GCEvent struct {
 	NatMap *nat.Map
 }
 
-type natDeleteFunc func(natMap *nat.Map, key tuple.TupleKey) error
-
-func NatMapNext4(event GCEvent) {
-	natMapNext(
-		event,
-		nat.DeleteMapping4,
-		nat.DeleteSwappedMapping4,
-	)
-}
-
-func NatMapNext6(event GCEvent) {
-	natMapNext(
-		event,
-		nat.DeleteMapping6,
-		nat.DeleteSwappedMapping6,
-	)
-}
-
-func natMapNext(event GCEvent, deleteMapping natDeleteFunc, deleteSwappedMapping natDeleteFunc) {
-	if event.NatMap == nil {
-		return
-	}
-
-	t := event.Key.GetTupleKey()
-	tupleType := t.GetFlags()
-
-	if tupleType == tuple.TUPLE_F_OUT {
-		// Check if the entry is for DSR and call the appropriate delete function
-		if event.Entry.isDsrInternalEntry() {
-			deleteSwappedMapping(event.NatMap, t)
-		} else {
-			deleteMapping(event.NatMap, t)
-		}
-	}
-}
-
 // DumpEntriesWithTimeDiff iterates through Map m and writes the values of the
 // ct entries in m to a string. If clockSource is not nil, it uses it to
 // compute the time difference of each entry from now and prints that too.
@@ -442,6 +406,11 @@ func (f GCFilter) doFiltering(srcIP, dstIP netip.Addr, srcPort, dstPort uint16, 
 }
 
 func (m *Map) doGC(filter GCFilter, next4, next6 func(GCEvent)) (int, error) {
+	if filter.RemoveExpired {
+		t, _ := timestamp.GetCTCurTime(timestamp.GetClockSourceFromOptions())
+		filter.Time = uint32(t)
+	}
+
 	stats := m.doGCForFamily(filter, next4, next6, m.mapType.isIPv6())
 	return int(stats.deleted), stats.dumpError
 }
@@ -524,7 +493,7 @@ func PurgeOrphanNATEntries(ctMapTCP, ctMapAny *Map) *NatGCStats {
 			}
 		} else if natKey.GetFlags()&tuple.TUPLE_F_OUT == tuple.TUPLE_F_OUT {
 			checkDsr := func(entry *CtEntry) bool {
-				return entry.isDsrInternalEntry()
+				return entry.IsDsrInternalEntry()
 			}
 
 			egressCTKey := egressCTKeyFromEgressNatKey(natKey)

@@ -4,39 +4,46 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 
-	"github.com/cilium/stream"
+	"github.com/cilium/hive/shell"
 	"github.com/spf13/cobra"
 
 	"github.com/cilium/cilium/pkg/common"
+	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
 )
+
+var direct bool
 
 // bpfCtFlushCmd represents the bpf_ct_flush command
 var bpfCtFlushCmd = &cobra.Command{
 	Use:   "flush",
 	Short: "Flush all connection tracking entries",
-	Run: func(cmd *cobra.Command, args []string) {
-		common.RequireRootPrivilege("cilium bpf ct flush")
-		flushCt()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if direct {
+			common.RequireRootPrivilege("cilium bpf ct flush")
+			return flushCtBPFMap()
+		}
+
+		cfg := hive.DefaultShellConfig
+		if err := cfg.Parse(cmd.Flags()); err != nil {
+			return err
+		}
+		return shell.ShellExchange(cfg, os.Stdout, "ct/flush")
 	},
 }
 
 func init() {
+	bpfCtFlushCmd.Flags().BoolVarP(&direct, "direct", "d", false, "Directly flushing the CT BPF map (without Agent)")
 	BPFCtCmd.AddCommand(bpfCtFlushCmd)
+	hive.DefaultShellConfig.Flags(bpfCtFlushCmd.Flags())
 }
 
-func flushCt() {
+func flushCtBPFMap() error {
 	ipv4, ipv6 := getIpEnableStatuses()
 	maps := ctmap.Maps(ipv4, ipv6)
-
-	observable4, next4, complete4 := stream.Multicast[ctmap.GCEvent]()
-	observable6, next6, complete6 := stream.Multicast[ctmap.GCEvent]()
-	observable4.Observe(context.Background(), ctmap.NatMapNext4, func(error) {})
-	observable6.Observe(context.Background(), ctmap.NatMapNext6, func(error) {})
 
 	for _, m := range maps {
 		path, err := ctmap.OpenCTMap(m)
@@ -45,13 +52,15 @@ func flushCt() {
 				fmt.Fprintf(os.Stderr, "Unable to open %s: %s. Skipping.\n", path, err)
 				continue
 			}
-			Fatalf("Unable to open %s: %s", path, err)
+			return fmt.Errorf("unable to open %s: %w", path, err)
 		}
 		defer m.Close()
-		entries := m.Flush(next4, next6)
-		fmt.Printf("Flushed %d entries from %s\n", entries, path)
-	}
 
-	complete4(nil)
-	complete6(nil)
+		if err := m.ClearAll(); err != nil {
+			return fmt.Errorf("unable to clear %s: %w", path, err)
+		}
+
+		fmt.Printf("Flushed all entries from %s\n", path)
+	}
+	return nil
 }

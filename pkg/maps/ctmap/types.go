@@ -522,7 +522,7 @@ const (
 	MaxFlags
 )
 
-func (c *CtEntry) isDsrInternalEntry() bool {
+func (c *CtEntry) IsDsrInternalEntry() bool {
 	return c.Flags&DSRInternal != 0
 }
 

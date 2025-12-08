@@ -27,11 +27,13 @@ import (
 	"github.com/cilium/cilium/pkg/endpointstate"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
+	"github.com/cilium/cilium/pkg/maps/nat"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/promise"
 	"github.com/cilium/cilium/pkg/slices"
 	"github.com/cilium/cilium/pkg/time"
+	"github.com/cilium/cilium/pkg/tuple"
 )
 
 // initialGCInterval sets the time after which the agent will begin to warn
@@ -151,8 +153,8 @@ func newGC(params parameters) *GC {
 	}
 
 	params.JobGroup.Add(
-		job.Observer("nat-map-next4", func(ctx context.Context, event ctmap.GCEvent) error { ctmap.NatMapNext4(event); return nil }, gc.Observe4()),
-		job.Observer("nat-map-next6", func(ctx context.Context, event ctmap.GCEvent) error { ctmap.NatMapNext6(event); return nil }, gc.Observe6()),
+		job.Observer("nat-map-next4", gc.handleCTGCEvent(nat.DeleteMapping4, nat.DeleteSwappedMapping4), gc.Observe4()),
+		job.Observer("nat-map-next6", gc.handleCTGCEvent(nat.DeleteMapping6, nat.DeleteSwappedMapping6), gc.Observe6()),
 		job.OneShot("enable-gc", enableGCFunc))
 
 	return gc
@@ -366,6 +368,16 @@ func (gc *GC) Run(filter ctmap.GCFilter) (int, error) {
 	return totalDeleted, nil
 }
 
+// flush runs garbage collection on all connection tracking maps
+func (gc *GC) flush() int {
+	totalDeleted := 0
+	for _, m := range gc.ctMaps.ActiveMaps() {
+		totalDeleted += m.Flush(gc.next4, gc.next6)
+	}
+
+	return totalDeleted
+}
+
 func (gc *GC) Observe4() stream.Observable[ctmap.GCEvent] {
 	return gc.observable4
 }
@@ -574,4 +586,27 @@ func calculateIntervalWithConfig(prevInterval time.Duration, maxDeleteRatio floa
 	}
 
 	return prevInterval
+}
+
+type natDeleteFunc func(natMap *nat.Map, key tuple.TupleKey) error
+
+func (gc *GC) handleCTGCEvent(deleteMapping natDeleteFunc, deleteSwappedMapping natDeleteFunc) func(_ context.Context, event ctmap.GCEvent) error {
+	return func(_ context.Context, event ctmap.GCEvent) error {
+		if event.NatMap == nil {
+			return nil
+		}
+
+		t := event.Key.GetTupleKey()
+		tupleType := t.GetFlags()
+
+		if tupleType == tuple.TUPLE_F_OUT {
+			// Check if the entry is for DSR and call the appropriate delete function
+			if event.Entry.IsDsrInternalEntry() {
+				deleteSwappedMapping(event.NatMap, t)
+			} else {
+				deleteMapping(event.NatMap, t)
+			}
+		}
+		return nil
+	}
 }
