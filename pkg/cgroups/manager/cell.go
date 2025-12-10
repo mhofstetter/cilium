@@ -4,12 +4,16 @@
 package manager
 
 import (
+	"context"
+	"fmt"
 	"log/slog"
 
 	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
 
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/promise"
 )
 
 // Cell provides access to the cgroup manager.
@@ -24,17 +28,13 @@ var Cell = cell.Module(
 type cgroupManagerParams struct {
 	cell.In
 
-	Logger    *slog.Logger
-	Lifecycle cell.Lifecycle
+	Logger   *slog.Logger
+	JobGroup job.Group
 
-	AgentConfig *option.DaemonConfig
+	AgentConfigPromise promise.Promise[*option.DaemonConfig]
 }
 
 func newCGroupManager(params cgroupManagerParams) CGroupManager {
-	if !params.AgentConfig.EnableSocketLBTracing {
-		return &noopCGroupManager{}
-	}
-
 	pathProvider, err := getCgroupPathProvider()
 	if err != nil {
 		params.Logger.
@@ -48,18 +48,21 @@ func newCGroupManager(params cgroupManagerParams) CGroupManager {
 
 	cm := newManager(params.Logger, cgroupImpl{}, pathProvider, podEventsChannelSize)
 
-	params.Lifecycle.Append(cell.Hook{
-		OnStart: func(hookContext cell.HookContext) error {
-			go cm.processPodEvents()
-			return nil
-		},
-		OnStop: func(cell.HookContext) error {
-			cm.Close()
-			return nil
-		},
-	})
+	params.JobGroup.Add(job.OneShot("process-pod-events", func(ctx context.Context, health cell.Health) error {
+		dc, err := params.AgentConfigPromise.Await(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to wait for daemon promise: %w", err)
+		}
 
-	params.Logger.Info("Cgroup metadata manager is enabled")
+		if !dc.EnableSocketLBTracing {
+			return nil
+		}
+
+		params.Logger.Info("Cgroup metadata manager is enabled")
+
+		cm.processPodEvents(ctx)
+		return nil
+	}))
 
 	return cm
 }

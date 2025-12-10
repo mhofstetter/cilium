@@ -128,8 +128,7 @@ func newCgroupManagerTest(t testing.TB, pMock providerMock, cg cgroup, events ch
 
 	tcm.podEventsDone = events
 
-	go tcm.processPodEvents()
-	t.Cleanup(tcm.Close)
+	go tcm.processPodEvents(t.Context())
 
 	return tcm
 }
