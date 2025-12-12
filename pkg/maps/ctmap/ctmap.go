@@ -22,6 +22,7 @@ import (
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/maps/nat"
 	"github.com/cilium/cilium/pkg/maps/timestamp"
 	"github.com/cilium/cilium/pkg/metrics"
@@ -338,7 +339,7 @@ func doGCForFamily(m *Map, filter GCFilter, next4, next6 func(GCEvent), ipv6 boo
 		natMap = ctMap.natMap
 	} else {
 		// per-cluster map handling
-		natm, err := nat.GetClusterNATMap(m.clusterID, family)
+		natm, err := nat.GetClusterNATMap(m.clusterID, family, mapsize.LimitTableMax)
 		if err != nil {
 			m.Logger.Error("Unable to get per-cluster NAT map", logfields.Error, err)
 		} else {
@@ -542,12 +543,12 @@ func PurgeOrphanNATEntries(ctMapTCP, ctMapAny *Map) *NatGCStats {
 		natMap = ctMap.natMap
 	} else {
 		// per-cluster map handling
-		var family = nat.IPv4
+		family := nat.IPv4
 		if ctMapTCP.mapType.isIPv6() {
 			family = nat.IPv6
 		}
 
-		natm, err := nat.GetClusterNATMap(ctMapTCP.clusterID, family)
+		natm, err := nat.GetClusterNATMap(ctMapTCP.clusterID, family, mapsize.LimitTableMax)
 		if err != nil {
 			ctMapTCP.Logger.Error("Unable to get per-cluster NAT map", logfields.Error, err)
 		} else {

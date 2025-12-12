@@ -64,20 +64,20 @@ type PerClusterNATMapper interface {
 }
 
 // NewPerClusterNATMaps returns a new instance of the per-cluster NAT maps manager.
-func NewPerClusterNATMaps(ipv4, ipv6 bool) *perClusterNATMaps {
-	return newPerClusterNATMaps(ipv4, ipv6, maxEntries())
+func NewPerClusterNATMaps(ipv4, ipv6 bool, maxEntries int) *perClusterNATMaps {
+	return newPerClusterNATMaps(ipv4, ipv6, maxEntries)
 }
 
 // GetClusterNATMap returns the per-cluster map for the given cluster ID. The
 // returned map needs to be opened by the caller, and it is not guaranteed to exist.
-func GetClusterNATMap(clusterID uint32, family IPFamily) (*Map, error) {
-	maps := NewPerClusterNATMaps(family == IPv4, family == IPv6)
+func GetClusterNATMap(clusterID uint32, family IPFamily, maxEntries int) (*Map, error) {
+	maps := NewPerClusterNATMaps(family == IPv4, family == IPv6, maxEntries)
 	return maps.getClusterNATMap(clusterID, family)
 }
 
 // CleanupPerClusterNATMaps deletes the per-cluster NAT maps, including the inner ones.
-func CleanupPerClusterNATMaps(ipv4, ipv6 bool) error {
-	maps := NewPerClusterNATMaps(ipv4, ipv6)
+func CleanupPerClusterNATMaps(ipv4, ipv6 bool, maxEntries int) error {
+	maps := NewPerClusterNATMaps(ipv4, ipv6, maxEntries)
 	return maps.cleanup()
 }
 
@@ -100,14 +100,16 @@ type PerClusterNATMapKey struct {
 	ClusterID uint32
 }
 
-func (k *PerClusterNATMapKey) String() string  { return strconv.FormatUint(uint64(k.ClusterID), 10) }
+func (k *PerClusterNATMapKey) String() string { return strconv.FormatUint(uint64(k.ClusterID), 10) }
+
 func (n *PerClusterNATMapKey) New() bpf.MapKey { return &PerClusterNATMapKey{} }
 
 type PerClusterNATMapVal struct {
 	Fd uint32
 }
 
-func (v *PerClusterNATMapVal) String() string    { return fmt.Sprintf("fd=%d", v.Fd) }
+func (v *PerClusterNATMapVal) String() string { return fmt.Sprintf("fd=%d", v.Fd) }
+
 func (n *PerClusterNATMapVal) New() bpf.MapValue { return &PerClusterNATMapVal{} }
 
 func newPerClusterNATMap(family IPFamily, innerMapEntries int) *perClusterNATMap {

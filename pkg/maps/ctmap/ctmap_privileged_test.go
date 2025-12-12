@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/pkg/bpf"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/maps/nat"
-	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/testutils"
 	"github.com/cilium/cilium/pkg/tuple"
 	"github.com/cilium/cilium/pkg/types"
@@ -26,7 +26,7 @@ import (
 )
 
 func init() {
-	nat4, nat6 := nat.GlobalMaps(nil, true, true)
+	nat4, nat6 := nat.GlobalMaps(nil, true, true, mapsize.LimitTableMax)
 	InitMapInfo(nil, true, true, nat4, nat6)
 }
 
@@ -45,14 +45,14 @@ func BenchmarkMapBatchLookup(b *testing.B) {
 	assert.NoError(b, m.Map.Unpin())
 	assert.NoError(b, err)
 
-	_ = populateFakeDataCTMap4(b, m, option.CTMapEntriesGlobalTCPDefault)
+	_ = populateFakeDataCTMap4(b, m, mapsize.LimitTableMax)
 
 	b.ReportAllocs()
 
 	for b.Loop() {
 		count, err := m.Count(context.TODO())
 		assert.NoError(b, err)
-		assert.Greater(b, count, option.CTMapEntriesGlobalAnyDefault)
+		assert.Greater(b, count, mapsize.LimitTableMax)
 	}
 }
 
@@ -753,10 +753,7 @@ func TestPrivilegedCount(t *testing.T) {
 	// Set the max size of the map explicitly so we can provide enough buffer
 	// for the LRU map to avoid eviction that makes the assertions within this
 	// test indeterministic and consequently cause flakes.
-	prev := option.Config.CTMapEntriesGlobalTCP
-	defer func() { option.Config.CTMapEntriesGlobalTCP = prev }()
-	option.Config.CTMapEntriesGlobalTCP = 524288
-	size := 8192 // choose a reasonbly large map that does not make test time too long.
+	size := 8192 // choose a reasonably large map that does not make test time too long.
 
 	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal)
 	err := m.OpenOrCreate()
@@ -871,11 +868,6 @@ func benchmarkCtGc(t *testing.B, size int) {
 			natMap: natMap, natMapLock: mapInfo[mapTypeIPv4TCPGlobal].natMapLock,
 		}
 
-		prev := option.Config.CTMapEntriesGlobalTCP
-		option.Config.CTMapEntriesGlobalTCP = size
-		defer func() {
-			option.Config.CTMapEntriesGlobalTCP = prev
-		}()
 		ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal)
 		err = ctMap.OpenOrCreate()
 		assert.NoError(t, err)

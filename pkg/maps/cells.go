@@ -20,6 +20,7 @@ import (
 	"github.com/cilium/cilium/pkg/maps/l2respondermap"
 	"github.com/cilium/cilium/pkg/maps/l2v6respondermap"
 	"github.com/cilium/cilium/pkg/maps/lxcmap"
+	mapsizecell "github.com/cilium/cilium/pkg/maps/mapsize/cell"
 	"github.com/cilium/cilium/pkg/maps/multicast"
 	"github.com/cilium/cilium/pkg/maps/nat"
 	"github.com/cilium/cilium/pkg/maps/neighborsmap"
@@ -36,6 +37,8 @@ var Cell = cell.Module(
 	"BPF Maps",
 
 	cell.Provide(newMapApiHandler),
+
+	mapsizecell.Cell,
 
 	// Provides the auth.Map which contains the authentication state between Cilium security identities.
 	authmap.Cell,

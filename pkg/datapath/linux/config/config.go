@@ -93,7 +93,6 @@ func writeIncludes(w io.Writer) (int, error) {
 // https://docs.cilium.io/en/latest/contributing/development/datapath_config
 // will guide you through adding new configuration.
 func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeConfiguration) error {
-
 	// --- WARNING: THIS CONFIGURATION METHOD IS DEPRECATED, SEE FUNCTION DOC ---
 
 	extraMacrosMap := make(dpdef.Map)
@@ -140,7 +139,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		cDefinesMap["ENABLE_IPV6_FRAGMENTS"] = "1"
 	}
 
-	cDefinesMap["CILIUM_IPV6_FRAG_MAP_MAX_ENTRIES"] = fmt.Sprintf("%d", option.Config.FragmentsMapEntries)
+	cDefinesMap["CILIUM_IPV6_FRAG_MAP_MAX_ENTRIES"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFFragmentsMapMax())
 
 	if option.Config.EnableIPv4 {
 		ipv4GW := cfg.CiliumInternalIPv4
@@ -151,7 +150,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		}
 	}
 
-	cDefinesMap["CILIUM_IPV4_FRAG_MAP_MAX_ENTRIES"] = fmt.Sprintf("%d", option.Config.FragmentsMapEntries)
+	cDefinesMap["CILIUM_IPV4_FRAG_MAP_MAX_ENTRIES"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFFragmentsMapMax())
 
 	// --- WARNING: THIS CONFIGURATION METHOD IS DEPRECATED, SEE FUNCTION DOC ---
 
@@ -182,7 +181,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 
 	cDefinesMap["ENDPOINTS_MAP_SIZE"] = fmt.Sprintf("%d", lxcmap.MaxEntries)
 	cDefinesMap["METRICS_MAP_SIZE"] = fmt.Sprintf("%d", metricsmap.MaxEntries)
-	cDefinesMap["AUTH_MAP_SIZE"] = fmt.Sprintf("%d", option.Config.AuthMapEntries)
+	cDefinesMap["AUTH_MAP_SIZE"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFAuthMapMax())
 	cDefinesMap["CONFIG_MAP_SIZE"] = fmt.Sprintf("%d", configmap.MaxEntries)
 	cDefinesMap["IPCACHE_MAP_SIZE"] = fmt.Sprintf("%d", ipcachemap.MaxEntries)
 	cDefinesMap["NODE_MAP_SIZE"] = fmt.Sprintf("%d", h.nodeMap.Size())
@@ -202,7 +201,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	if option.Config.PreAllocateMaps {
 		cDefinesMap["PREALLOCATE_MAPS"] = "1"
 	}
-	if option.Config.BPFDistributedLRU {
+	if cfg.BPFMapsSizeConfig.GetBPFDistributedLRU() {
 		cDefinesMap["NO_COMMON_MEM_MAPS"] = "1"
 	}
 
@@ -311,8 +310,8 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	cDefinesMap["NAT_46X64_PREFIX_2"] = "0"
 	cDefinesMap["NAT_46X64_PREFIX_3"] = "0"
 
-	cDefinesMap["NODEPORT_NEIGH6_SIZE"] = fmt.Sprintf("%d", option.Config.NeighMapEntriesGlobal)
-	cDefinesMap["NODEPORT_NEIGH4_SIZE"] = fmt.Sprintf("%d", option.Config.NeighMapEntriesGlobal)
+	cDefinesMap["NODEPORT_NEIGH6_SIZE"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFNeighGlobalMax())
+	cDefinesMap["NODEPORT_NEIGH4_SIZE"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFNeighGlobalMax())
 
 	if h.kprCfg.KubeProxyReplacement {
 		if option.Config.EnableHealthDatapath {
@@ -480,8 +479,8 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		cDefinesMap["ENABLE_HOST_FIREWALL"] = "1"
 	}
 
-	cDefinesMap["SNAT_MAPPING_IPV4_SIZE"] = fmt.Sprintf("%d", option.Config.NATMapEntriesGlobal)
-	cDefinesMap["SNAT_MAPPING_IPV6_SIZE"] = fmt.Sprintf("%d", option.Config.NATMapEntriesGlobal)
+	cDefinesMap["SNAT_MAPPING_IPV4_SIZE"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFNATGlobalMax())
+	cDefinesMap["SNAT_MAPPING_IPV6_SIZE"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFNATGlobalMax())
 	cDefinesMap["SNAT_COLLISION_RETRIES"] = fmt.Sprintf("%d", nat.SnatCollisionRetries)
 
 	if option.Config.EnableBPFMasquerade {
@@ -502,8 +501,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 			}
 
 			if excludeCIDR != nil {
-				cDefinesMap["IPV4_SNAT_EXCLUSION_DST_CIDR"] =
-					fmt.Sprintf("%#x", byteorder.NetIPv4ToHost32(excludeCIDR.IP))
+				cDefinesMap["IPV4_SNAT_EXCLUSION_DST_CIDR"] = fmt.Sprintf("%#x", byteorder.NetIPv4ToHost32(excludeCIDR.IP))
 				ones, _ := excludeCIDR.Mask.Size()
 				cDefinesMap["IPV4_SNAT_EXCLUSION_DST_CIDR_LEN"] = fmt.Sprintf("%d", ones)
 			}

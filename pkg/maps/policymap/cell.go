@@ -14,7 +14,12 @@ import (
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/datapath/linux/config/defines"
 	"github.com/cilium/cilium/pkg/logging/logfields"
-	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
+)
+
+const (
+	policyMapMin = 1 << 8
+	policyMapMax = 1 << 16
 )
 
 var Cell = cell.Module(
@@ -114,31 +119,32 @@ func createFactory(in struct {
 	Factory
 	bpf.MapOut[*StatsMap]
 	defines.NodeOut
-}) {
-	if in.BpfPolicyMapMax < option.PolicyMapMin {
+},
+) {
+	if in.BpfPolicyMapMax < policyMapMin {
 		in.Log.Warn("specified PolicyMap max entries too low, using minimum value instead",
 			logfields.Entries, in.BpfPolicyMapMax,
-			logfields.Minimum, option.PolicyMapMin)
-		in.BpfPolicyMapMax = option.PolicyMapMin
+			logfields.Minimum, policyMapMin)
+		in.BpfPolicyMapMax = policyMapMin
 	}
-	if in.BpfPolicyMapMax > option.PolicyMapMax {
+	if in.BpfPolicyMapMax > policyMapMax {
 		in.Log.Warn("specified PolicyMap max entries too high, using maximum value instead",
 			logfields.Entries, in.BpfPolicyMapMax,
-			logfields.Maximum, option.PolicyMapMax)
-		in.BpfPolicyMapMax = option.PolicyMapMax
+			logfields.Maximum, policyMapMax)
+		in.BpfPolicyMapMax = policyMapMax
 	}
 
-	if in.BpfPolicyStatsMapMax < option.LimitTableMin {
+	if in.BpfPolicyStatsMapMax < mapsize.LimitTableMin {
 		in.Log.Warn("specified policy stats map max entries too low, using minimum value instead",
 			logfields.Entries, in.BpfPolicyStatsMapMax,
-			logfields.Minimum, option.LimitTableMin)
-		in.BpfPolicyStatsMapMax = option.LimitTableMin
+			logfields.Minimum, mapsize.LimitTableMin)
+		in.BpfPolicyStatsMapMax = mapsize.LimitTableMin
 	}
-	if in.BpfPolicyStatsMapMax > option.LimitTableMax {
+	if in.BpfPolicyStatsMapMax > mapsize.LimitTableMax {
 		in.Log.Warn("specified policy stats map max entries too high, using maximum value instead",
 			logfields.Entries, in.BpfPolicyStatsMapMax,
-			logfields.Maximum, option.LimitTableMax)
-		in.BpfPolicyStatsMapMax = option.LimitTableMax
+			logfields.Maximum, mapsize.LimitTableMax)
+		in.BpfPolicyStatsMapMax = mapsize.LimitTableMax
 	}
 
 	m, maxStatsEntries := newStatsMap(in.BpfPolicyStatsMapMax, in.Log)

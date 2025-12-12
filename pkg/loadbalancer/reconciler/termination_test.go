@@ -119,7 +119,6 @@ func testSocketTermination(t *testing.T, hostOnly bool) {
 		cell.Invoke(func(db_ *statedb.DB, backends_ statedb.RWTable[*loadbalancer.Backend]) {
 			db = db_
 			backends = backends_
-
 		}),
 	)
 
@@ -280,7 +279,6 @@ func TestPrivilegedSocketTermination_Datapath(t *testing.T) {
 			statedb.RWTable[*loadbalancer.Frontend].ToTable,
 			loadbalancer.NewConfig,
 			func() loadbalancer.ExternalConfig { return extConfig },
-			func() *option.DaemonConfig { return &option.DaemonConfig{} },
 			func() *loadbalancer.TestConfig { return &loadbalancer.TestConfig{} },
 		),
 		cell.Invoke(func(m lbmaps.LBMaps) {

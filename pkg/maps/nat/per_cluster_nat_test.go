@@ -12,7 +12,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/bpf"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
-	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/testutils"
 )
 
@@ -36,7 +36,7 @@ func path(tb testing.TB, m *bpf.Map) string {
 func TestPrivilegedPerClusterMaps(t *testing.T) {
 	setup(t)
 
-	maps := newPerClusterNATMaps(true, true, option.NATMapEntriesGlobalDefault)
+	maps := newPerClusterNATMaps(true, true, mapsize.LimitTableMax)
 	require.NotNil(t, maps.v4Map, "Failed to initialize maps")
 	require.NotNil(t, maps.v6Map, "Failed to initialize maps")
 
@@ -46,19 +46,19 @@ func TestPrivilegedPerClusterMaps(t *testing.T) {
 
 	t.Cleanup(func() {
 		require.NoError(t, maps.Close())
-		require.NoError(t, CleanupPerClusterNATMaps(true, true), "Failed to cleanup maps")
+		require.NoError(t, CleanupPerClusterNATMaps(true, true, mapsize.LimitTableMax), "Failed to cleanup maps")
 	})
 
 	// ClusterID 0 should never be used
 	require.Error(t, maps.CreateClusterNATMaps(0), "ClusterID 0 should never be used")
 	require.Error(t, maps.DeleteClusterNATMaps(0), "ClusterID 0 should never be used")
-	_, err := GetClusterNATMap(0, IPv4)
+	_, err := GetClusterNATMap(0, IPv4, mapsize.LimitTableMax)
 	require.Error(t, err, "ClusterID 0 should never be used")
 
 	// ClusterID beyond the ClusterIDMax should never be used
 	require.Error(t, maps.CreateClusterNATMaps(cmtypes.ClusterIDMax+1), "ClusterID beyond the ClusterIDMax should never be used")
 	require.Error(t, maps.DeleteClusterNATMaps(cmtypes.ClusterIDMax+1), "ClusterID beyond the ClusterIDMax should never be used")
-	_, err = GetClusterNATMap(cmtypes.ClusterIDMax+1, IPv6)
+	_, err = GetClusterNATMap(cmtypes.ClusterIDMax+1, IPv6, mapsize.LimitTableMax)
 	require.Error(t, err, "ClusterID beyond the ClusterIDMax should never be used")
 
 	// Basic update
@@ -76,7 +76,7 @@ func TestPrivilegedPerClusterMaps(t *testing.T) {
 			require.FileExists(t, path(t, &om.newInnerMap(id).Map), "Inner map not correctly present (id=%v, family=%v)", id, om.family)
 
 			// After update, it should be possible to get and open the inner map
-			im, err := GetClusterNATMap(id, om.family)
+			im, err := GetClusterNATMap(id, om.family, mapsize.LimitTableMax)
 			require.NotNil(t, im, "Failed to get inner map (id=%v, family=%v)", id, om.family)
 			require.NoError(t, err, "Failed to get inner map (id=%v, family=%v)", id, om.family)
 			require.NoError(t, im.Open(), "Failed to open inner map (id=%v, family=%v)", id, om.family)
@@ -101,7 +101,7 @@ func TestPrivilegedPerClusterMaps(t *testing.T) {
 			require.NoFileExists(t, path(t, &om.newInnerMap(id).Map), "Inner map not correctly deleted (id=%v, family=%v)", id, om.family)
 
 			// After delete, it should be no longer be possible to open the inner map
-			im, err := GetClusterNATMap(id, om.family)
+			im, err := GetClusterNATMap(id, om.family, mapsize.LimitTableMax)
 			require.NotNil(t, im, "Failed to get inner map (id=%v, family=%v)", id, om.family)
 			require.NoError(t, err, "Failed to get inner map (id=%v, family=%v)", id, om.family)
 			require.Error(t, im.Open(), "Should have failed to open inner map (id=%v, family=%v)", id, om.family)
@@ -128,20 +128,20 @@ func TestPrivilegedPerClusterMapsCleanup(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Pick up edge and middle values since filling all slots consumes too much memory.
 			ids := []uint32{1, 128, cmtypes.ClusterIDMax}
-			maps := newPerClusterNATMaps(true, true, option.NATMapEntriesGlobalDefault)
+			maps := newPerClusterNATMaps(true, true, mapsize.LimitTableMax)
 
 			require.NoError(t, maps.OpenOrCreate(), "Failed to create outer maps")
 			t.Cleanup(func() {
 				require.NoError(t, maps.Close())
 				// This also ensures that the cleanup succeeds even if the outer maps don't exist
-				require.NoError(t, CleanupPerClusterNATMaps(true, true), "Failed to cleanup maps")
+				require.NoError(t, CleanupPerClusterNATMaps(true, true, mapsize.LimitTableMax), "Failed to cleanup maps")
 			})
 
 			for _, id := range ids {
 				require.NoError(t, maps.CreateClusterNATMaps(id), "Failed to create maps (id=%v)", id)
 			}
 
-			require.NoError(t, CleanupPerClusterNATMaps(tt.ipv4, tt.ipv6), "Failed to cleanup maps")
+			require.NoError(t, CleanupPerClusterNATMaps(tt.ipv4, tt.ipv6, mapsize.LimitTableMax), "Failed to cleanup maps")
 
 			for _, om := range []*perClusterNATMap{maps.v4Map, maps.v6Map} {
 				must := require.FileExists

@@ -11,12 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/pkg/defaults"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/maps/nat"
 	"github.com/cilium/cilium/pkg/option"
 )
 
 func init() {
-	nat4, nat6 := nat.GlobalMaps(nil, true, true)
+	nat4, nat6 := nat.GlobalMaps(nil, true, true, mapsize.LimitTableMax)
 	InitMapInfo(nil, true, true, nat4, nat6)
 }
 

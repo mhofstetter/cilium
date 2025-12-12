@@ -375,38 +375,31 @@ func DeleteSwappedMapping6(m *Map, tk tuple.TupleKey) error {
 }
 
 // GlobalMaps returns all global NAT maps.
-func GlobalMaps(registry *metrics.Registry, ipv4, ipv6 bool) (ipv4Map, ipv6Map *Map) {
+func GlobalMaps(registry *metrics.Registry, ipv4, ipv6 bool, maxEntries int) (ipv4Map, ipv6Map *Map) {
 	if ipv4 {
-		ipv4Map = NewMap(registry, MapNameSnat4Global, IPv4, maxEntries())
+		ipv4Map = NewMap(registry, MapNameSnat4Global, IPv4, maxEntries)
 	}
 	if ipv6 {
-		ipv6Map = NewMap(registry, MapNameSnat6Global, IPv6, maxEntries())
+		ipv6Map = NewMap(registry, MapNameSnat6Global, IPv6, maxEntries)
 	}
 	return
 }
 
 // ClusterMaps returns all NAT maps for given clusters
-func ClusterMaps(clusterID uint32, ipv4, ipv6 bool) (ipv4Map, ipv6Map *Map, err error) {
+func ClusterMaps(clusterID uint32, ipv4, ipv6 bool, maxEntries int) (ipv4Map, ipv6Map *Map, err error) {
 	if ipv4 {
-		ipv4Map, err = GetClusterNATMap(clusterID, IPv4)
+		ipv4Map, err = GetClusterNATMap(clusterID, IPv4, maxEntries)
 		if err != nil {
 			return
 		}
 	}
 	if ipv6 {
-		ipv6Map, err = GetClusterNATMap(clusterID, IPv6)
+		ipv6Map, err = GetClusterNATMap(clusterID, IPv6, maxEntries)
 		if err != nil {
 			return
 		}
 	}
 	return
-}
-
-func maxEntries() int {
-	if option.Config.NATMapEntriesGlobal != 0 {
-		return option.Config.NATMapEntriesGlobal
-	}
-	return option.LimitTableMax
 }
 
 type natRetriesMap struct {

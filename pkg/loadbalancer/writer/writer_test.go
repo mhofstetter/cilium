@@ -25,6 +25,7 @@ import (
 	"github.com/cilium/cilium/pkg/hive"
 	"github.com/cilium/cilium/pkg/kpr"
 	"github.com/cilium/cilium/pkg/loadbalancer"
+	mapsizecell "github.com/cilium/cilium/pkg/maps/mapsize/cell"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/source"
@@ -57,6 +58,7 @@ func fixture(t testing.TB) (p testParams) {
 			func() kpr.KPRConfig { return kpr.KPRConfig{} },
 		),
 		cell.Invoke(func(p_ testParams) { p = p_ }),
+		mapsizecell.Cell,
 	)
 
 	require.NoError(t, h.Start(log, context.TODO()))
@@ -237,7 +239,8 @@ func TestWriter_Backend_UpsertDelete(t *testing.T) {
 				{
 					Address: beAddr2,
 					State:   loadbalancer.BackendStateActive,
-				}}),
+				},
+			}),
 		)
 
 		// Add a backend for the non-existing [name2].
@@ -249,7 +252,8 @@ func TestWriter_Backend_UpsertDelete(t *testing.T) {
 				{
 					Address: beAddr3,
 					State:   loadbalancer.BackendStateActive,
-				}}),
+				},
+			}),
 		)
 
 		wtxn.Commit()

@@ -9,7 +9,7 @@ import (
 	"github.com/cilium/hive/cell"
 
 	"github.com/cilium/cilium/pkg/bpf"
-	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 )
 
 // Cell provides the auth.Map which contains the authentication state between Cilium security identities.
@@ -23,8 +23,8 @@ var Cell = cell.Module(
 	cell.Provide(newAuthMap),
 )
 
-func newAuthMap(lifecycle cell.Lifecycle, logger *slog.Logger) bpf.MapOut[Map] {
-	authMap := newMap(logger, option.Config.AuthMapEntries)
+func newAuthMap(lifecycle cell.Lifecycle, logger *slog.Logger, bpfMapsSizeConfig mapsize.BPFMapsSizeConfig) bpf.MapOut[Map] {
+	authMap := newMap(logger, bpfMapsSizeConfig.GetBPFAuthMapMax())
 
 	lifecycle.Append(cell.Hook{
 		OnStart: func(context cell.HookContext) error {

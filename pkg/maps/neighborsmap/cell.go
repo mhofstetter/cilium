@@ -8,6 +8,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/kpr"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/option"
 )
 
@@ -22,12 +23,12 @@ var Cell = cell.Module(
 	cell.Provide(newNeighborsMap),
 )
 
-func newNeighborsMap(lifecycle cell.Lifecycle, daemonConfig *option.DaemonConfig, kprConfig kpr.KPRConfig) bpf.MapOut[Map] {
+func newNeighborsMap(lifecycle cell.Lifecycle, daemonConfig *option.DaemonConfig, kprConfig kpr.KPRConfig, bpfMapsSizeConfig mapsize.BPFMapsSizeConfig) bpf.MapOut[Map] {
 	if !kprConfig.KubeProxyReplacement {
 		return bpf.NewMapOut(Map(nil))
 	}
 
-	neighborsMap := newMap(daemonConfig.NeighMapEntriesGlobal, daemonConfig.IPv4Enabled(), daemonConfig.IPv6Enabled())
+	neighborsMap := newMap(bpfMapsSizeConfig.GetBPFNeighGlobalMax(), daemonConfig.IPv4Enabled(), daemonConfig.IPv6Enabled())
 
 	lifecycle.Append(cell.Hook{
 		OnStart: func(context cell.HookContext) error {

@@ -44,6 +44,7 @@ import (
 	"github.com/cilium/cilium/pkg/labelsfilter"
 	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/maps/ctmap"
+	mapsizecell "github.com/cilium/cilium/pkg/maps/mapsize/cell"
 	"github.com/cilium/cilium/pkg/maps/policymap"
 	"github.com/cilium/cilium/pkg/metrics"
 	monitorAgent "github.com/cilium/cilium/pkg/monitor/agent"
@@ -142,6 +143,7 @@ func setupDaemonEtcdSuite(tb testing.TB) *DaemonSuite {
 			},
 			func() *server.Server { return nil },
 		),
+		mapsizecell.Cell,
 		fakeDatapath.Cell,
 		neighbor.ForwardableIPCell,
 		reconciler.TableCell,

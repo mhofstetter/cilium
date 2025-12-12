@@ -33,7 +33,7 @@ func init() {
 func flushCt() {
 	ipv4, ipv6 := getIpEnableStatuses()
 
-	nat4, nat6 := nat.GlobalMaps(nil, ipv4, ipv6)
+	nat4, nat6 := nat.GlobalMaps(nil, ipv4, ipv6, 0)
 	if nat4 != nil {
 		if err := nat4.Open(); err != nil {
 			nat4 = nil

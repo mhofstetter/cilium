@@ -34,6 +34,7 @@ import (
 	lb "github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/loadbalancer/reflectors"
 	"github.com/cilium/cilium/pkg/loadbalancer/writer"
+	mapsizecell "github.com/cilium/cilium/pkg/maps/mapsize/cell"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
@@ -73,6 +74,7 @@ func TestLBServiceResolver(t *testing.T) {
 
 		writer.Cell,
 		reflectors.Cell,
+		mapsizecell.Cell,
 	)
 }
 
@@ -225,6 +227,7 @@ func TestServiceBackendResolver(t *testing.T) {
 		lb.ConfigCell,
 		node.LocalNodeStoreTestCell,
 		writer.Cell,
+		mapsizecell.Cell,
 
 		cell.Provide(
 			func() cmtypes.ClusterInfo { return cmtypes.ClusterInfo{} },

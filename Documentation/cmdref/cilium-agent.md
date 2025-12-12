@@ -27,8 +27,8 @@ cilium-agent [flags]
       --bgp-router-id-allocation-mode string                      BGP router-id allocation mode. Currently supported values: 'default' or 'ip-pool' (default "default")
       --bpf-auth-map-max int                                      Maximum number of entries in auth map (default 524288)
       --bpf-conntrack-accounting                                  Enable CT accounting for packets and bytes (default false)
-      --bpf-ct-global-any-max int                                 Maximum number of entries in non-TCP CT table (default 262144)
-      --bpf-ct-global-tcp-max int                                 Maximum number of entries in TCP CT table (default 524288)
+      --bpf-ct-global-any-max int                                 Maximum number of entries in non-TCP CT table (auto-calculated by default - otherwise 262144)
+      --bpf-ct-global-tcp-max int                                 Maximum number of entries in TCP CT table (auto-calculated by default - otherwise 524288)
       --bpf-ct-timeout-regular-any duration                       Timeout for entries in non-TCP CT table (default 1m0s)
       --bpf-ct-timeout-regular-tcp duration                       Timeout for established entries in TCP CT table (default 2h13m20s)
       --bpf-ct-timeout-regular-tcp-fin duration                   Teardown timeout for entries in TCP CT table (default 10s)
@@ -57,8 +57,8 @@ cilium-agent [flags]
       --bpf-lb-sock-hostns-only                                   Skip socket LB for services when inside a pod namespace, in favor of service LB at the pod interface. Socket LB is still used when in the host namespace. Required by service mesh (e.g., Istio, Linkerd).
       --bpf-lb-source-range-all-types                             Propagate loadbalancerSourceRanges to all corresponding service types
       --bpf-map-dynamic-size-ratio float                          Ratio (0.0-1.0] of total system memory to use for dynamic sizing of CT, NAT and policy BPF maps (default 0.0025)
-      --bpf-nat-global-max int                                    Maximum number of entries for the global BPF NAT table (default 524288)
-      --bpf-neigh-global-max int                                  Maximum number of entries for the global BPF neighbor table (default 524288)
+      --bpf-nat-global-max int                                    Maximum number of entries for the global BPF NAT table (auto-calculated by default - otherwise 524288)
+      --bpf-neigh-global-max int                                  Maximum number of entries for the global BPF neighbor table (auto-calculated by default - otherwise 524288
       --bpf-node-map-max uint32                                   Sets size of node bpf map which will be the max number of unique Node IPs in the cluster (default 16384)
       --bpf-policy-map-max int                                    Maximum number of entries in endpoint policy map (per endpoint) (default 16384)
       --bpf-policy-map-pressure-metrics-threshold float           Sets threshold for emitting pressure metrics of policy maps (default 0.1)

@@ -39,6 +39,7 @@ import (
 	"github.com/cilium/cilium/pkg/loadbalancer/reflectors"
 	"github.com/cilium/cilium/pkg/loadbalancer/writer"
 	"github.com/cilium/cilium/pkg/maglev"
+	mapsizecell "github.com/cilium/cilium/pkg/maps/mapsize/cell"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/source"
@@ -234,8 +235,10 @@ type run struct {
 }
 
 func (r run) insert() time.Duration { return r.insertDuration }
+
 func (r run) delete() time.Duration { return r.deleteDuration }
-func (r run) mem() *memoryPair      { return r.memstats }
+
+func (r run) mem() *memoryPair { return r.memstats }
 
 func printMemoryStats(pairs []*memoryPair, testSize int) {
 	Min, Max, Avg := calculateStatistics(pairs)
@@ -296,7 +299,6 @@ func calculateTimeStats(durations []time.Duration) (Min, Max, Avg time.Duration)
 	}
 	Avg = time.Duration(Sum.Nanoseconds() / int64(len(durations)) * int64(time.Nanosecond))
 	return
-
 }
 
 func mapFunc[A, B any](xs []A, fn func(A) B) []B {
@@ -502,12 +504,10 @@ func checkTables(db *statedb.DB, writer *writer.Writer, svcs []*slim_corev1.Serv
 	return err
 }
 
-var (
-	nodePortAddrs = []netip.Addr{
-		netip.MustParseAddr("10.0.0.3"),
-		netip.MustParseAddr("2002::1"),
-	}
-)
+var nodePortAddrs = []netip.Addr{
+	netip.MustParseAddr("10.0.0.3"),
+	netip.MustParseAddr("2002::1"),
+}
 
 func testHive(maps lbmaps.LBMaps,
 	services chan resource.Event[*slim_corev1.Service],
@@ -579,6 +579,8 @@ func testHive(maps lbmaps.LBMaps,
 			// Reconcile tables to BPF maps
 			lbreconciler.Cell,
 
+			mapsizecell.Cell,
+
 			cell.Provide(reflectors.NetnsCookieSupportFunc),
 
 			cell.Provide(
@@ -610,7 +612,6 @@ func testHive(maps lbmaps.LBMaps,
 					)
 				}
 				txn.Commit()
-
 			}),
 		),
 	)

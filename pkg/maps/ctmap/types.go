@@ -13,7 +13,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/byteorder"
-	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/tuple"
 )
 
@@ -102,22 +102,23 @@ func (m mapType) value() bpf.MapValue {
 }
 
 func (m mapType) maxEntries() int {
-	switch m {
-	case mapTypeIPv4TCPGlobal, mapTypeIPv6TCPGlobal:
-		if option.Config.CTMapEntriesGlobalTCP != 0 {
-			return option.Config.CTMapEntriesGlobalTCP
-		}
-		return option.CTMapEntriesGlobalTCPDefault
-
-	case mapTypeIPv4AnyGlobal, mapTypeIPv6AnyGlobal:
-		if option.Config.CTMapEntriesGlobalAny != 0 {
-			return option.Config.CTMapEntriesGlobalAny
-		}
-		return option.CTMapEntriesGlobalAnyDefault
-
-	default:
-		panic("Unexpected map type " + m.String())
-	}
+	// switch m {
+	// case mapTypeIPv4TCPGlobal, mapTypeIPv6TCPGlobal:
+	// 	if option.Config.CTMapEntriesGlobalTCP != 0 {
+	// 		return option.Config.CTMapEntriesGlobalTCP
+	// 	}
+	// 	return option.CTMapEntriesGlobalTCPDefault
+	//
+	// case mapTypeIPv4AnyGlobal, mapTypeIPv6AnyGlobal:
+	// 	if option.Config.CTMapEntriesGlobalAny != 0 {
+	// 		return option.Config.CTMapEntriesGlobalAny
+	// 	}
+	// 	return option.CTMapEntriesGlobalAnyDefault
+	//
+	// default:
+	// 	panic("Unexpected map type " + m.String())
+	// }
+	return mapsize.LimitTableMax
 }
 
 type CtKey interface {

@@ -398,19 +398,19 @@ func (d *statusCollector) getBPFMapStatus() *models.BPFMapStatus {
 	}
 
 	return &models.BPFMapStatus{
-		DynamicSizeRatio: d.statusParams.DaemonConfig.BPFMapsDynamicSizeRatio,
+		DynamicSizeRatio: d.statusParams.BPFMapsSizeConfig.GetBPFMapDynamicSizeRatio(),
 		Maps: []*models.BPFMapProperties{
 			{
 				Name: "Auth",
-				Size: int64(d.statusParams.DaemonConfig.AuthMapEntries),
+				Size: int64(d.statusParams.BPFMapsSizeConfig.GetBPFAuthMapMax()),
 			},
 			{
 				Name: "Non-TCP connection tracking",
-				Size: int64(d.statusParams.DaemonConfig.CTMapEntriesGlobalAny),
+				Size: int64(d.statusParams.BPFMapsSizeConfig.GetBPFCTGlobalAnyMax()),
 			},
 			{
 				Name: "TCP connection tracking",
-				Size: int64(d.statusParams.DaemonConfig.CTMapEntriesGlobalTCP),
+				Size: int64(d.statusParams.BPFMapsSizeConfig.GetBPFCTGlobalTCPMax()),
 			},
 			{
 				Name: "Endpoints",
@@ -430,7 +430,7 @@ func (d *statusCollector) getBPFMapStatus() *models.BPFMapStatus {
 			},
 			{
 				Name: "IPv4 fragmentation",
-				Size: int64(d.statusParams.DaemonConfig.FragmentsMapEntries),
+				Size: int64(d.statusParams.BPFMapsSizeConfig.GetBPFFragmentsMapMax()),
 			},
 			{
 				Name: "IPv4 service", // cilium_lb4_services_v2
@@ -466,11 +466,11 @@ func (d *statusCollector) getBPFMapStatus() *models.BPFMapStatus {
 			},
 			{
 				Name: "NAT",
-				Size: int64(d.statusParams.DaemonConfig.NATMapEntriesGlobal),
+				Size: int64(d.statusParams.BPFMapsSizeConfig.GetBPFNATGlobalMax()),
 			},
 			{
 				Name: "Neighbor table",
-				Size: int64(d.statusParams.DaemonConfig.NeighMapEntriesGlobal),
+				Size: int64(d.statusParams.BPFMapsSizeConfig.GetBPFNeighGlobalMax()),
 			},
 			{
 				Name: "Endpoint policy",
