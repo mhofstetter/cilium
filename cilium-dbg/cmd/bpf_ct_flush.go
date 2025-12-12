@@ -33,7 +33,11 @@ func init() {
 func flushCt() {
 	ipv4, ipv6 := getIpEnableStatuses()
 
-	nat4, nat6 := nat.GlobalMaps(nil, ipv4, ipv6)
+	nat4, nat6, err := nat.Maps(log, nil, ipv4, ipv6)
+	if err != nil {
+		Fatalf("Unable to read NAT maps: %s", err)
+	}
+
 	if nat4 != nil {
 		if err := nat4.Open(); err != nil {
 			nat4 = nil
@@ -50,7 +54,10 @@ func flushCt() {
 	}
 	ctmap.InitMapInfo(nat4, nat6)
 
-	maps := ctmap.Maps(ipv4, ipv6)
+	maps, err := ctmap.Maps(log, ipv4, ipv6)
+	if err != nil {
+		Fatalf("Unable to read ct maps: %s", err)
+	}
 
 	observable4, next4, complete4 := stream.Multicast[ctmap.GCEvent]()
 	observable6, next6, complete6 := stream.Multicast[ctmap.GCEvent]()

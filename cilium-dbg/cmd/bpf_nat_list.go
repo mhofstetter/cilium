@@ -27,7 +27,11 @@ var bpfNatListCmd = &cobra.Command{
 		common.RequireRootPrivilege("cilium bpf nat list")
 		if len(args) == 0 {
 			ipv4, ipv6 := getIpEnableStatuses()
-			ipv4Map, ipv6Map := nat.GlobalMaps(nil, ipv4, ipv6)
+			ipv4Map, ipv6Map, err := nat.Maps(log, nil, ipv4, ipv6)
+			if err != nil {
+				Fatalf("Unable to read NAT maps: %s", err)
+			}
+
 			globalMaps := make([]nat.NatMap, 2)
 			globalMaps[0] = ipv4Map
 			globalMaps[1] = ipv6Map
@@ -39,7 +43,7 @@ var bpfNatListCmd = &cobra.Command{
 				return
 			}
 			ipv4, ipv6 := getIpEnableStatuses()
-			ipv4Map, ipv6Map, err := nat.ClusterMaps(uint32(clusterID), ipv4, ipv6)
+			ipv4Map, ipv6Map, err := nat.ClusterMaps(log, uint32(clusterID), ipv4, ipv6)
 			if err != nil {
 				cmd.PrintErrf("Failed to retrieve cluster maps: %s", err.Error())
 				return

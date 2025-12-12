@@ -6,6 +6,7 @@ package ctmap
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"strconv"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/cilium/cilium/pkg/bpf"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/lock"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 )
 
 const (
@@ -65,14 +67,26 @@ type PerClusterCTMapper interface {
 
 // GetClusterCTMaps returns the per-cluster maps for the given cluster ID. The
 // returned maps need to be opened by the caller, and are not guaranteed to exist.
-func GetClusterCTMaps(clusterID uint32, ipv4, ipv6 bool) ([]*Map, error) {
-	maps := NewPerClusterCTMaps(ipv4, ipv6)
+func GetClusterCTMaps(clusterID uint32, ipv4, ipv6 bool, tcpMaxEntries int, anyMaxEntries int) ([]*Map, error) {
+	maps := NewPerClusterCTMaps(ipv4, ipv6, tcpMaxEntries, anyMaxEntries)
+	return maps.getClusterCTMaps(clusterID)
+}
+
+// OpenClusterCTMaps returns the per-cluster maps for the given cluster ID. The
+// returned maps need to be opened by the caller, and are not guaranteed to exist.
+//
+// This should only be used from components which aren't capable of using hive - mainly the Cilium CLI.
+func OpenClusterCTMaps(logger *slog.Logger, clusterID uint32, ipv4, ipv6 bool) ([]*Map, error) {
+	maps, err := OpenPerClusterCTMaps(logger, ipv4, ipv6)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open per cluster ct maps: %w", err)
+	}
 	return maps.getClusterCTMaps(clusterID)
 }
 
 // CleanupPerClusterCTMaps deletes the per-cluster CT maps, including the inner ones.
-func CleanupPerClusterCTMaps(ipv4, ipv6 bool) error {
-	maps := NewPerClusterCTMaps(ipv4, ipv6)
+func CleanupPerClusterCTMaps(ipv4, ipv6 bool, tcpMaxEntries int, anyMaxEntries int) error {
+	maps := NewPerClusterCTMaps(ipv4, ipv6, tcpMaxEntries, anyMaxEntries)
 	return maps.cleanup()
 }
 
@@ -124,20 +138,60 @@ func (v *PerClusterCTMapVal) String() string { return fmt.Sprintf("fd=%d", v.Fd)
 func (v *PerClusterCTMapVal) New() bpf.MapValue { return &PerClusterCTMapVal{} }
 
 // NewPerClusterCTMaps returns a new instance of the per-cluster CT maps manager.
-func NewPerClusterCTMaps(ipv4, ipv6 bool) *perClusterCTMaps {
+func NewPerClusterCTMaps(ipv4, ipv6 bool, maxEntriesTCP int, maxEntriesAny int) *perClusterCTMaps {
 	gm := perClusterCTMaps{clusterIDs: sets.New[uint32]()}
 
 	if ipv4 {
-		gm.tcp4 = newPerClusterCTMap(mapTypeIPv4TCPGlobal)
-		gm.any4 = newPerClusterCTMap(mapTypeIPv4AnyGlobal)
+		gm.tcp4 = newPerClusterCTMap(mapTypeIPv4TCPGlobal, maxEntriesTCP)
+		gm.any4 = newPerClusterCTMap(mapTypeIPv4AnyGlobal, maxEntriesAny)
 	}
 
 	if ipv6 {
-		gm.tcp6 = newPerClusterCTMap(mapTypeIPv6TCPGlobal)
-		gm.any6 = newPerClusterCTMap(mapTypeIPv6AnyGlobal)
+		gm.tcp6 = newPerClusterCTMap(mapTypeIPv6TCPGlobal, maxEntriesTCP)
+		gm.any6 = newPerClusterCTMap(mapTypeIPv6AnyGlobal, maxEntriesAny)
 	}
 
 	return &gm
+}
+
+// OpenPerClusterCTMaps returns a new instance of the per-cluster CT maps manager.
+func OpenPerClusterCTMaps(logger *slog.Logger, ipv4, ipv6 bool) (*perClusterCTMaps, error) {
+	tcpSize := mapsize.LimitTableMax
+	anySize := mapsize.LimitTableMax
+
+	if ipv4 {
+		globalV4TCP, err := bpf.OpenMap(bpf.MapPath(logger, MapNameTCP4Global), mapTypeIPv4TCPGlobal.key(), mapTypeIPv4TCPGlobal.value())
+		if err != nil {
+			return nil, fmt.Errorf("failed to open v4 tcp map: %w", err)
+		}
+
+		globalV4Any, err := bpf.OpenMap(bpf.MapPath(logger, MapNameAny4Global), mapTypeIPv4AnyGlobal.key(), mapTypeIPv4AnyGlobal.value())
+		if err != nil {
+			return nil, fmt.Errorf("failed to open v4 any map: %w", err)
+		}
+
+		tcpSize = int(globalV4TCP.MaxEntries())
+		anySize = int(globalV4Any.MaxEntries())
+		return NewPerClusterCTMaps(ipv4, ipv6, tcpSize, anySize), nil
+	}
+
+	if ipv6 {
+		globalV6TCP, err := bpf.OpenMap(bpf.MapPath(logger, MapNameTCP6Global), mapTypeIPv6TCPGlobal.key(), mapTypeIPv6TCPGlobal.value())
+		if err != nil {
+			return nil, fmt.Errorf("failed to open v6 tcp map: %w", err)
+		}
+
+		globalV6Any, err := bpf.OpenMap(bpf.MapPath(logger, MapNameAny6Global), mapTypeIPv6AnyGlobal.key(), mapTypeIPv6AnyGlobal.value())
+		if err != nil {
+			return nil, fmt.Errorf("failed to open v6 any map: %w", err)
+		}
+
+		tcpSize = int(globalV6TCP.MaxEntries())
+		anySize = int(globalV6Any.MaxEntries())
+		return NewPerClusterCTMaps(ipv4, ipv6, tcpSize, anySize), nil
+	}
+
+	return nil, errors.New("failed to open per cluster maps - no global map found to retrieve map size")
 }
 
 func (gm *perClusterCTMaps) OpenOrCreate() (err error) {
@@ -257,13 +311,13 @@ func (gm *perClusterCTMaps) foreach(fn func(om *PerClusterCTMap) error) error {
 	return errors.Join(errs...)
 }
 
-func newPerClusterCTMap(m mapType) *PerClusterCTMap {
+func newPerClusterCTMap(m mapType, maxEntries int) *PerClusterCTMap {
 	keySize := reflect.Indirect(reflect.ValueOf(m.key())).Type().Size()
 	inner := &ebpf.MapSpec{
 		Type:       ebpf.LRUHash,
 		KeySize:    uint32(keySize),
 		ValueSize:  uint32(SizeofCtEntry),
-		MaxEntries: uint32(m.maxEntries()),
+		MaxEntries: uint32(maxEntries),
 	}
 
 	om := bpf.NewMapWithInnerSpec(
@@ -284,7 +338,7 @@ func newPerClusterCTMap(m mapType) *PerClusterCTMap {
 
 func (om *PerClusterCTMap) newInnerMap(clusterID uint32) *Map {
 	name := ClusterInnerMapName(om.m, clusterID)
-	im := newMap(name, om.m, nil)
+	im := newMap(name, om.m, nil, mapsize.LimitTableMax)
 	im.clusterID = clusterID
 	return im
 }

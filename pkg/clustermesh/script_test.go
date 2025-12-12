@@ -48,6 +48,7 @@ import (
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/maglev"
+	mapsizecell "github.com/cilium/cilium/pkg/maps/mapsize/cell"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/node"
 	nodemanager "github.com/cilium/cilium/pkg/node/manager"
@@ -94,6 +95,7 @@ func TestScript(t *testing.T) {
 			ipset.Cell,
 			dial.ServiceResolverCell,
 			metrics.Cell,
+			mapsizecell.Cell,
 
 			cell.Config(cmtypes.DefaultClusterInfo),
 			cell.Invoke(cmtypes.ClusterInfo.InitClusterIDMax, cmtypes.ClusterInfo.Validate),
@@ -149,11 +151,11 @@ func TestScript(t *testing.T) {
 			cell.Invoke(func(client kvstore.Client) {
 				clusterConfig := []byte("endpoints:\n- in-memory\n")
 				config1 := path.Join(configDir, "cluster1")
-				require.NoError(t, os.WriteFile(config1, clusterConfig, 0644), "Failed to write config file for cluster1")
+				require.NoError(t, os.WriteFile(config1, clusterConfig, 0o644), "Failed to write config file for cluster1")
 				config2 := path.Join(configDir, "cluster2")
-				require.NoError(t, os.WriteFile(config2, clusterConfig, 0644), "Failed to write config file for cluster2")
+				require.NoError(t, os.WriteFile(config2, clusterConfig, 0o644), "Failed to write config file for cluster2")
 				config3 := path.Join(configDir, "cluster3")
-				require.NoError(t, os.WriteFile(config3, clusterConfig, 0644), "Failed to write config file for cluster3")
+				require.NoError(t, os.WriteFile(config3, clusterConfig, 0o644), "Failed to write config file for cluster3")
 
 				for i, name := range []string{"cluster1", "cluster2", "cluster3"} {
 					config := cmtypes.CiliumClusterConfig{

@@ -10,6 +10,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/kpr"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/tuple"
@@ -23,7 +24,7 @@ var ErrMapDisabled = fmt.Errorf("nat map is disabled")
 var Cell = cell.Module(
 	"nat-maps",
 	"NAT Maps",
-	cell.Provide(func(lc cell.Lifecycle, registry *metrics.Registry, cfg *option.DaemonConfig, kprCfg kpr.KPRConfig) (bpf.MapOut[NatMap4], bpf.MapOut[NatMap6]) {
+	cell.Provide(func(lc cell.Lifecycle, registry *metrics.Registry, cfg *option.DaemonConfig, kprCfg kpr.KPRConfig, bpfMapsSizeConfig mapsize.BPFMapsSizeConfig) (bpf.MapOut[NatMap4], bpf.MapOut[NatMap6]) {
 		var out4 bpf.MapOut[NatMap4]
 		var out6 bpf.MapOut[NatMap6]
 		var ipv4Nat, ipv6Nat *Map
@@ -32,11 +33,12 @@ var Cell = cell.Module(
 			return out4, out6
 		}
 
-		ipv4Nat, ipv6Nat = GlobalMaps(registry, cfg.EnableIPv4, cfg.EnableIPv6)
-		if ipv4Nat != nil {
+		if cfg.EnableIPv4 {
+			ipv4Nat = NewMap(registry, MapNameSnat4Global, IPv4, bpfMapsSizeConfig.GetBPFNATGlobalMax())
 			out4 = bpf.NewMapOut[NatMap4](ipv4Nat)
 		}
-		if ipv6Nat != nil {
+		if cfg.EnableIPv6 {
+			ipv6Nat = NewMap(registry, MapNameSnat6Global, IPv6, bpfMapsSizeConfig.GetBPFNATGlobalMax())
 			out6 = bpf.NewMapOut[NatMap6](ipv6Nat)
 		}
 
@@ -56,12 +58,12 @@ var Cell = cell.Module(
 			},
 			OnStop: func(hc cell.HookContext) error {
 				if ipv4Nat != nil {
-					if err := ipv4Nat.Map.Close(); err != nil {
+					if err := ipv4Nat.Close(); err != nil {
 						return err
 					}
 				}
 				if ipv6Nat != nil {
-					if err := ipv6Nat.Map.Close(); err != nil {
+					if err := ipv6Nat.Close(); err != nil {
 						return err
 					}
 				}

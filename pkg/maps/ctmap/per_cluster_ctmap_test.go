@@ -12,6 +12,7 @@ import (
 
 	"github.com/cilium/cilium/pkg/bpf"
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/testutils"
 )
 
@@ -29,13 +30,13 @@ func setup(tb testing.TB) {
 func BenchmarkPrivilegedPerClusterCTMapUpdate(b *testing.B) {
 	setup(b)
 
-	om := newPerClusterCTMap(mapTypeIPv4TCPGlobal)
+	om := newPerClusterCTMap(mapTypeIPv4TCPGlobal, mapsize.LimitTableMax)
 	require.NotNil(b, om, "Failed to initialize map")
 
 	require.NoError(b, om.OpenOrCreate(), "Failed to create outer map")
 	b.Cleanup(func() {
 		require.NoError(b, om.Close())
-		require.NoError(b, CleanupPerClusterCTMaps(true, true), "Failed to cleanup maps")
+		require.NoError(b, CleanupPerClusterCTMaps(true, true, mapsize.LimitTableMax, mapsize.LimitTableMax), "Failed to cleanup maps")
 	})
 
 	for b.Loop() {
@@ -48,13 +49,13 @@ func BenchmarkPrivilegedPerClusterCTMapUpdate(b *testing.B) {
 func BenchmarkPrivilegedPerClusterCTMapLookup(b *testing.B) {
 	setup(b)
 
-	om := newPerClusterCTMap(mapTypeIPv4TCPGlobal)
+	om := newPerClusterCTMap(mapTypeIPv4TCPGlobal, mapsize.LimitTableMax)
 	require.NotNil(b, om, "Failed to initialize map")
 
 	require.NoError(b, om.OpenOrCreate(), "Failed to create outer map")
 	b.Cleanup(func() {
 		require.NoError(b, om.Close())
-		require.NoError(b, CleanupPerClusterCTMaps(true, true), "Failed to cleanup maps")
+		require.NoError(b, CleanupPerClusterCTMaps(true, true, mapsize.LimitTableMax, mapsize.LimitTableMax), "Failed to cleanup maps")
 	})
 
 	require.NoError(b, om.createClusterCTMap(1), "Failed to create map")
@@ -72,7 +73,7 @@ func TestPrivilegedPerClusterCTMaps(t *testing.T) {
 	setup(t)
 	logger := hivetest.Logger(t)
 
-	maps := NewPerClusterCTMaps(true, true)
+	maps := NewPerClusterCTMaps(true, true, mapsize.LimitTableMax, mapsize.LimitTableMax)
 	for _, om := range []*PerClusterCTMap{maps.tcp4, maps.any4, maps.tcp6, maps.any6} {
 		require.NotNil(t, om, "Failed to initialize maps")
 	}
@@ -84,19 +85,19 @@ func TestPrivilegedPerClusterCTMaps(t *testing.T) {
 
 	t.Cleanup(func() {
 		require.NoError(t, maps.Close())
-		require.NoError(t, CleanupPerClusterCTMaps(true, true), "Failed to cleanup maps")
+		require.NoError(t, CleanupPerClusterCTMaps(true, true, mapsize.LimitTableMax, mapsize.LimitTableMax), "Failed to cleanup maps")
 	})
 
 	// ClusterID 0 should never be used
 	require.Error(t, maps.CreateClusterCTMaps(0), "ClusterID 0 should never be used")
 	require.Error(t, maps.DeleteClusterCTMaps(0), "ClusterID 0 should never be used")
-	_, err := GetClusterCTMaps(0, true, true)
+	_, err := GetClusterCTMaps(0, true, true, mapsize.LimitTableMax, mapsize.LimitTableMax)
 	require.Error(t, err, "ClusterID 0 should never be used")
 
 	// ClusterID beyond the ClusterIDMax should never be used
 	require.Error(t, maps.CreateClusterCTMaps(cmtypes.ClusterIDMax+1), "ClusterID beyond the ClusterIDMax should never be used")
 	require.Error(t, maps.DeleteClusterCTMaps(cmtypes.ClusterIDMax+1), "ClusterID beyond the ClusterIDMax should never be used")
-	_, err = GetClusterCTMaps(cmtypes.ClusterIDMax+1, true, true)
+	_, err = GetClusterCTMaps(cmtypes.ClusterIDMax+1, true, true, mapsize.LimitTableMax, mapsize.LimitTableMax)
 	require.Error(t, err, "ClusterID beyond the ClusterIDMax should never be used")
 
 	// Basic update
@@ -115,7 +116,7 @@ func TestPrivilegedPerClusterCTMaps(t *testing.T) {
 		}
 
 		// After update, it should be possible to get and open the inner map
-		ims, err := GetClusterCTMaps(id, true, true)
+		ims, err := GetClusterCTMaps(id, true, true, mapsize.LimitTableMax, mapsize.LimitTableMax)
 		require.Len(t, ims, 4, "Retrieved an incorrect number of inner maps")
 		for _, im := range ims {
 			require.NotNil(t, im, "Failed to get inner map (id=%v, map=%v)", id, im.Name())
@@ -147,7 +148,7 @@ func TestPrivilegedPerClusterCTMaps(t *testing.T) {
 		}
 
 		// After delete, it should be no longer be possible to open the inner map
-		ims, err := GetClusterCTMaps(id, true, true)
+		ims, err := GetClusterCTMaps(id, true, true, mapsize.LimitTableMax, mapsize.LimitTableMax)
 		require.Len(t, ims, 4, "Retrieved an incorrect number of inner maps")
 		for _, im := range ims {
 			require.NotNil(t, im, "Failed to get inner map (id=%v, map=%v)", id, im.Name())
@@ -193,20 +194,20 @@ func TestPrivilegedPerClusterCTMapsCleanup(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Pick up edge and middle values since filling all slots consumes too much memory.
 			ids := []uint32{1, 128, cmtypes.ClusterIDMax}
-			gm := NewPerClusterCTMaps(true, true)
+			gm := NewPerClusterCTMaps(true, true, mapsize.LimitTableMax, mapsize.LimitTableMax)
 
 			require.NoError(t, gm.OpenOrCreate(), "Failed to create outer maps")
 			t.Cleanup(func() {
 				require.NoError(t, gm.Close())
 				// This also ensures that the cleanup succeeds even if the outer maps don't exist
-				require.NoError(t, CleanupPerClusterCTMaps(true, true), "Failed to cleanup maps")
+				require.NoError(t, CleanupPerClusterCTMaps(true, true, mapsize.LimitTableMax, mapsize.LimitTableMax), "Failed to cleanup maps")
 			})
 
 			for _, id := range ids {
 				require.NoError(t, gm.CreateClusterCTMaps(id), "Failed to create maps (id=%v)", id)
 			}
 
-			require.NoError(t, CleanupPerClusterCTMaps(tt.ipv4, tt.ipv6), "Failed to cleanup maps")
+			require.NoError(t, CleanupPerClusterCTMaps(tt.ipv4, tt.ipv6, mapsize.LimitTableMax, mapsize.LimitTableMax), "Failed to cleanup maps")
 
 			for _, typ := range tt.present {
 				for _, id := range ids {

@@ -13,6 +13,7 @@ import (
 	"github.com/cilium/cilium/pkg/kpr"
 	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/maglev"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
 	"github.com/cilium/cilium/pkg/svcrouteconfig"
 )
@@ -197,6 +198,8 @@ type LocalNodeConfiguration struct {
 
 	// LBConfig holds the configuration options for load-balancing
 	LBConfig loadbalancer.Config
+
+	BPFMapsSizeConfig mapsize.BPFMapsSizeConfig
 
 	// Maglev configuration provides the maglev table sizes and seeds for
 	// the BPF programs.

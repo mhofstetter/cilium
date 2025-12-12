@@ -8,8 +8,9 @@ import (
 
 	"github.com/cilium/hive/hivetest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
-	"github.com/cilium/cilium/pkg/option"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 )
 
 func TestNewConfig_NodePortRange(t *testing.T) {
@@ -93,7 +94,10 @@ func TestNewConfig_NodePortRange(t *testing.T) {
 			log := hivetest.Logger(t)
 			ucfg := DefaultUserConfig
 			ucfg.NodePortRange = tt.npRange
-			cfg, err := NewConfig(log, ucfg, DeprecatedConfig{}, &option.DaemonConfig{})
+			mCfg, err := mapsize.NewBPFMapsSizeConfig(hivetest.Logger(t), mapsize.BPFMapsSizeFlags{BPFAuthMapMax: 256, BPFFragmentsMapMax: 256}, 1, 1, 1, 1)
+			require.NoError(t, err)
+
+			cfg, err := NewConfig(log, ucfg, DeprecatedConfig{}, mCfg)
 
 			if tt.want.wantErr {
 				assert.Error(t, err)

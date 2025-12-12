@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/cilium/hive/cell"
 	"github.com/spf13/pflag"
 
-	"github.com/cilium/hive/cell"
-
 	"github.com/cilium/cilium/pkg/kpr"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/time"
 )
@@ -339,7 +339,7 @@ func (def UserConfig) Flags(flags *pflag.FlagSet) {
 
 // NewConfig takes the user-provided configuration, validates and processes it to produce the final
 // configuration for load-balancing.
-func NewConfig(log *slog.Logger, userConfig UserConfig, deprecatedConfig DeprecatedConfig, dcfg *option.DaemonConfig) (cfg Config, err error) {
+func NewConfig(log *slog.Logger, userConfig UserConfig, deprecatedConfig DeprecatedConfig, bpfMapsSizeConfig mapsize.BPFMapsSizeConfig) (cfg Config, err error) {
 	cfg.UserConfig = userConfig
 
 	if cfg.LBMapEntries <= 0 {
@@ -364,18 +364,22 @@ func NewConfig(log *slog.Logger, userConfig UserConfig, deprecatedConfig Depreca
 
 	// Dynamically size the SockRevNat map if not set by the user.
 	if cfg.LBSockRevNatEntries == 0 {
-		getEntries := dcfg.GetDynamicSizeCalculator(log)
-		cfg.LBSockRevNatEntries = getEntries(option.SockRevNATMapEntriesDefault, option.LimitTableAutoSockRevNatMin, option.LimitTableMax)
+		dynamicSize, err := bpfMapsSizeConfig.GetDynamicSize(mapsize.SockRevNATMapEntriesDefault, mapsize.LimitTableAutoSockRevNatMin, mapsize.LimitTableMax)
+		if err != nil {
+			return Config{}, err
+		}
+
+		cfg.LBSockRevNatEntries = dynamicSize
 		log.Info(fmt.Sprintf("option %s set by dynamic sizing to %v", LBSockRevNatEntriesName, cfg.LBSockRevNatEntries)) // FIXME
 	}
 
-	if cfg.LBSockRevNatEntries < option.LimitTableMin {
+	if cfg.LBSockRevNatEntries < mapsize.LimitTableMin {
 		return Config{}, fmt.Errorf("specified Socket Reverse NAT table size %d must be greater or equal to %d",
-			cfg.LBSockRevNatEntries, option.LimitTableMin)
+			cfg.LBSockRevNatEntries, mapsize.LimitTableMin)
 	}
-	if cfg.LBSockRevNatEntries > option.LimitTableMax {
+	if cfg.LBSockRevNatEntries > mapsize.LimitTableMax {
 		return Config{}, fmt.Errorf("specified Socket Reverse NAT tables size %d must not exceed maximum %d",
-			cfg.LBSockRevNatEntries, option.LimitTableMax)
+			cfg.LBSockRevNatEntries, mapsize.LimitTableMax)
 	}
 
 	// Use [cfg.LBMapEntries] for map size if not overridden.

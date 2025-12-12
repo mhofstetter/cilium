@@ -79,13 +79,17 @@ func parseArgs(args []string) (string, uint32, error) {
 func getMaps(t string, id uint32) []ctmap.CtMap {
 	var m []*ctmap.Map
 	var r []ctmap.CtMap
+	var err error
 	ipv4, ipv6 := getIpEnableStatuses()
 	if t == "global" {
-		m = ctmap.Maps(ipv4, ipv6)
+		m, err = ctmap.Maps(log, ipv4, ipv6)
+		if err != nil {
+			Fatalf("failed to read ct map: %s", err)
+		}
 	}
 	if t == "cluster" {
 		// Ignoring the error, as we already validated the cluster ID.
-		m, _ = ctmap.GetClusterCTMaps(id, ipv4, ipv6)
+		m, _ = ctmap.OpenClusterCTMaps(log, id, ipv4, ipv6)
 	}
 	for _, v := range m {
 		r = append(r, v)

@@ -51,13 +51,10 @@ import (
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/labelsfilter"
-	lbmaps "github.com/cilium/cilium/pkg/loadbalancer/maps"
 	"github.com/cilium/cilium/pkg/loadinfo"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
-	"github.com/cilium/cilium/pkg/maps/ctmap"
-	"github.com/cilium/cilium/pkg/maps/nat"
-	"github.com/cilium/cilium/pkg/maps/neighborsmap"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/metrics"
 	monitorAgent "github.com/cilium/cilium/pkg/monitor/agent"
 	monitorAPI "github.com/cilium/cilium/pkg/monitor/api"
@@ -306,9 +303,6 @@ func InitGlobalFlags(logger *slog.Logger, cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.Bool(option.EnableTracing, false, "Enable tracing while determining policy (debugging)")
 	option.BindEnv(vp, option.EnableTracing)
-
-	flags.Bool(option.BPFDistributedLRU, defaults.BPFDistributedLRU, "Enable per-CPU BPF LRU backend memory")
-	option.BindEnv(vp, option.BPFDistributedLRU)
 
 	flags.Bool(option.BPFConntrackAccounting, defaults.BPFConntrackAccounting, "Enable CT accounting for packets and bytes (default false)")
 	option.BindEnv(vp, option.BPFConntrackAccounting)
@@ -570,15 +564,6 @@ func InitGlobalFlags(logger *slog.Logger, cmd *cobra.Command, vp *viper.Viper) {
 	flags.Bool(option.PreAllocateMapsName, defaults.PreAllocateMaps, "Enable BPF map pre-allocation")
 	option.BindEnv(vp, option.PreAllocateMapsName)
 
-	flags.Int(option.AuthMapEntriesName, option.AuthMapEntriesDefault, "Maximum number of entries in auth map")
-	option.BindEnv(vp, option.AuthMapEntriesName)
-
-	flags.Int(option.CTMapEntriesGlobalTCPName, option.CTMapEntriesGlobalTCPDefault, "Maximum number of entries in TCP CT table")
-	option.BindEnvWithLegacyEnvFallback(vp, option.CTMapEntriesGlobalTCPName, "CILIUM_GLOBAL_CT_MAX_TCP")
-
-	flags.Int(option.CTMapEntriesGlobalAnyName, option.CTMapEntriesGlobalAnyDefault, "Maximum number of entries in non-TCP CT table")
-	option.BindEnvWithLegacyEnvFallback(vp, option.CTMapEntriesGlobalAnyName, "CILIUM_GLOBAL_CT_MAX_ANY")
-
 	flags.Duration(option.CTMapEntriesTimeoutTCPName, 8000*time.Second, "Timeout for established entries in TCP CT table")
 	option.BindEnv(vp, option.CTMapEntriesTimeoutTCPName)
 
@@ -606,18 +591,9 @@ func InitGlobalFlags(logger *slog.Logger, cmd *cobra.Command, vp *viper.Viper) {
 	flags.StringSlice(option.MonitorAggregationFlags, option.MonitorAggregationFlagsDefault, "TCP flags that trigger monitor reports when monitor aggregation is enabled")
 	option.BindEnv(vp, option.MonitorAggregationFlags)
 
-	flags.Int(option.NATMapEntriesGlobalName, option.NATMapEntriesGlobalDefault, "Maximum number of entries for the global BPF NAT table")
-	option.BindEnv(vp, option.NATMapEntriesGlobalName)
-
-	flags.Int(option.NeighMapEntriesGlobalName, option.NATMapEntriesGlobalDefault, "Maximum number of entries for the global BPF neighbor table")
-	option.BindEnv(vp, option.NeighMapEntriesGlobalName)
-
 	flags.Duration(option.PolicyMapFullReconciliationIntervalName, 15*time.Minute, "Interval for full reconciliation of endpoint policy map")
 	option.BindEnv(vp, option.PolicyMapFullReconciliationIntervalName)
 	flags.MarkHidden(option.PolicyMapFullReconciliationIntervalName)
-
-	flags.Float64(option.MapEntriesGlobalDynamicSizeRatioName, 0.0025, "Ratio (0.0-1.0] of total system memory to use for dynamic sizing of CT, NAT and policy BPF maps")
-	option.BindEnv(vp, option.MapEntriesGlobalDynamicSizeRatioName)
 
 	flags.String(option.CMDRef, "", "Path to cmdref output directory")
 	flags.MarkHidden(option.CMDRef)
@@ -690,9 +666,6 @@ func InitGlobalFlags(logger *slog.Logger, cmd *cobra.Command, vp *viper.Viper) {
 
 	flags.Bool(option.EnableIPv6FragmentsTrackingName, defaults.EnableIPv6FragmentsTracking, "Enable IPv6 fragments tracking for L4-based lookups")
 	option.BindEnv(vp, option.EnableIPv6FragmentsTrackingName)
-
-	flags.Int(option.FragmentsMapEntriesName, defaults.FragmentsMapEntries, "Maximum number of entries in fragments tracking map")
-	option.BindEnv(vp, option.FragmentsMapEntriesName)
 
 	flags.Int(option.BPFEventsDefaultRateLimit, 0, fmt.Sprintf("Limit of average number of messages per second that can be written to BPF events map (if set, --%s value must also be specified). If both --%s and --%s are 0 or not specified, no limit is imposed.", option.BPFEventsDefaultBurstLimit, option.BPFEventsDefaultRateLimit, option.BPFEventsDefaultBurstLimit))
 	flags.MarkHidden(option.BPFEventsDefaultRateLimit)
@@ -849,14 +822,6 @@ func restoreExecPermissions(searchDir string, patterns ...string) error {
 }
 
 func initDaemonConfigAndLogging(vp *viper.Viper) {
-	option.Config.SetMapElementSizes(
-		// for the conntrack and NAT element size we assume the largest possible
-		// key size, i.e. IPv6 keys
-		ctmap.SizeofCtKey6Global+ctmap.SizeofCtEntry,
-		nat.SizeofNatKey6+nat.SizeofNatEntry6,
-		neighborsmap.SizeofNeighKey6+neighborsmap.SizeOfNeighValue,
-		lbmaps.SizeofSockRevNat6Key+lbmaps.SizeofSockRevNat6Value)
-
 	option.Config.SetupLogging(vp, "cilium-agent")
 
 	// slogloggercheck: using default logger for configuration initialization
@@ -915,7 +880,7 @@ func initEnv(logger *slog.Logger, vp *viper.Viper) {
 	if option.Config.PreAllocateMaps {
 		bpf.EnableMapPreAllocation()
 	}
-	if option.Config.BPFDistributedLRU {
+	if vp.GetBool(mapsize.BPFDistributedLRUFlagName) {
 		bpf.EnableMapDistributedLRU()
 	}
 

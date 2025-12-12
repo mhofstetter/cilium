@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math"
 	"net/netip"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/cilium/cilium/pkg/bpf"
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/maps/nat"
 	"github.com/cilium/cilium/pkg/maps/timestamp"
 	"github.com/cilium/cilium/pkg/metrics"
@@ -138,7 +140,7 @@ func InitMapInfo(nat4 nat.NatMap4, nat6 nat.NatMap6) {
 // Map represents an instance of a BPF connection tracking map.
 // It also implements the CtMap interface.
 type Map struct {
-	bpf.Map
+	*bpf.Map
 
 	mapType mapType
 
@@ -271,10 +273,10 @@ func (m *Map) DumpEntriesWithTimeDiff(clockSource *models.ClockSource) (string, 
 // Count batch dumps the Map m and returns the count of the entries.
 func (m *Map) Count(ctx context.Context) (count int, err error) {
 	if m.mapType.isIPv4() {
-		iter := bpf.NewBatchIterator[tuple.TupleKey4, CtEntry](&m.Map)
+		iter := bpf.NewBatchIterator[tuple.TupleKey4, CtEntry](m.Map)
 		return bpf.CountAll(ctx, iter)
 	} else {
-		iter := bpf.NewBatchIterator[tuple.TupleKey6, CtEntry](&m.Map)
+		iter := bpf.NewBatchIterator[tuple.TupleKey6, CtEntry](m.Map)
 		return bpf.CountAll(ctx, iter)
 	}
 }
@@ -291,13 +293,13 @@ func OpenCTMap(m CtMap) (path string, err error) {
 }
 
 // newMap creates a new CT map of the specified type with the specified name.
-func newMap(mapName string, m mapType, registry *metrics.Registry) *Map {
+func newMap(mapName string, m mapType, registry *metrics.Registry, maxEntries int) *Map {
 	result := &Map{
-		Map: *bpf.NewMap(mapName,
+		Map: bpf.NewMap(mapName,
 			ebpf.LRUHash,
 			m.key(),
 			m.value(),
-			m.maxEntries(),
+			maxEntries,
 			0,
 		).WithPressureMetric(registry),
 		mapType: m,
@@ -325,7 +327,7 @@ func (m *Map) doGCForFamily(filter GCFilter, next4, next6 func(GCEvent), ipv6 bo
 		natMap = ctMap.natMap
 	} else {
 		// per-cluster map handling
-		natm, err := nat.GetClusterNATMap(m.clusterID, family)
+		natm, err := nat.GetClusterNATMap(m.clusterID, family, mapsize.LimitTableMax)
 		if err != nil {
 			m.Logger.Error("Unable to get per-cluster NAT map", logfields.Error, err)
 		} else {
@@ -385,7 +387,7 @@ func (m *Map) purgeCtEntry(key CtKey, entry *CtEntry, natMap *nat.Map, next func
 
 func iterate[KT any, VT any, KP bpf.KeyPointer[KT], VP bpf.ValuePointer[VT]](m *Map, stats *gcStats, filterCallback func(key bpf.MapKey, value bpf.MapValue)) error {
 	ctx := context.Background()
-	iter := bpf.NewBatchIterator[KT, VT, KP, VP](&m.Map)
+	iter := bpf.NewBatchIterator[KT, VT, KP, VP](m.Map)
 	for k, v := range iter.IterateAll(ctx) {
 		filterCallback(k, v)
 	}
@@ -534,7 +536,7 @@ func PurgeOrphanNATEntries(ctMapTCP, ctMapAny *Map) *NatGCStats {
 			family = nat.IPv6
 		}
 
-		natm, err := nat.GetClusterNATMap(ctMapTCP.clusterID, family)
+		natm, err := nat.GetClusterNATMap(ctMapTCP.clusterID, family, mapsize.LimitTableMax)
 		if err != nil {
 			ctMapTCP.Logger.Error("Unable to get per-cluster NAT map", logfields.Error, err)
 		} else {
@@ -634,16 +636,35 @@ func (m *Map) Flush(next4, next6 func(GCEvent)) int {
 //
 // The returned maps are not yet opened.
 //
-// This should only be used from components which aren't capable of using hive - mainly the Cilium CLI.
-func Maps(ipv4, ipv6 bool) []*Map {
+// This should only be used from components which aren't capable of using hive - mainly the cilium-dbg.
+func Maps(logger *slog.Logger, ipv4, ipv6 bool) ([]*Map, error) {
 	result := make([]*Map, 0, mapCount)
 	if ipv4 {
-		result = append(result, newMap(MapNameTCP4Global, mapTypeIPv4TCPGlobal, nil))
-		result = append(result, newMap(MapNameAny4Global, mapTypeIPv4AnyGlobal, nil))
+		v4TCP, err := bpf.OpenMap(bpf.MapPath(logger, MapNameTCP4Global), mapTypeIPv4TCPGlobal.key(), mapTypeIPv4TCPGlobal.value())
+		if err != nil {
+			return nil, fmt.Errorf("failed to open v4 tcp map: %w", err)
+		}
+		result = append(result, &Map{Map: v4TCP, mapType: mapTypeIPv4TCPGlobal})
+
+		v4Any, err := bpf.OpenMap(bpf.MapPath(logger, MapNameAny4Global), mapTypeIPv4AnyGlobal.key(), mapTypeIPv4AnyGlobal.value())
+		if err != nil {
+			return nil, fmt.Errorf("failed to open v4 any map: %w", err)
+		}
+		result = append(result, &Map{Map: v4Any, mapType: mapTypeIPv4AnyGlobal})
 	}
 	if ipv6 {
-		result = append(result, newMap(MapNameTCP6Global, mapTypeIPv6TCPGlobal, nil))
-		result = append(result, newMap(MapNameAny6Global, mapTypeIPv6AnyGlobal, nil))
+		v6TCP, err := bpf.OpenMap(bpf.MapPath(logger, MapNameTCP6Global), mapTypeIPv6TCPGlobal.key(), mapTypeIPv6TCPGlobal.value())
+		if err != nil {
+			return nil, fmt.Errorf("failed to open v6 tcp map: %w", err)
+		}
+		result = append(result, &Map{Map: v6TCP, mapType: mapTypeIPv6TCPGlobal})
+
+		v6Any, err := bpf.OpenMap(bpf.MapPath(logger, MapNameAny6Global), mapTypeIPv6AnyGlobal.key(), mapTypeIPv6AnyGlobal.value())
+		if err != nil {
+			return nil, fmt.Errorf("failed to open v6 any map: %w", err)
+		}
+		result = append(result, &Map{Map: v6Any, mapType: mapTypeIPv6AnyGlobal})
 	}
-	return result
+
+	return result, nil
 }

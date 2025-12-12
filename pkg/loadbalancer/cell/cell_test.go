@@ -19,6 +19,7 @@ import (
 	k8sClient "github.com/cilium/cilium/pkg/k8s/client/testutils"
 	"github.com/cilium/cilium/pkg/kpr"
 	"github.com/cilium/cilium/pkg/maglev"
+	mapsizecell "github.com/cilium/cilium/pkg/maps/mapsize/cell"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
@@ -28,7 +29,6 @@ import (
 // TestCell checks that 'Cell' can be instantiated with the defaults and it
 // also shows what are the minimal dependencies to it for testing.
 func TestCell(t *testing.T) {
-
 	h := hive.New(
 		k8sClient.FakeClientCell(),
 		daemonk8s.ResourcesCell,
@@ -38,6 +38,7 @@ func TestCell(t *testing.T) {
 		node.LocalNodeStoreTestCell,
 		metrics.Cell,
 		kpr.Cell,
+		mapsizecell.Cell,
 		Cell,
 		cell.Provide(
 			func() cmtypes.ClusterInfo { return cmtypes.ClusterInfo{} },

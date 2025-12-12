@@ -34,6 +34,7 @@ import (
 	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maglev"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/maps/policymap"
 	monitoragent "github.com/cilium/cilium/pkg/monitor/agent"
 	"github.com/cilium/cilium/pkg/node"
@@ -71,11 +72,12 @@ type statusParams struct {
 	JobGroup  job.Group
 	Logger    *slog.Logger
 
-	Config       Config
-	DaemonConfig *option.DaemonConfig
-	LBConfig     loadbalancer.Config
-	KPRConfig    kpr.KPRConfig
-	IPsecConfig  datapath.IPsecConfig
+	Config            Config
+	DaemonConfig      *option.DaemonConfig
+	BPFMapsSizeConfig mapsize.BPFMapsSizeConfig
+	LBConfig          loadbalancer.Config
+	KPRConfig         kpr.KPRConfig
+	IPsecConfig       datapath.IPsecConfig
 
 	DaemonConfigPromise promise.Promise[*option.DaemonConfig]
 

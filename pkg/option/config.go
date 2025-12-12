@@ -21,10 +21,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/cilium/ebpf"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/mackerelio/go-osstat/memory"
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -40,7 +38,6 @@ import (
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/time"
-	"github.com/cilium/cilium/pkg/util"
 	"github.com/cilium/cilium/pkg/version"
 )
 
@@ -82,9 +79,6 @@ const (
 	// AnnotateK8sNode enables annotating a kubernetes node while bootstrapping
 	// the daemon, which can also be disabled using this option.
 	AnnotateK8sNode = "annotate-k8s-node"
-
-	// BPFDistributedLRU enables per-CPU distributed backend memory
-	BPFDistributedLRU = "bpf-distributed-lru"
 
 	// BPFRoot is the Path to BPF filesystem
 	BPFRoot = "bpf-root"
@@ -473,36 +467,8 @@ const (
 	// insert our plugin configuration
 	CNIChainingTarget = "cni-chaining-target"
 
-	// AuthMapEntriesMin defines the minimum auth map limit.
-	AuthMapEntriesMin = 1 << 8
-
-	// AuthMapEntriesMax defines the maximum auth map limit.
-	AuthMapEntriesMax = 1 << 24
-
-	// AuthMapEntriesDefault defines the default auth map limit.
-	AuthMapEntriesDefault = 1 << 19
-
 	// BPFConntrackAccounting controls whether CT accounting for packets and bytes is enabled
 	BPFConntrackAccountingDefault = false
-
-	// AuthMapEntriesName configures max entries for BPF auth map.
-	AuthMapEntriesName = "bpf-auth-map-max"
-
-	// CTMapEntriesGlobalTCPDefault is the default maximum number of entries
-	// in the TCP CT table.
-	CTMapEntriesGlobalTCPDefault = 2 << 18 // 512Ki
-
-	// CTMapEntriesGlobalAnyDefault is the default maximum number of entries
-	// in the non-TCP CT table.
-	CTMapEntriesGlobalAnyDefault = 2 << 17 // 256Ki
-
-	// CTMapEntriesGlobalTCPName configures max entries for the TCP CT
-	// table.
-	CTMapEntriesGlobalTCPName = "bpf-ct-global-tcp-max"
-
-	// CTMapEntriesGlobalAnyName configures max entries for the non-TCP CT
-	// table.
-	CTMapEntriesGlobalAnyName = "bpf-ct-global-any-max"
 
 	// CTMapEntriesTimeout* name option and default value mappings
 	CTMapEntriesTimeoutSYNName         = "bpf-ct-timeout-regular-tcp-syn"
@@ -512,60 +478,6 @@ const (
 	CTMapEntriesTimeoutSVCTCPName      = "bpf-ct-timeout-service-tcp"
 	CTMapEntriesTimeoutSVCTCPGraceName = "bpf-ct-timeout-service-tcp-grace"
 	CTMapEntriesTimeoutSVCAnyName      = "bpf-ct-timeout-service-any"
-
-	// NATMapEntriesGlobalDefault holds the default size of the NAT map
-	// and is 2/3 of the full CT size as a heuristic
-	NATMapEntriesGlobalDefault = int((CTMapEntriesGlobalTCPDefault + CTMapEntriesGlobalAnyDefault) * 2 / 3)
-
-	// SockRevNATMapEntriesDefault holds the default size of the SockRev NAT map
-	// and is the same size of CTMapEntriesGlobalAnyDefault as a heuristic given
-	// that sock rev NAT is mostly used for UDP and getpeername only.
-	SockRevNATMapEntriesDefault = CTMapEntriesGlobalAnyDefault
-
-	// MapEntriesGlobalDynamicSizeRatioName is the name of the option to
-	// set the ratio of total system memory to use for dynamic sizing of the
-	// CT, NAT, Neighbor and SockRevNAT BPF maps.
-	MapEntriesGlobalDynamicSizeRatioName = "bpf-map-dynamic-size-ratio"
-
-	// LimitTableAutoGlobalTCPMin defines the minimum TCP CT table limit for
-	// dynamic size ration calculation.
-	LimitTableAutoGlobalTCPMin = 1 << 17 // 128Ki entries
-
-	// LimitTableAutoGlobalAnyMin defines the minimum UDP CT table limit for
-	// dynamic size ration calculation.
-	LimitTableAutoGlobalAnyMin = 1 << 16 // 64Ki entries
-
-	// LimitTableAutoNatGlobalMin defines the minimum NAT limit for dynamic size
-	// ration calculation.
-	LimitTableAutoNatGlobalMin = 1 << 17 // 128Ki entries
-
-	// LimitTableAutoSockRevNatMin defines the minimum SockRevNAT limit for
-	// dynamic size ration calculation.
-	LimitTableAutoSockRevNatMin = 1 << 16 // 64Ki entries
-
-	// LimitTableMin defines the minimum CT or NAT table limit
-	LimitTableMin = 1 << 10 // 1Ki entries
-
-	// LimitTableMax defines the maximum CT or NAT table limit
-	LimitTableMax = 1 << 24 // 16Mi entries (~1GiB of entries per map)
-
-	// PolicyMapMin defines the minimum policy map limit.
-	PolicyMapMin = 1 << 8
-
-	// PolicyMapMax defines the maximum policy map limit.
-	PolicyMapMax = 1 << 16
-
-	// FragmentsMapMin defines the minimum fragments map limit.
-	FragmentsMapMin = 1 << 8
-
-	// FragmentsMapMax defines the maximum fragments map limit.
-	FragmentsMapMax = 1 << 16
-
-	// NATMapEntriesGlobalName configures max entries for BPF NAT table
-	NATMapEntriesGlobalName = "bpf-nat-global-max"
-
-	// NeighMapEntriesGlobalName configures max entries for BPF neighbor table
-	NeighMapEntriesGlobalName = "bpf-neigh-global-max"
 
 	// PolicyMapFullReconciliationInterval sets the interval for performing the full
 	// reconciliation of the endpoint policy map.
@@ -867,10 +779,6 @@ const (
 	// EnableIPv6FragmentsTrackingName is the name of the option to enable
 	// IPv6 fragments tracking for L4-based lookups. Needs LRU map support.
 	EnableIPv6FragmentsTrackingName = "enable-ipv6-fragment-tracking"
-
-	// FragmentsMapEntriesName configures max entries for BPF fragments
-	// tracking map.
-	FragmentsMapEntriesName = "bpf-fragments-map-max"
 
 	// K8sEnableAPIDiscovery enables Kubernetes API discovery
 	K8sEnableAPIDiscovery = "enable-k8s-api-discovery"
@@ -1219,14 +1127,6 @@ type DaemonConfig struct {
 	// ClusterID is the unique identifier of the cluster
 	ClusterID uint32
 
-	// CTMapEntriesGlobalTCP is the maximum number of conntrack entries
-	// allowed in each TCP CT table for IPv4/IPv6.
-	CTMapEntriesGlobalTCP int
-
-	// CTMapEntriesGlobalAny is the maximum number of conntrack entries
-	// allowed in each non-TCP CT table for IPv4/IPv6.
-	CTMapEntriesGlobalAny int
-
 	// CTMapEntriesTimeout* values configured by the user.
 	CTMapEntriesTimeoutTCP         time.Duration
 	CTMapEntriesTimeoutAny         time.Duration
@@ -1262,21 +1162,6 @@ type DaemonConfig struct {
 	// lest the configuration is considered invalid.
 	// If both burst and rate limit are 0 or not specified, no limit is imposed.
 	BPFEventsDefaultBurstLimit uint32
-
-	// BPFMapsDynamicSizeRatio is ratio of total system memory to use for
-	// dynamic sizing of the CT, NAT, Neighbor and SockRevNAT BPF maps.
-	BPFMapsDynamicSizeRatio float64
-
-	// NATMapEntriesGlobal is the maximum number of NAT mappings allowed
-	// in the BPF NAT table
-	NATMapEntriesGlobal int
-
-	// NeighMapEntriesGlobal is the maximum number of neighbor mappings
-	// allowed in the BPF neigh table
-	NeighMapEntriesGlobal int
-
-	// AuthMapEntries is the maximum number of entries in the auth map.
-	AuthMapEntries int
 
 	// PolicyMapFullReconciliationInterval is the interval at which to perform
 	// the full reconciliation of the endpoint policy map.
@@ -1671,25 +1556,6 @@ type DaemonConfig struct {
 	// L4-based lookups. Needs LRU map support.
 	EnableIPv6FragmentsTracking bool
 
-	// FragmentsMapEntries is the maximum number of fragmented datagrams
-	// that can simultaneously be tracked in order to retrieve their L4
-	// ports for all fragments.
-	FragmentsMapEntries int
-
-	// SizeofCTElement is the size of an element (key + value) in the CT map.
-	SizeofCTElement int
-
-	// SizeofNATElement is the size of an element (key + value) in the NAT map.
-	SizeofNATElement int
-
-	// SizeofNeighElement is the size of an element (key + value) in the neigh
-	// map.
-	SizeofNeighElement int
-
-	// SizeofSockRevElement is the size of an element (key + value) in the neigh
-	// map.
-	SizeofSockRevElement int
-
 	// Install ingress/egress routes through uplink on host for Pods when working with
 	// delegated IPAM plugin.
 	InstallUplinkRoutesForDelegatedIPAM bool
@@ -1748,9 +1614,6 @@ type DaemonConfig struct {
 	BPFMapEventBuffers          map[string]string
 	BPFMapEventBuffersValidator Validator `json:"-"`
 	bpfMapEventConfigs          BPFEventBufferConfigs
-
-	// BPFDistributedLRU enables per-CPU distributed backend memory
-	BPFDistributedLRU bool
 
 	// BPFEventsDropEnabled controls whether the Cilium datapath exposes "drop" events to Cilium monitor and Hubble.
 	BPFEventsDropEnabled bool
@@ -1873,7 +1736,6 @@ var (
 		PolicyCIDRMatchMode:                  defaults.PolicyCIDRMatchMode,
 		MaxConnectedClusters:                 defaults.MaxConnectedClusters,
 
-		BPFDistributedLRU:             defaults.BPFDistributedLRU,
 		BPFEventsDropEnabled:          defaults.BPFEventsDropEnabled,
 		BPFEventsPolicyVerdictEnabled: defaults.BPFEventsPolicyVerdictEnabled,
 		BPFEventsTraceEnabled:         defaults.BPFEventsTraceEnabled,
@@ -2223,10 +2085,6 @@ func (c *DaemonConfig) Validate(vp *viper.Viper) error {
 		return err
 	}
 
-	if err := c.checkMapSizeLimits(); err != nil {
-		return err
-	}
-
 	if err := c.checkIPv4NativeRoutingCIDR(); err != nil {
 		return err
 	}
@@ -2328,9 +2186,7 @@ func MergeConfig(vp *viper.Viper, m map[string]any) error {
 // option in the configuration map have any effect.
 func ReplaceDeprecatedFields(m map[string]any) {
 	deprecatedFields := map[string]string{
-		"monitor-aggregation-level":   MonitorAggregationName,
-		"ct-global-max-entries-tcp":   CTMapEntriesGlobalTCPName,
-		"ct-global-max-entries-other": CTMapEntriesGlobalAnyName,
+		"monitor-aggregation-level": MonitorAggregationName,
 	}
 	for deprecatedOption, newOption := range deprecatedFields {
 		if deprecatedValue, ok := m[deprecatedOption]; ok {
@@ -2422,6 +2278,7 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.HealthCheckICMPFailureThreshold = vp.GetInt(HealthCheckICMPFailureThreshold)
 	c.EnableLocalNodeRoute = vp.GetBool(EnableLocalNodeRoute)
 	c.EnablePolicy = strings.ToLower(vp.GetString(EnablePolicy))
+	c.PolicyMapFullReconciliationInterval = vp.GetDuration(PolicyMapFullReconciliationIntervalName)
 	c.EnableL7Proxy = vp.GetBool(EnableL7Proxy)
 	c.EnableTracing = vp.GetBool(EnableTracing)
 	c.EnableIPIPTermination = vp.GetBool(EnableIPIPTermination)
@@ -2490,7 +2347,6 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.PolicyAccounting = vp.GetBool(PolicyAccountingArg)
 	c.EnableIPv4FragmentsTracking = vp.GetBool(EnableIPv4FragmentsTrackingName)
 	c.EnableIPv6FragmentsTracking = vp.GetBool(EnableIPv6FragmentsTrackingName)
-	c.FragmentsMapEntries = vp.GetInt(FragmentsMapEntriesName)
 	c.LoadBalancerRSSv4CIDR = vp.GetString(LoadBalancerRSSv4CIDR)
 	c.LoadBalancerRSSv6CIDR = vp.GetString(LoadBalancerRSSv6CIDR)
 	c.LoadBalancerIPIPSockMark = vp.GetBool(LoadBalancerIPIPSockMark)
@@ -2506,7 +2362,6 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.EnablePMTUDiscovery = vp.GetBool(EnablePMTUDiscovery)
 	c.IPv6NAT46x64CIDR = defaults.IPv6NAT46x64CIDR
 	c.IPAMCiliumNodeUpdateRate = vp.GetDuration(IPAMCiliumNodeUpdateRate)
-	c.BPFDistributedLRU = vp.GetBool(BPFDistributedLRU)
 	c.BPFEventsDropEnabled = vp.GetBool(BPFEventsDropEnabled)
 	c.BPFEventsPolicyVerdictEnabled = vp.GetBool(BPFEventsPolicyVerdictEnabled)
 	c.BPFEventsTraceEnabled = vp.GetBool(BPFEventsTraceEnabled)
@@ -2617,10 +2472,6 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 
 	if c.DirectRoutingSkipUnreachable && !c.EnableAutoDirectRouting {
 		logging.Fatal(logger, fmt.Sprintf("Flag %s cannot be enabled when %s is not enabled. As if %s is then enabled, it may lead to unexpected behaviour causing network connectivity issues.", DirectRoutingSkipUnreachableName, EnableAutoDirectRoutingName, EnableAutoDirectRoutingName))
-	}
-
-	if err := c.calculateBPFMapSizes(logger, vp); err != nil {
-		logging.Fatal(logger, err.Error())
 	}
 
 	c.ClockSource = ClockSourceKtime
@@ -2888,53 +2739,6 @@ func (c *DaemonConfig) populateLoadBalancerSettings(logger *slog.Logger, vp *vip
 	}
 }
 
-func (c *DaemonConfig) checkMapSizeLimits() error {
-	if c.AuthMapEntries < AuthMapEntriesMin {
-		return fmt.Errorf("specified AuthMap max entries %d must be greater or equal to %d", c.AuthMapEntries, AuthMapEntriesMin)
-	}
-	if c.AuthMapEntries > AuthMapEntriesMax {
-		return fmt.Errorf("specified AuthMap max entries %d must not exceed maximum %d", c.AuthMapEntries, AuthMapEntriesMax)
-	}
-
-	if c.CTMapEntriesGlobalTCP < LimitTableMin || c.CTMapEntriesGlobalAny < LimitTableMin {
-		return fmt.Errorf("specified CT tables values %d/%d must be greater or equal to %d",
-			c.CTMapEntriesGlobalTCP, c.CTMapEntriesGlobalAny, LimitTableMin)
-	}
-	if c.CTMapEntriesGlobalTCP > LimitTableMax || c.CTMapEntriesGlobalAny > LimitTableMax {
-		return fmt.Errorf("specified CT tables values %d/%d must not exceed maximum %d",
-			c.CTMapEntriesGlobalTCP, c.CTMapEntriesGlobalAny, LimitTableMax)
-	}
-
-	if c.NATMapEntriesGlobal < LimitTableMin {
-		return fmt.Errorf("specified NAT table size %d must be greater or equal to %d",
-			c.NATMapEntriesGlobal, LimitTableMin)
-	}
-	if c.NATMapEntriesGlobal > LimitTableMax {
-		return fmt.Errorf("specified NAT tables size %d must not exceed maximum %d",
-			c.NATMapEntriesGlobal, LimitTableMax)
-	}
-	if c.NATMapEntriesGlobal > c.CTMapEntriesGlobalTCP+c.CTMapEntriesGlobalAny {
-		if c.NATMapEntriesGlobal == NATMapEntriesGlobalDefault {
-			// Auto-size for the case where CT table size was adapted but NAT still on default
-			c.NATMapEntriesGlobal = int((c.CTMapEntriesGlobalTCP + c.CTMapEntriesGlobalAny) * 2 / 3)
-		} else {
-			return fmt.Errorf("specified NAT tables size %d must not exceed maximum CT table size %d",
-				c.NATMapEntriesGlobal, c.CTMapEntriesGlobalTCP+c.CTMapEntriesGlobalAny)
-		}
-	}
-
-	if c.FragmentsMapEntries < FragmentsMapMin {
-		return fmt.Errorf("specified max entries %d for fragment-tracking map must be greater or equal to %d",
-			c.FragmentsMapEntries, FragmentsMapMin)
-	}
-	if c.FragmentsMapEntries > FragmentsMapMax {
-		return fmt.Errorf("specified max entries %d for fragment-tracking map must not exceed maximum %d",
-			c.FragmentsMapEntries, FragmentsMapMax)
-	}
-
-	return nil
-}
-
 func (c *DaemonConfig) checkIPv4NativeRoutingCIDR() error {
 	if c.IPv4NativeRoutingCIDR != nil {
 		return nil
@@ -3006,177 +2810,6 @@ func (c *DaemonConfig) checkIPAMDelegatedPlugin() error {
 		}
 	}
 	return nil
-}
-
-func (c *DaemonConfig) calculateBPFMapSizes(logger *slog.Logger, vp *viper.Viper) error {
-	// BPF map size options
-	// Any map size explicitly set via option will override the dynamic
-	// sizing.
-	c.AuthMapEntries = vp.GetInt(AuthMapEntriesName)
-	c.CTMapEntriesGlobalTCP = vp.GetInt(CTMapEntriesGlobalTCPName)
-	c.CTMapEntriesGlobalAny = vp.GetInt(CTMapEntriesGlobalAnyName)
-	c.NATMapEntriesGlobal = vp.GetInt(NATMapEntriesGlobalName)
-	c.NeighMapEntriesGlobal = vp.GetInt(NeighMapEntriesGlobalName)
-	c.PolicyMapFullReconciliationInterval = vp.GetDuration(PolicyMapFullReconciliationIntervalName)
-
-	// Don't attempt dynamic sizing if any of the sizeof members was not
-	// populated by the daemon (or any other caller).
-	if c.SizeofCTElement == 0 ||
-		c.SizeofNATElement == 0 ||
-		c.SizeofNeighElement == 0 ||
-		c.SizeofSockRevElement == 0 {
-		return nil
-	}
-
-	// Allow the range (0.0, 1.0] because the dynamic size will anyway be
-	// clamped to the table limits. Thus, a ratio of e.g. 0.98 will not lead
-	// to 98% of the total memory being allocated for BPF maps.
-	dynamicSizeRatio := vp.GetFloat64(MapEntriesGlobalDynamicSizeRatioName)
-	if 0.0 < dynamicSizeRatio && dynamicSizeRatio <= 1.0 {
-		vms, err := memory.Get()
-		if err != nil || vms == nil {
-			logging.Fatal(logger, "Failed to get system memory", logfields.Error, err)
-		}
-		c.BPFMapsDynamicSizeRatio = dynamicSizeRatio
-		c.calculateDynamicBPFMapSizes(logger, vp, vms.Total, dynamicSizeRatio)
-	} else if c.BPFDistributedLRU {
-		return fmt.Errorf("distributed LRU is only valid with a specified dynamic map size ratio")
-	} else if dynamicSizeRatio < 0.0 {
-		return fmt.Errorf("specified dynamic map size ratio %f must be > 0.0", dynamicSizeRatio)
-	} else if dynamicSizeRatio > 1.0 {
-		return fmt.Errorf("specified dynamic map size ratio %f must be ≤ 1.0", dynamicSizeRatio)
-	}
-	return nil
-}
-
-// SetMapElementSizes sets the BPF map element sizes (key + value) used for
-// dynamic BPF map size calculations in calculateDynamicBPFMapSizes.
-func (c *DaemonConfig) SetMapElementSizes(
-	sizeofCTElement,
-	sizeofNATElement,
-	sizeofNeighElement,
-	sizeofSockRevElement int) {
-
-	c.SizeofCTElement = sizeofCTElement
-	c.SizeofNATElement = sizeofNATElement
-	c.SizeofNeighElement = sizeofNeighElement
-	c.SizeofSockRevElement = sizeofSockRevElement
-}
-
-func (c *DaemonConfig) GetDynamicSizeCalculator(logger *slog.Logger) func(def int, min int, max int) int {
-	vms, err := memory.Get()
-	if err != nil || vms == nil {
-		logging.Fatal(logger, "Failed to get system memory", logfields.Error, err)
-	}
-
-	return c.getDynamicSizeCalculator(logger, c.BPFMapsDynamicSizeRatio, vms.Total)
-}
-
-func (c *DaemonConfig) getDynamicSizeCalculator(logger *slog.Logger, dynamicSizeRatio float64, totalMemory uint64) func(def int, min int, max int) int {
-	if 0.0 >= dynamicSizeRatio || dynamicSizeRatio > 1.0 {
-		return func(def int, min int, max int) int { return def }
-	}
-
-	possibleCPUs := 1
-	// Heuristic:
-	// Distribute relative to map default entries among the different maps.
-	// Cap each map size by the maximum. Map size provided by the user will
-	// override the calculated value and also the max. There will be a check
-	// for maximum size later on in DaemonConfig.Validate()
-	//
-	// Calculation examples:
-	//
-	// Memory   CT TCP  CT Any      NAT
-	//
-	//  512MB    33140   16570    33140
-	//    1GB    66280   33140    66280
-	//    4GB   265121  132560   265121
-	//   16GB  1060485  530242  1060485
-
-	memoryAvailableForMaps := int(float64(totalMemory) * dynamicSizeRatio)
-	logger.Info(fmt.Sprintf("Memory available for map entries (%.3f%% of %dB): %dB", dynamicSizeRatio*100, totalMemory, memoryAvailableForMaps))
-	totalMapMemoryDefault := CTMapEntriesGlobalTCPDefault*c.SizeofCTElement +
-		CTMapEntriesGlobalAnyDefault*c.SizeofCTElement +
-		NATMapEntriesGlobalDefault*c.SizeofNATElement +
-		// Neigh table has the same number of entries as NAT Map has.
-		NATMapEntriesGlobalDefault*c.SizeofNeighElement +
-		SockRevNATMapEntriesDefault*c.SizeofSockRevElement
-	logger.Debug(fmt.Sprintf("Total memory for default map entdries: %d", totalMapMemoryDefault))
-
-	// In case of distributed LRU, we need to round up to the number of possible CPUs
-	// since this is also what the kernel does internally, see htab_map_alloc()'s:
-	//
-	//   htab->map.max_entries = roundup(attr->max_entries,
-	//				     num_possible_cpus());
-	//
-	// Thus, if we would not round up from agent side, then Cilium would constantly
-	// try to replace maps due to property mismatch!
-	if c.BPFDistributedLRU {
-		cpus, err := ebpf.PossibleCPU()
-		if err != nil {
-			logging.Fatal(logger, "Failed to get number of possible CPUs needed for the distributed LRU")
-		}
-		possibleCPUs = cpus
-	}
-	return func(entriesDefault, min, max int) int {
-		entries := (entriesDefault * memoryAvailableForMaps) / totalMapMemoryDefault
-		entries = util.RoundUp(entries, possibleCPUs)
-		if entries < min {
-			entries = util.RoundUp(min, possibleCPUs)
-		} else if entries > max {
-			entries = util.RoundDown(max, possibleCPUs)
-		}
-		return entries
-	}
-}
-
-func (c *DaemonConfig) calculateDynamicBPFMapSizes(logger *slog.Logger, vp *viper.Viper, totalMemory uint64, dynamicSizeRatio float64) {
-	getEntries := c.getDynamicSizeCalculator(logger, dynamicSizeRatio, totalMemory)
-
-	// If value for a particular map was explicitly set by an
-	// option, disable dynamic sizing for this map and use the
-	// provided size.
-	if !vp.IsSet(CTMapEntriesGlobalTCPName) {
-		c.CTMapEntriesGlobalTCP =
-			getEntries(CTMapEntriesGlobalTCPDefault, LimitTableAutoGlobalTCPMin, LimitTableMax)
-		logger.Info(fmt.Sprintf("option %s set by dynamic sizing to %v",
-			CTMapEntriesGlobalTCPName, c.CTMapEntriesGlobalTCP))
-	} else {
-		logger.Debug(fmt.Sprintf("option %s set by user to %v", CTMapEntriesGlobalTCPName, c.CTMapEntriesGlobalTCP))
-	}
-	if !vp.IsSet(CTMapEntriesGlobalAnyName) {
-		c.CTMapEntriesGlobalAny =
-			getEntries(CTMapEntriesGlobalAnyDefault, LimitTableAutoGlobalAnyMin, LimitTableMax)
-		logger.Info(fmt.Sprintf("option %s set by dynamic sizing to %v",
-			CTMapEntriesGlobalAnyName, c.CTMapEntriesGlobalAny))
-	} else {
-		logger.Debug(fmt.Sprintf("option %s set by user to %v", CTMapEntriesGlobalAnyName, c.CTMapEntriesGlobalAny))
-	}
-	if !vp.IsSet(NATMapEntriesGlobalName) {
-		c.NATMapEntriesGlobal =
-			getEntries(NATMapEntriesGlobalDefault, LimitTableAutoNatGlobalMin, LimitTableMax)
-		logger.Info(fmt.Sprintf("option %s set by dynamic sizing to %v",
-			NATMapEntriesGlobalName, c.NATMapEntriesGlobal))
-		if c.NATMapEntriesGlobal > c.CTMapEntriesGlobalTCP+c.CTMapEntriesGlobalAny {
-			// CT table size was specified manually, make sure that the NAT table size
-			// does not exceed maximum CT table size. See
-			// (*DaemonConfig).checkMapSizeLimits.
-			c.NATMapEntriesGlobal = (c.CTMapEntriesGlobalTCP + c.CTMapEntriesGlobalAny) * 2 / 3
-			logger.Warn(fmt.Sprintf("option %s would exceed maximum determined by CT table sizes, capping to %v",
-				NATMapEntriesGlobalName, c.NATMapEntriesGlobal))
-		}
-	} else {
-		logger.Debug(fmt.Sprintf("option %s set by user to %v", NATMapEntriesGlobalName, c.NATMapEntriesGlobal))
-	}
-	if !vp.IsSet(NeighMapEntriesGlobalName) {
-		// By default we auto-size it to the same value as the NAT map since we
-		// need to keep at least as many neigh entries.
-		c.NeighMapEntriesGlobal = c.NATMapEntriesGlobal
-		logger.Info(fmt.Sprintf("option %s set by dynamic sizing to %v",
-			NeighMapEntriesGlobalName, c.NeighMapEntriesGlobal))
-	} else {
-		logger.Debug(fmt.Sprintf("option %s set by user to %v", NeighMapEntriesGlobalName, c.NeighMapEntriesGlobal))
-	}
 }
 
 // Validate VTEP integration configuration

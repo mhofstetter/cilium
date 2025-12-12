@@ -22,6 +22,11 @@ cilium-agent hive dot-graph [flags]
       --agent-labels strings                                      Additional labels to identify this agent in monitor events
       --agent-liveness-update-interval duration                   Interval at which the agent updates liveness time for the datapath (default 1s)
       --api-rate-limit string                                     API rate limiting configuration (example: --api-rate-limit endpoint-create=rate-limit:10/m,rate-burst:2)
+      --bpf-auth-map-max int                                      Maximum number of entries in auth map (default 524288)
+      --bpf-ct-global-any-max int                                 Maximum number of entries in non-TCP CT table (auto-calculated by default - otherwise 262144)
+      --bpf-ct-global-tcp-max int                                 Maximum number of entries in TCP CT table (auto-calculated by default - otherwise 524288)
+      --bpf-distributed-lru                                       Enable per-CPU BPF LRU backend memory
+      --bpf-fragments-map-max int                                 Maximum number of entries in fragments tracking map (default 8192)
       --bpf-lb-algorithm string                                   BPF load balancing algorithm ("random", "maglev") (default "random")
       --bpf-lb-algorithm-annotation                               Enable service-level annotation for configuring BPF load balancing algorithm
       --bpf-lb-dsr-dispatch string                                BPF load balancing DSR dispatch method ("opt", "ipip", "geneve") (default "opt")
@@ -33,6 +38,9 @@ cilium-agent hive dot-graph [flags]
       --bpf-lb-mode-annotation                                    Enable service-level annotation for configuring BPF load balancing mode
       --bpf-lb-sock                                               Enable socket-based LB for E/W traffic
       --bpf-lb-source-range-all-types                             Propagate loadbalancerSourceRanges to all corresponding service types
+      --bpf-map-dynamic-size-ratio float                          Ratio (0.0-1.0] of total system memory to use for dynamic sizing of CT, NAT and policy BPF maps (default 0.0025)
+      --bpf-nat-global-max int                                    Maximum number of entries for the global BPF NAT table (auto-calculated by default - otherwise 524288)
+      --bpf-neigh-global-max int                                  Maximum number of entries for the global BPF neighbor table (auto-calculated by default - otherwise 524288
       --bpf-node-map-max uint32                                   Sets size of node bpf map which will be the max number of unique Node IPs in the cluster (default 16384)
       --bpf-policy-map-max int                                    Maximum number of entries in endpoint policy map (per endpoint) (default 16384)
       --bpf-policy-map-pressure-metrics-threshold float           Sets threshold for emitting pressure metrics of policy maps (default 0.1)

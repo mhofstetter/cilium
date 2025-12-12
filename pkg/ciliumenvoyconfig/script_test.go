@@ -51,6 +51,7 @@ import (
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maglev"
+	mapsizecell "github.com/cilium/cilium/pkg/maps/mapsize/cell"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
@@ -85,6 +86,7 @@ func TestScript(t *testing.T) {
 			cell.Config(envoyCfg.ProxyConfig{}),
 
 			lbcell.Cell,
+			mapsizecell.Cell,
 
 			cell.Provide(
 				tables.NewNodeAddressTable,
@@ -262,7 +264,6 @@ func TestScript(t *testing.T) {
 		setup,
 		[]string{},
 		"testdata/*.txtar")
-
 }
 
 type resourceKey struct {
@@ -524,8 +525,7 @@ func (s staticPortAllocator) ReleaseProxyPort(name string) error {
 
 var _ PortAllocator = staticPortAllocator{}
 
-type mockFeatureMetrics struct {
-}
+type mockFeatureMetrics struct{}
 
 // AddCCEC implements CECMetrics.
 func (m mockFeatureMetrics) AddCCEC() {

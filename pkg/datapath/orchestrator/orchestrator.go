@@ -27,6 +27,7 @@ import (
 	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/maglev"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/mtu"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/nodediscovery"
@@ -107,6 +108,7 @@ type orchestratorParams struct {
 	ConfigPromise       promise.Promise[*option.DaemonConfig]
 	XDPConfig           xdp.Config
 	LBConfig            loadbalancer.Config
+	BPFMapsSizeConfig   mapsize.BPFMapsSizeConfig
 	KPRConfig           kpr.KPRConfig
 	SvcRouteConfig      svcrouteconfig.RoutesConfig
 	MaglevConfig        maglev.Config
@@ -208,6 +210,7 @@ func (o *orchestrator) reconciler(ctx context.Context, health cell.Health) error
 			o.params.Config.DeriveMasqIPAddrFromDevice,
 			o.params.XDPConfig,
 			o.params.LBConfig,
+			o.params.BPFMapsSizeConfig,
 			o.params.KPRConfig,
 			o.params.SvcRouteConfig,
 			o.params.MaglevConfig,

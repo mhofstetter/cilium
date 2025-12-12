@@ -7,6 +7,7 @@ import (
 	"github.com/cilium/hive/cell"
 
 	"github.com/cilium/cilium/pkg/bpf"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/option"
 )
@@ -22,8 +23,8 @@ var Cell = cell.Module(
 	cell.Provide(newFragMap),
 )
 
-func newFragMap(lifecycle cell.Lifecycle, registry *metrics.Registry, daemonConfig *option.DaemonConfig) bpf.MapOut[Map] {
-	fragMap := newMap(registry, daemonConfig.FragmentsMapEntries, daemonConfig.GetEventBufferConfig)
+func newFragMap(lifecycle cell.Lifecycle, registry *metrics.Registry, daemonConfig *option.DaemonConfig, config mapsize.BPFMapsSizeConfig) bpf.MapOut[Map] {
+	fragMap := newMap(registry, config.GetBPFFragmentsMapMax(), daemonConfig.GetEventBufferConfig)
 
 	lifecycle.Append(cell.Hook{
 		OnStart: func(context cell.HookContext) error {

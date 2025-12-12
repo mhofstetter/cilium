@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/cilium/cilium/pkg/bpf"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/maps/nat"
-	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/testutils"
 	"github.com/cilium/cilium/pkg/tuple"
 	"github.com/cilium/cilium/pkg/types"
@@ -26,7 +26,8 @@ import (
 )
 
 func init() {
-	nat4, nat6 := nat.GlobalMaps(nil, true, true)
+	nat4 := nat.NewMap(nil, nat.MapNameSnat4Global, nat.IPv4, mapsize.LimitTableMax)
+	nat6 := nat.NewMap(nil, nat.MapNameSnat6Global, nat.IPv6, mapsize.LimitTableMax)
 	InitMapInfo(nat4, nat6)
 }
 
@@ -40,26 +41,26 @@ func setupCTMap(tb testing.TB) {
 }
 
 func BenchmarkMapBatchLookup(b *testing.B) {
-	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal, nil)
+	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal, nil, mapsize.LimitTableMax)
 	err := m.OpenOrCreate()
 	assert.NoError(b, m.Map.Unpin())
 	assert.NoError(b, err)
 
-	_ = populateFakeDataCTMap4(b, m, option.CTMapEntriesGlobalTCPDefault)
+	_ = populateFakeDataCTMap4(b, m, mapsize.LimitTableMax)
 
 	b.ReportAllocs()
 
 	for b.Loop() {
 		count, err := m.Count(context.TODO())
 		assert.NoError(b, err)
-		assert.Greater(b, count, option.CTMapEntriesGlobalAnyDefault)
+		assert.Greater(b, count, mapsize.LimitTableMax)
 	}
 }
 
 func BenchmarkPrivileged_MapUpdate(b *testing.B) {
 	setupCTMap(b)
 
-	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal, nil)
+	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal, nil, mapsize.LimitTableMax)
 	err := m.OpenOrCreate()
 	defer m.Map.Unpin()
 	require.NoError(b, err)
@@ -139,7 +140,7 @@ func TestPrivilegedCtGcIcmp(t *testing.T) {
 		natMap: natMap, natMapLock: mapInfo[mapTypeIPv4AnyGlobal].natMapLock,
 	}
 
-	ctMap := newMap(ctMapName, mapTypeIPv4AnyGlobal, nil)
+	ctMap := newMap(ctMapName, mapTypeIPv4AnyGlobal, nil, mapsize.LimitTableMax)
 	err = ctMap.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMap.Map.Unpin()
@@ -253,7 +254,7 @@ func TestPrivilegedCtGcTcp(t *testing.T) {
 		natMap: natMap, natMapLock: mapInfo[mapTypeIPv4TCPGlobal].natMapLock,
 	}
 
-	ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal, nil)
+	ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal, nil, mapsize.LimitTableMax)
 	err = ctMap.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMap.Map.Unpin()
@@ -368,7 +369,7 @@ func TestPrivilegedCtGcDsr(t *testing.T) {
 		natMap: natMap, natMapLock: mapInfo[mapTypeIPv4TCPGlobal].natMapLock,
 	}
 
-	ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal, nil)
+	ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal, nil, mapsize.LimitTableMax)
 	err = ctMap.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMap.Map.Unpin()
@@ -460,7 +461,7 @@ func TestPrivilegedOrphanNatGC(t *testing.T) {
 	mapInfo[mapTypeIPv4AnyGlobal] = mapAttributes{
 		natMap: natMap, natMapLock: mapInfo[mapTypeIPv4AnyGlobal].natMapLock,
 	}
-	ctMapAny := newMap(ctMapAnyName, mapTypeIPv4AnyGlobal, nil)
+	ctMapAny := newMap(ctMapAnyName, mapTypeIPv4AnyGlobal, nil, mapsize.LimitTableMax)
 	err = ctMapAny.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMapAny.Map.Unpin()
@@ -469,7 +470,7 @@ func TestPrivilegedOrphanNatGC(t *testing.T) {
 	mapInfo[mapTypeIPv4TCPGlobal] = mapAttributes{
 		natMap: natMap, natMapLock: mapInfo[mapTypeIPv4TCPGlobal].natMapLock,
 	}
-	ctMapTCP := newMap(ctMapTCPName, mapTypeIPv4TCPGlobal, nil)
+	ctMapTCP := newMap(ctMapTCPName, mapTypeIPv4TCPGlobal, nil, mapsize.LimitTableMax)
 	err = ctMapTCP.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMapTCP.Map.Unpin()
@@ -701,7 +702,7 @@ func TestPrivilegedOrphanNatGC(t *testing.T) {
 	mapInfo[mapTypeIPv6AnyGlobal] = mapAttributes{
 		natMap: natMapV6, natMapLock: mapInfo[mapTypeIPv6AnyGlobal].natMapLock,
 	}
-	ctMapAnyV6 := newMap(ctMapAnyName, mapTypeIPv6AnyGlobal, nil)
+	ctMapAnyV6 := newMap(ctMapAnyName, mapTypeIPv6AnyGlobal, nil, mapsize.LimitTableMax)
 	err = ctMapAnyV6.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMapAnyV6.Map.Unpin()
@@ -710,7 +711,7 @@ func TestPrivilegedOrphanNatGC(t *testing.T) {
 	mapInfo[mapTypeIPv6TCPGlobal] = mapAttributes{
 		natMap: natMapV6, natMapLock: mapInfo[mapTypeIPv6TCPGlobal].natMapLock,
 	}
-	ctMapTCPV6 := newMap(ctMapTCPName, mapTypeIPv6TCPGlobal, nil)
+	ctMapTCPV6 := newMap(ctMapTCPName, mapTypeIPv6TCPGlobal, nil, mapsize.LimitTableMax)
 	err = ctMapTCP.OpenOrCreate()
 	require.NoError(t, err)
 	defer ctMapTCPV6.Map.Unpin()
@@ -753,12 +754,9 @@ func TestPrivilegedCount(t *testing.T) {
 	// Set the max size of the map explicitly so we can provide enough buffer
 	// for the LRU map to avoid eviction that makes the assertions within this
 	// test indeterministic and consequently cause flakes.
-	prev := option.Config.CTMapEntriesGlobalTCP
-	defer func() { option.Config.CTMapEntriesGlobalTCP = prev }()
-	option.Config.CTMapEntriesGlobalTCP = 524288
-	size := 8192 // choose a reasonbly large map that does not make test time too long.
+	size := 8192 // choose a reasonably large map that does not make test time too long.
 
-	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal, nil)
+	m := newMap(MapNameTCP4Global+"_test", mapTypeIPv4TCPGlobal, nil, mapsize.LimitTableMax)
 	err := m.OpenOrCreate()
 	assert.NoError(t, err)
 	assert.NoError(t, m.Map.Unpin())
@@ -871,12 +869,7 @@ func benchmarkCtGc(t *testing.B, size int) {
 			natMap: natMap, natMapLock: mapInfo[mapTypeIPv4TCPGlobal].natMapLock,
 		}
 
-		prev := option.Config.CTMapEntriesGlobalTCP
-		option.Config.CTMapEntriesGlobalTCP = size
-		defer func() {
-			option.Config.CTMapEntriesGlobalTCP = prev
-		}()
-		ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal, nil)
+		ctMap := newMap(ctMapName, mapTypeIPv4TCPGlobal, nil, mapsize.LimitTableMax)
 		err = ctMap.OpenOrCreate()
 		assert.NoError(t, err)
 		defer ctMap.Map.Unpin()

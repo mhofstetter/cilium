@@ -37,6 +37,7 @@ import (
 	"github.com/cilium/cilium/pkg/lock"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/maglev"
+	mapsizecell "github.com/cilium/cilium/pkg/maps/mapsize/cell"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/node"
 	nodeTypes "github.com/cilium/cilium/pkg/node/types"
@@ -73,6 +74,7 @@ func TestScript(t *testing.T) {
 				cell.Config(envoyCfg.SecretSyncConfig{}),
 				daemonk8s.TablesCell,
 				metrics.Cell,
+				mapsizecell.Cell,
 
 				lbcell.Cell,
 

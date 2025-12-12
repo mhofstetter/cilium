@@ -6,6 +6,7 @@ package nat
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"unsafe"
 
@@ -64,20 +65,32 @@ type PerClusterNATMapper interface {
 }
 
 // NewPerClusterNATMaps returns a new instance of the per-cluster NAT maps manager.
-func NewPerClusterNATMaps(ipv4, ipv6 bool) *perClusterNATMaps {
-	return newPerClusterNATMaps(ipv4, ipv6, maxEntries())
+func NewPerClusterNATMaps(ipv4, ipv6 bool, maxEntries int) *perClusterNATMaps {
+	return newPerClusterNATMaps(ipv4, ipv6, maxEntries)
 }
 
 // GetClusterNATMap returns the per-cluster map for the given cluster ID. The
 // returned map needs to be opened by the caller, and it is not guaranteed to exist.
-func GetClusterNATMap(clusterID uint32, family IPFamily) (*Map, error) {
-	maps := NewPerClusterNATMaps(family == IPv4, family == IPv6)
+func GetClusterNATMap(clusterID uint32, family IPFamily, maxEntries int) (*Map, error) {
+	maps := NewPerClusterNATMaps(family == IPv4, family == IPv6, maxEntries)
+	return maps.getClusterNATMap(clusterID, family)
+}
+
+// OpenClusterNATMap returns the per-cluster map for the given cluster ID. The
+// returned map needs to be opened by the caller, and it is not guaranteed to exist.
+//
+// This should only be used from components which aren't capable of using hive - mainly the Cilium CLI.
+func OpenClusterNATMap(logger *slog.Logger, clusterID uint32, family IPFamily) (*Map, error) {
+	maps, err := openPerClusterNATMaps(logger, family == IPv4, family == IPv6)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read per cluster nat map: %w", err)
+	}
 	return maps.getClusterNATMap(clusterID, family)
 }
 
 // CleanupPerClusterNATMaps deletes the per-cluster NAT maps, including the inner ones.
-func CleanupPerClusterNATMaps(ipv4, ipv6 bool) error {
-	maps := NewPerClusterNATMaps(ipv4, ipv6)
+func CleanupPerClusterNATMaps(ipv4, ipv6 bool, maxEntries int) error {
+	maps := NewPerClusterNATMaps(ipv4, ipv6, maxEntries)
 	return maps.cleanup()
 }
 
@@ -100,14 +113,16 @@ type PerClusterNATMapKey struct {
 	ClusterID uint32
 }
 
-func (k *PerClusterNATMapKey) String() string  { return strconv.FormatUint(uint64(k.ClusterID), 10) }
+func (k *PerClusterNATMapKey) String() string { return strconv.FormatUint(uint64(k.ClusterID), 10) }
+
 func (n *PerClusterNATMapKey) New() bpf.MapKey { return &PerClusterNATMapKey{} }
 
 type PerClusterNATMapVal struct {
 	Fd uint32
 }
 
-func (v *PerClusterNATMapVal) String() string    { return fmt.Sprintf("fd=%d", v.Fd) }
+func (v *PerClusterNATMapVal) String() string { return fmt.Sprintf("fd=%d", v.Fd) }
+
 func (n *PerClusterNATMapVal) New() bpf.MapValue { return &PerClusterNATMapVal{} }
 
 func newPerClusterNATMap(family IPFamily, innerMapEntries int) *perClusterNATMap {
@@ -215,6 +230,28 @@ func newPerClusterNATMaps(ipv4, ipv6 bool, innerMapEntries int) *perClusterNATMa
 	}
 
 	return &gm
+}
+
+func openPerClusterNATMaps(logger *slog.Logger, ipv4, ipv6 bool) (*perClusterNATMaps, error) {
+	if ipv4 {
+		globalV4, err := bpf.OpenMap(bpf.MapPath(logger, MapNameSnat4Global), &NatKey4{}, &NatEntry4{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to open v4 map: %w", err)
+		}
+
+		return newPerClusterNATMaps(ipv4, ipv6, int(globalV4.MaxEntries())), nil
+	}
+
+	if ipv6 {
+		globalV6, err := bpf.OpenMap(bpf.MapPath(logger, MapNameSnat4Global), &NatKey6{}, &NatEntry6{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to open v6 map: %w", err)
+		}
+
+		return newPerClusterNATMaps(ipv4, ipv6, int(globalV6.MaxEntries())), nil
+	}
+
+	return nil, errors.New("failed to open per cluster maps - no global map found to retrieve map size")
 }
 
 func (gm *perClusterNATMaps) OpenOrCreate() (err error) {

@@ -24,6 +24,7 @@ import (
 	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/loadbalancer/maps"
 	"github.com/cilium/cilium/pkg/maglev"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/source"
 	"github.com/cilium/cilium/pkg/testutils"
@@ -114,7 +115,6 @@ func parseAddrPort(s string) loadbalancer.L3n4Addr {
 		loadbalancer.TCP,
 		addr, uint16(port), loadbalancer.ScopeExternal,
 	)
-
 }
 
 func dumpLBMapsWithReplace(lbmaps maps.LBMaps, feAddr loadbalancer.L3n4Addr, sanitizeIDs bool) (out []maps.MapDump) {
@@ -185,6 +185,7 @@ var emptyInstances = func() part.Map[loadbalancer.BackendInstanceKey, loadbalanc
 }()
 
 var baseBackend = newTestBackend(backend1, loadbalancer.BackendStateActive)
+
 var nextBackendRevision = statedb.Revision(1)
 
 func concatBe(bes loadbalancer.BackendsSeq2, be loadbalancer.BackendParams, rev statedb.Revision) loadbalancer.BackendsSeq2 {
@@ -279,8 +280,7 @@ var clusterIPTestCases = []testCase{
 		func(svc *loadbalancer.Service, fe *loadbalancer.Frontend) (delete bool, bes []loadbalancer.Backend) {
 			fe.Type = ClusterIP
 			fe.Address = autoAddr
-			be1, be2 :=
-				newTestBackend(backend1, loadbalancer.BackendStateActive),
+			be1, be2 := newTestBackend(backend1, loadbalancer.BackendStateActive),
 				newTestBackend(backend2, loadbalancer.BackendStateActive)
 			return false, []loadbalancer.Backend{be1, be2}
 		},
@@ -301,8 +301,7 @@ var clusterIPTestCases = []testCase{
 		func(svc *loadbalancer.Service, fe *loadbalancer.Frontend) (delete bool, bes []loadbalancer.Backend) {
 			fe.Type = ClusterIP
 			fe.Address = autoAddr
-			be1, be2, be3, be4 :=
-				newTestBackend(backend1, loadbalancer.BackendStateActive),
+			be1, be2, be3, be4 := newTestBackend(backend1, loadbalancer.BackendStateActive),
 				newTestBackend(backend2, loadbalancer.BackendStateActive),
 				newTestBackend(withClusterID(backend2, 10), loadbalancer.BackendStateActive),
 				newTestBackend(withClusterID(backend2, 20), loadbalancer.BackendStateActive)
@@ -413,8 +412,7 @@ var quarantineTestCases = []testCase{
 		func(svc *loadbalancer.Service, fe *loadbalancer.Frontend) (delete bool, bes []loadbalancer.Backend) {
 			fe.Type = ClusterIP
 			fe.Address = autoAddr
-			be1, be2 :=
-				newTestBackend(backend1, loadbalancer.BackendStateActive),
+			be1, be2 := newTestBackend(backend1, loadbalancer.BackendStateActive),
 				newTestBackend(backend2, loadbalancer.BackendStateActive)
 			return false, []loadbalancer.Backend{be1, be2}
 		},
@@ -435,8 +433,7 @@ var quarantineTestCases = []testCase{
 		func(svc *loadbalancer.Service, fe *loadbalancer.Frontend) (delete bool, bes []loadbalancer.Backend) {
 			fe.Type = ClusterIP
 			fe.Address = autoAddr
-			be1, be2 :=
-				newTestBackend(backend1, loadbalancer.BackendStateQuarantined),
+			be1, be2 := newTestBackend(backend1, loadbalancer.BackendStateQuarantined),
 				newTestBackend(backend2, loadbalancer.BackendStateActive)
 			return false, []loadbalancer.Backend{be1, be2}
 		},
@@ -471,8 +468,7 @@ var nodePortTestCases = []testCase{
 		func(svc *loadbalancer.Service, fe *loadbalancer.Frontend) (delete bool, bes []loadbalancer.Backend) {
 			fe.Type = NodePort
 			fe.Address = zeroAddr
-			be1, be2 :=
-				newTestBackend(backend1, loadbalancer.BackendStateActive),
+			be1, be2 := newTestBackend(backend1, loadbalancer.BackendStateActive),
 				newTestBackend(backend2, loadbalancer.BackendStateActive)
 			return false, []loadbalancer.Backend{be1, be2}
 		},
@@ -804,8 +800,7 @@ var sessionAffinityTestCases = []testCase{
 			fe.Address = zeroAddr
 			svc.SessionAffinity = true
 			svc.SessionAffinityTimeout = time.Second
-			be1, be2 :=
-				newTestBackend(backend1, loadbalancer.BackendStateActive),
+			be1, be2 := newTestBackend(backend1, loadbalancer.BackendStateActive),
 				newTestBackend(backend2, loadbalancer.BackendStateActive)
 			return false, []loadbalancer.Backend{be1, be2}
 		},
@@ -838,8 +833,7 @@ var sessionAffinityTestCases = []testCase{
 			fe.Address = zeroAddr
 			svc.SessionAffinity = true
 			svc.SessionAffinityTimeout = time.Second
-			be1, be2 :=
-				newTestBackend(backend1, loadbalancer.BackendStateQuarantined),
+			be1, be2 := newTestBackend(backend1, loadbalancer.BackendStateQuarantined),
 				newTestBackend(backend2, loadbalancer.BackendStateActive)
 			return false, []loadbalancer.Backend{be1, be2}
 		},
@@ -1105,7 +1099,10 @@ func TestBPFOps(t *testing.T) {
 		KubeProxyReplacement: true,
 	}
 
-	cfg, _ := loadbalancer.NewConfig(log, loadbalancer.DefaultUserConfig, loadbalancer.DeprecatedConfig{}, &option.DaemonConfig{})
+	mCfg, err := mapsize.NewBPFMapsSizeConfig(hivetest.Logger(t), mapsize.BPFMapsSizeFlags{BPFAuthMapMax: 256, BPFFragmentsMapMax: 256}, 1, 1, 1, 1)
+	require.NoError(t, err)
+
+	cfg, _ := loadbalancer.NewConfig(log, loadbalancer.DefaultUserConfig, loadbalancer.DeprecatedConfig{}, mCfg)
 
 	var lbmaps maps.LBMaps
 	if testutils.IsPrivileged() {

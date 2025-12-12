@@ -29,7 +29,10 @@ func init() {
 
 func flushNat() {
 	ipv4, ipv6 := getIpEnableStatuses()
-	ipv4Map, ipv6Map := nat.GlobalMaps(nil, ipv4, ipv6)
+	ipv4Map, ipv6Map, err := nat.Maps(log, nil, ipv4, ipv6)
+	if err != nil {
+		Fatalf("Unable to read NAT maps: %s", err)
+	}
 
 	for _, m := range []*nat.Map{ipv4Map, ipv6Map} {
 		if m == nil {

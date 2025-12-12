@@ -40,6 +40,7 @@ import (
 	"github.com/cilium/cilium/pkg/loadbalancer/writer"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/maglev"
+	mapsizecell "github.com/cilium/cilium/pkg/maps/mapsize/cell"
 	"github.com/cilium/cilium/pkg/metrics"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/node/addressing"
@@ -111,6 +112,7 @@ func TestScript(t *testing.T) {
 					},
 				),
 
+				mapsizecell.Cell,
 				lbcell.Cell,
 			)
 

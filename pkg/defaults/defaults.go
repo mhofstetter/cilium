@@ -422,10 +422,6 @@ const (
 	// L4-based lookups
 	EnableIPv6FragmentsTracking = true
 
-	// FragmentsMapEntries is the default number of entries allowed in an
-	// the map used to track datagram fragments.
-	FragmentsMapEntries = 8192
-
 	// K8sEnableAPIDiscovery defines whether Kubernetes API groups and
 	// resources should be probed using the discovery API
 	K8sEnableAPIDiscovery = false
@@ -508,9 +504,6 @@ const (
 
 	// EnableNodeSelectorLabels is the default value for option.EnableNodeSelectorLabels
 	EnableNodeSelectorLabels = false
-
-	// BPFDistributedLRU enables per-CPU distributed backend memory
-	BPFDistributedLRU = false
 
 	// BPFEventsDropEnabled controls whether the Cilium datapath exposes "drop" events to Cilium monitor and Hubble.
 	BPFEventsDropEnabled = true

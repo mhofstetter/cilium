@@ -6,7 +6,6 @@ package config
 import (
 	"bufio"
 	"bytes"
-	"cmp"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -139,7 +138,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		cDefinesMap["ENABLE_IPV6_FRAGMENTS"] = "1"
 	}
 
-	cDefinesMap["CILIUM_IPV6_FRAG_MAP_MAX_ENTRIES"] = fmt.Sprintf("%d", option.Config.FragmentsMapEntries)
+	cDefinesMap["CILIUM_IPV6_FRAG_MAP_MAX_ENTRIES"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFFragmentsMapMax())
 
 	if option.Config.EnableIPv4 {
 		ipv4GW := cfg.CiliumInternalIPv4
@@ -150,7 +149,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		}
 	}
 
-	cDefinesMap["CILIUM_IPV4_FRAG_MAP_MAX_ENTRIES"] = fmt.Sprintf("%d", option.Config.FragmentsMapEntries)
+	cDefinesMap["CILIUM_IPV4_FRAG_MAP_MAX_ENTRIES"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFFragmentsMapMax())
 
 	// --- WARNING: THIS CONFIGURATION METHOD IS DEPRECATED, SEE FUNCTION DOC ---
 
@@ -181,7 +180,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 
 	cDefinesMap["ENDPOINTS_MAP_SIZE"] = fmt.Sprintf("%d", lxcmap.MaxEntries)
 	cDefinesMap["METRICS_MAP_SIZE"] = fmt.Sprintf("%d", metricsmap.MaxEntries)
-	cDefinesMap["AUTH_MAP_SIZE"] = fmt.Sprintf("%d", option.Config.AuthMapEntries)
+	cDefinesMap["AUTH_MAP_SIZE"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFAuthMapMax())
 	cDefinesMap["CONFIG_MAP_SIZE"] = fmt.Sprintf("%d", configmap.MaxEntries)
 	cDefinesMap["IPCACHE_MAP_SIZE"] = fmt.Sprintf("%d", ipcachemap.MaxEntries)
 	cDefinesMap["NODE_MAP_SIZE"] = fmt.Sprintf("%d", h.nodeMap.Size())
@@ -201,7 +200,7 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	if option.Config.PreAllocateMaps {
 		cDefinesMap["PREALLOCATE_MAPS"] = "1"
 	}
-	if option.Config.BPFDistributedLRU {
+	if cfg.BPFMapsSizeConfig.GetBPFDistributedLRU() {
 		cDefinesMap["NO_COMMON_MEM_MAPS"] = "1"
 	}
 
@@ -310,8 +309,8 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 	cDefinesMap["NAT_46X64_PREFIX_2"] = "0"
 	cDefinesMap["NAT_46X64_PREFIX_3"] = "0"
 
-	cDefinesMap["NODEPORT_NEIGH6_SIZE"] = fmt.Sprintf("%d", option.Config.NeighMapEntriesGlobal)
-	cDefinesMap["NODEPORT_NEIGH4_SIZE"] = fmt.Sprintf("%d", option.Config.NeighMapEntriesGlobal)
+	cDefinesMap["NODEPORT_NEIGH6_SIZE"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFNeighGlobalMax())
+	cDefinesMap["NODEPORT_NEIGH4_SIZE"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFNeighGlobalMax())
 
 	if h.kprCfg.KubeProxyReplacement {
 		if option.Config.EnableHealthDatapath {
@@ -479,8 +478,8 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 		cDefinesMap["ENABLE_HOST_FIREWALL"] = "1"
 	}
 
-	cDefinesMap["SNAT_MAPPING_IPV4_SIZE"] = fmt.Sprintf("%d", option.Config.NATMapEntriesGlobal)
-	cDefinesMap["SNAT_MAPPING_IPV6_SIZE"] = fmt.Sprintf("%d", option.Config.NATMapEntriesGlobal)
+	cDefinesMap["SNAT_MAPPING_IPV4_SIZE"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFNATGlobalMax())
+	cDefinesMap["SNAT_MAPPING_IPV6_SIZE"] = fmt.Sprintf("%d", cfg.BPFMapsSizeConfig.GetBPFNATGlobalMax())
 	cDefinesMap["SNAT_COLLISION_RETRIES"] = fmt.Sprintf("%d", nat.SnatCollisionRetries)
 
 	if option.Config.EnableBPFMasquerade {
@@ -529,8 +528,8 @@ func (h *HeaderfileWriter) WriteNodeConfig(w io.Writer, cfg *datapath.LocalNodeC
 
 	// --- WARNING: THIS CONFIGURATION METHOD IS DEPRECATED, SEE FUNCTION DOC ---
 
-	fmt.Fprintf(fw, "#define CT_MAP_SIZE_TCP %d\n", cmp.Or(option.Config.CTMapEntriesGlobalTCP, option.CTMapEntriesGlobalTCPDefault))
-	fmt.Fprintf(fw, "#define CT_MAP_SIZE_ANY %d\n", cmp.Or(option.Config.CTMapEntriesGlobalAny, option.CTMapEntriesGlobalAnyDefault))
+	fmt.Fprintf(fw, "#define CT_MAP_SIZE_TCP %d\n", cfg.BPFMapsSizeConfig.GetBPFCTGlobalTCPMax())
+	fmt.Fprintf(fw, "#define CT_MAP_SIZE_ANY %d\n", cfg.BPFMapsSizeConfig.GetBPFCTGlobalAnyMax())
 
 	if option.Config.ClockSource == option.ClockSourceJiffies {
 		cDefinesMap["ENABLE_JIFFIES"] = "1"

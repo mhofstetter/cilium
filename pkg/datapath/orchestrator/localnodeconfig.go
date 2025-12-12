@@ -20,6 +20,7 @@ import (
 	"github.com/cilium/cilium/pkg/kpr"
 	"github.com/cilium/cilium/pkg/loadbalancer"
 	"github.com/cilium/cilium/pkg/maglev"
+	"github.com/cilium/cilium/pkg/maps/mapsize"
 	"github.com/cilium/cilium/pkg/mtu"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
@@ -52,6 +53,7 @@ func newLocalNodeConfig(
 	masqInterface string,
 	xdpConfig xdp.Config,
 	lbConfig loadbalancer.Config,
+	bpfMapsSizeConfig mapsize.BPFMapsSizeConfig,
 	kprCfg kpr.KPRConfig,
 	svcCfg svcrouteconfig.RoutesConfig,
 	maglevConfig maglev.Config,
@@ -138,6 +140,7 @@ func newLocalNodeConfig(
 		IPv6PodSubnets:               cidr.NewCIDRSlice(config.IPv6PodSubnets),
 		XDPConfig:                    xdpConfig,
 		LBConfig:                     lbConfig,
+		BPFMapsSizeConfig:            bpfMapsSizeConfig,
 		KPRConfig:                    kprCfg,
 		SvcRouteConfig:               svcCfg,
 		MaglevConfig:                 maglevConfig,
