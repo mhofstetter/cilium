@@ -103,7 +103,7 @@ jobs:
       SHA: ${{ inputs.SHA || github.sha }}
       extra-args: ${{ inputs.extra-args }}
       test-l7-only: true
-      UID: 1
+      UID: 2
 
   merge-upload-and-status:
     name: Merge Upload and Status
