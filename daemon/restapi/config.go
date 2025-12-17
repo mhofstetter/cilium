@@ -23,7 +23,6 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/bigtcp"
 	datapathTables "github.com/cilium/cilium/pkg/datapath/tables"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
-	"github.com/cilium/cilium/pkg/datapath/types"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/endpoint/regeneration"
@@ -60,7 +59,8 @@ var configModificationCell = cell.Module(
 type configModifyApiHandlerParams struct {
 	cell.In
 
-	Logger *slog.Logger
+	Logger       *slog.Logger
+	DaemonConfig *option.DaemonConfig
 
 	// Depend on DaemonInitialization to wait until legacy daemon initialization is finished. This blocks the
 	// API server from starting and is required to prevent panics when accessing node globals that are
@@ -77,7 +77,7 @@ type configModifyApiHandlerParams struct {
 	TunnelConfig    tunnel.Config
 	BandwidthConfig datapath.BandwidthConfig
 	WgConfig        wgTypes.WireguardConfig
-	ConnectorConfig types.ConnectorConfig
+	ConnectorConfig datapath.ConnectorConfig
 
 	EventHandler *ConfigModifyEventHandler
 }
@@ -93,6 +93,7 @@ func newConfigModifyApiHandler(params configModifyApiHandlerParams) configModify
 	return configModifyApiHandlerOut{
 		GetConfigHandler: &getConfigHandler{
 			logger:          params.Logger,
+			daemonConfig:    params.DaemonConfig,
 			db:              params.DB,
 			devices:         params.Devices,
 			clientset:       params.Clientset,
@@ -115,8 +116,9 @@ func newConfigModifyApiHandler(params configModifyApiHandlerParams) configModify
 type configModifyEventHandlerParams struct {
 	cell.In
 
-	Lifecycle cell.Lifecycle
-	Logger    *slog.Logger
+	Lifecycle    cell.Lifecycle
+	Logger       *slog.Logger
+	DaemonConfig *option.DaemonConfig
 
 	Orchestrator    datapath.Orchestrator
 	Policy          policy.PolicyRepository
@@ -130,6 +132,7 @@ func newConfigModifyEventHandler(params configModifyEventHandlerParams) *ConfigM
 	eventHandler := &ConfigModifyEventHandler{
 		ctx:             ctx,
 		logger:          params.Logger,
+		daemonConfig:    params.DaemonConfig,
 		orchestrator:    params.Orchestrator,
 		policy:          params.Policy,
 		endpointManager: params.EndpointManager,
@@ -140,7 +143,7 @@ func newConfigModifyEventHandler(params configModifyEventHandlerParams) *ConfigM
 		OnStart: func(hookContext cell.HookContext) error {
 			rt, err := trigger.NewTrigger(trigger.Parameters{
 				Name:        "datapath-regeneration",
-				MinInterval: option.Config.PolicyTriggerInterval,
+				MinInterval: params.DaemonConfig.PolicyTriggerInterval,
 				TriggerFunc: eventHandler.datapathRegen,
 			})
 			if err != nil {
@@ -166,8 +169,9 @@ func newConfigModifyEventHandler(params configModifyEventHandlerParams) *ConfigM
 }
 
 type ConfigModifyEventHandler struct {
-	ctx    context.Context
-	logger *slog.Logger
+	ctx          context.Context
+	logger       *slog.Logger
+	daemonConfig *option.DaemonConfig
 
 	datapathRegenTrigger *trigger.Trigger
 	// event queue for serializing configuration updates to the daemon.
@@ -194,7 +198,7 @@ func (h *ConfigModifyEventHandler) datapathRegen(reasons []string) {
 func (h *ConfigModifyEventHandler) configModify(params daemonapi.PatchConfigParams, resChan chan any) {
 	cfgSpec := params.Configuration
 
-	om, err := option.Config.Opts.ValidateConfigurationMap(cfgSpec.Options)
+	om, err := h.daemonConfig.Opts.ValidateConfigurationMap(cfgSpec.Options)
 	if err != nil {
 		msg := fmt.Errorf("invalid configuration option: %w", err)
 		resChan <- api.Error(daemonapi.PatchConfigBadRequestCode, msg)
@@ -208,7 +212,7 @@ func (h *ConfigModifyEventHandler) configModify(params daemonapi.PatchConfigPara
 	oldEnforcementValue := policy.GetPolicyEnabled()
 	oldConfigOpts := make(option.OptionMap, len(om))
 	for k := range om {
-		oldConfigOpts[k] = option.Config.Opts.GetValue(k)
+		oldConfigOpts[k] = h.daemonConfig.Opts.GetValue(k)
 	}
 
 	// Only update if value provided for PolicyEnforcement.
@@ -233,7 +237,7 @@ func (h *ConfigModifyEventHandler) configModify(params daemonapi.PatchConfigPara
 		h.logger.Debug("finished configuring PolicyEnforcement for daemon")
 	}
 
-	changes += option.Config.Opts.ApplyValidated(om, h.changedOption, nil)
+	changes += h.daemonConfig.Opts.ApplyValidated(om, h.changedOption, nil)
 	h.endpointManager.OverrideEndpointOpts(om)
 
 	h.logger.Debug(
@@ -250,7 +254,7 @@ func (h *ConfigModifyEventHandler) configModify(params daemonapi.PatchConfigPara
 			if policyEnforcementChanged {
 				policy.SetPolicyEnabled(oldEnforcementValue)
 			}
-			option.Config.Opts.ApplyValidated(oldConfigOpts, func(string, option.OptionSetting, any) {}, h)
+			h.daemonConfig.Opts.ApplyValidated(oldConfigOpts, func(string, option.OptionSetting, any) {}, h)
 			h.endpointManager.OverrideEndpointOpts(oldConfigOpts)
 			h.logger.Debug("finished reverting agent configuration changes")
 			resChan <- api.Error(daemonapi.PatchConfigFailureCode, msg)
@@ -268,7 +272,7 @@ func (h *ConfigModifyEventHandler) configModify(params daemonapi.PatchConfigPara
 func (h *ConfigModifyEventHandler) changedOption(key string, value option.OptionSetting, _ any) {
 	if key == option.Debug {
 		// Set the log level of the agent (this can be a no-op)
-		if option.Config.Opts.IsEnabled(option.Debug) {
+		if h.daemonConfig.Opts.IsEnabled(option.Debug) {
 			logging.SetLogLevelToDebug()
 		} else {
 			logging.SetDefaultLogLevel()
@@ -276,7 +280,7 @@ func (h *ConfigModifyEventHandler) changedOption(key string, value option.Option
 
 		// Reflect log level change to proxies
 		// Might not be initialized yet
-		if option.Config.EnableL7Proxy {
+		if h.daemonConfig.EnableL7Proxy {
 			h.l7Proxy.ChangeLogLevel(logging.GetSlogLevel(h.logger))
 		}
 	}
@@ -337,7 +341,8 @@ func (h *patchConfigHandler) Handle(params daemonapi.PatchConfigParams) middlewa
 }
 
 type getConfigHandler struct {
-	logger *slog.Logger
+	logger       *slog.Logger
+	daemonConfig *option.DaemonConfig
 
 	db              *statedb.DB
 	devices         statedb.Table[*datapathTables.Device]
@@ -349,7 +354,7 @@ type getConfigHandler struct {
 	tunnelConfig    tunnel.Config
 	bandwidthConfig datapath.BandwidthConfig
 	wgConfig        wgTypes.WireguardConfig
-	connectorConfig types.ConnectorConfig
+	connectorConfig datapath.ConnectorConfig
 }
 
 func (h *getConfigHandler) Handle(params daemonapi.GetConfigParams) middleware.Responder {
@@ -361,7 +366,7 @@ func (h *getConfigHandler) Handle(params daemonapi.GetConfigParams) middleware.R
 	m := make(map[string]any)
 
 	// Collect config ignoring the mutable options.
-	e := reflect.ValueOf(option.Config).Elem()
+	e := reflect.ValueOf(h.daemonConfig).Elem()
 	for i := range e.NumField() {
 		if e.Field(i).Kind() != reflect.Func {
 			field := e.Type().Field(i)
@@ -377,7 +382,7 @@ func (h *getConfigHandler) Handle(params daemonapi.GetConfigParams) middleware.R
 	m["Devices"] = datapathTables.DeviceNames(devs)
 
 	spec := &models.DaemonConfigurationSpec{
-		Options:           *option.Config.Opts.GetMutableModel(),
+		Options:           *h.daemonConfig.Opts.GetMutableModel(),
 		PolicyEnforcement: policy.GetPolicyEnabled(),
 	}
 
@@ -395,14 +400,14 @@ func (h *getConfigHandler) Handle(params daemonapi.GetConfigParams) middleware.R
 		DeviceMTU:                    int64(h.mtuConfig.GetDeviceMTU()),
 		RouteMTU:                     int64(h.mtuConfig.GetRouteMTU()),
 		EnableRouteMTUForCNIChaining: h.mtuConfig.IsEnableRouteMTUForCNIChaining(),
-		DatapathMode:                 models.DatapathMode(option.Config.DatapathMode),
-		IpamMode:                     option.Config.IPAM,
-		Masquerade:                   option.Config.MasqueradingEnabled(),
+		DatapathMode:                 models.DatapathMode(h.daemonConfig.DatapathMode),
+		IpamMode:                     h.daemonConfig.IPAM,
+		Masquerade:                   h.daemonConfig.MasqueradingEnabled(),
 		MasqueradeProtocols: &models.DaemonConfigurationStatusMasqueradeProtocols{
-			IPV4: option.Config.EnableIPv4Masquerade,
-			IPV6: option.Config.EnableIPv6Masquerade,
+			IPV4: h.daemonConfig.EnableIPv4Masquerade,
+			IPV6: h.daemonConfig.EnableIPv6Masquerade,
 		},
-		InstallUplinkRoutesForDelegatedIPAM: option.Config.InstallUplinkRoutesForDelegatedIPAM,
+		InstallUplinkRoutesForDelegatedIPAM: h.daemonConfig.InstallUplinkRoutesForDelegatedIPAM,
 		GROMaxSize:                          int64(h.bigTCPConfig.GetGROIPv6MaxSize()),
 		GSOMaxSize:                          int64(h.bigTCPConfig.GetGSOIPv6MaxSize()),
 		GROIPV4MaxSize:                      int64(h.bigTCPConfig.GetGROIPv4MaxSize()),
@@ -428,11 +433,11 @@ func (h *getConfigHandler) Handle(params daemonapi.GetConfigParams) middleware.R
 // conflict when running with DNS transparent proxy mode.
 // This is a workaround for cilium/cilium#31535
 func (h *getConfigHandler) getIPLocalReservedPorts() string {
-	if option.Config.ContainerIPLocalReservedPorts != defaults.ContainerIPLocalReservedPortsAuto {
-		return option.Config.ContainerIPLocalReservedPorts
+	if h.daemonConfig.ContainerIPLocalReservedPorts != defaults.ContainerIPLocalReservedPortsAuto {
+		return h.daemonConfig.ContainerIPLocalReservedPorts
 	}
 
-	if !option.Config.DNSProxyEnableTransparentMode {
+	if !h.daemonConfig.DNSProxyEnableTransparentMode {
 		return "" // no ports to reserve
 	}
 
