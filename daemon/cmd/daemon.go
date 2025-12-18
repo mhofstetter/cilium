@@ -184,10 +184,6 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 		}
 	} else {
 		drdName = directRoutingDevice.Name
-		params.Logger.Info(
-			"Direct routing device detected",
-			option.DirectRoutingDevice, drdName,
-		)
 	}
 
 	nativeDevices, _ := datapathTables.SelectedDevices(params.Devices, rxn)

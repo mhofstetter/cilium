@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/pflag"
 	"go4.org/netipx"
 
+	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
 )
@@ -41,11 +42,12 @@ type DirectRoutingDeviceConfig struct {
 type DirectRoutingDeviceParams struct {
 	cell.In
 
-	Log     *slog.Logger
-	Config  DirectRoutingDeviceConfig
-	Node    *node.LocalNodeStore `optional:"true"`
-	DB      *statedb.DB
-	Devices statedb.Table[*Device]
+	Lifecycle cell.Lifecycle
+	Log       *slog.Logger
+	Config    DirectRoutingDeviceConfig
+	Node      *node.LocalNodeStore `optional:"true"`
+	DB        *statedb.DB
+	Devices   statedb.Table[*Device]
 }
 
 type DirectRoutingDevice struct {
@@ -53,7 +55,23 @@ type DirectRoutingDevice struct {
 }
 
 func NewDirectRoutingDevice(p DirectRoutingDeviceParams) DirectRoutingDevice {
-	return DirectRoutingDevice{&p}
+	drd := DirectRoutingDevice{&p}
+
+	p.Lifecycle.Append(cell.Hook{
+		OnStart: func(ctx cell.HookContext) error {
+			directRoutingDevice, _ := drd.Get(ctx, p.DB.ReadTxn())
+
+			if directRoutingDevice == nil {
+				p.Log.Info("No direct routing device detected")
+				return nil
+			}
+
+			p.Log.Info("Direct routing device detected", logfields.DirectRoutingDevice, directRoutingDevice.Name)
+			return nil
+		},
+	})
+
+	return drd
 }
 
 // Get returns the direct routing device and a channel which closes if the
