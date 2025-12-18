@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/cilium/cilium/pkg/datapath/fake/types"
 	fakeTypes "github.com/cilium/cilium/pkg/datapath/fake/types"
 	"github.com/cilium/cilium/pkg/datapath/linux/sysctl"
 	"github.com/cilium/cilium/pkg/datapath/tunnel"
@@ -43,7 +42,7 @@ type kprConfig struct {
 
 	lbConfig    loadbalancer.Config
 	kprConfig   kpr.KPRConfig
-	ipsecConfig types.IPsecConfig
+	ipsecConfig fakeTypes.IPsecConfig
 }
 
 func (cfg *kprConfig) set() (err error) {
@@ -54,7 +53,7 @@ func (cfg *kprConfig) set() (err error) {
 		EnableSocketLB:       cfg.enableSocketLB,
 	}
 
-	cfg.kprConfig, err = kpr.NewKPRConfig(kprFlags)
+	cfg.kprConfig, _, err = kpr.NewKPRConfig(kprFlags)
 	if err != nil {
 		return err
 	}

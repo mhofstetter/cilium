@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/cilium/cilium/pkg/datapath/linux/config/defines"
+	datapathtablestypes "github.com/cilium/cilium/pkg/datapath/tables/types"
 	"github.com/cilium/cilium/pkg/option"
 	"github.com/cilium/cilium/pkg/time"
 	"github.com/cilium/cilium/pkg/wireguard/types"
@@ -28,7 +29,8 @@ func newWireguardAgent(p params) (out struct {
 	cell.Out
 	types.WireguardAgent
 	defines.NodeOut
-}) {
+},
+) {
 	out.WireguardAgent = newAgent(p)
 	if out.WireguardAgent.Enabled() {
 		out.NodeDefines = map[string]string{
@@ -42,8 +44,8 @@ func newWireguardAgent(p params) (out struct {
 }
 
 // newWireguardConfig returns the [Config] as an interface [types.WireguardConfig].
-func newWireguardConfig(c Config) types.WireguardConfig {
-	return c
+func newWireguardConfig(c Config) (types.WireguardConfig, datapathtablestypes.DevicesRequiredConfigOut) {
+	return c, datapathtablestypes.DevicesRequiredConfigOut{Config: c}
 }
 
 // buildConfigFrom creates the [Config] from [UserConfig] and [option.DaemonConfig].
@@ -96,4 +98,8 @@ type Config struct {
 // Returns true when enabled. Implements [types.WireguardConfig].
 func (c Config) Enabled() bool {
 	return c.EnableWireguard
+}
+
+func (c Config) DevicesRequired() bool {
+	return c.Enabled()
 }

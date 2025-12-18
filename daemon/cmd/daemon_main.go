@@ -31,6 +31,7 @@ import (
 	"github.com/cilium/cilium/pkg/datapath/linux/probes"
 	datapathOption "github.com/cilium/cilium/pkg/datapath/option"
 	datapathTables "github.com/cilium/cilium/pkg/datapath/tables"
+	datapathtablestypes "github.com/cilium/cilium/pkg/datapath/tables/types"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
 	"github.com/cilium/cilium/pkg/endpointmanager"
@@ -1180,6 +1181,9 @@ var daemonCell = cell.Module(
 		daemonLegacyInitialization,
 		promise.New[*option.DaemonConfig],
 		newSyncHostIPs,
+		func(daemonConfig *option.DaemonConfig) datapathtablestypes.DevicesRequiredConfigOut {
+			return datapathtablestypes.DevicesRequiredConfigOut{Config: daemonConfig}
+		},
 	),
 	cell.Invoke(func(_ legacy.DaemonInitialization) {}), // Force instantiation.
 	endpointRestoreCell,

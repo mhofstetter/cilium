@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/cilium/cilium/pkg/datapath/linux/config/defines"
+	datapathtablestypes "github.com/cilium/cilium/pkg/datapath/tables/types"
 	"github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/maps/encrypt"
 	"github.com/cilium/cilium/pkg/node"
@@ -46,7 +47,8 @@ func newIPsecAgent(p params) (out struct {
 	cell.Out
 	types.IPsecAgent
 	defines.NodeOut
-}) {
+},
+) {
 	out.IPsecAgent = newAgent(p.Lifecycle, p.Log, p.JobGroup, p.LocalNodeStore, p.Config, p.EncryptMap)
 	if out.IPsecAgent.Enabled() {
 		out.NodeDefines = map[string]string{
@@ -57,8 +59,8 @@ func newIPsecAgent(p params) (out struct {
 }
 
 // newIPsecAgent returns the [Config] as an interface [types.IPsecConfig].
-func newIPsecConfig(c Config) types.IPsecConfig {
-	return c
+func newIPsecConfig(c Config) (types.IPsecConfig, datapathtablestypes.DevicesRequiredConfigOut) {
+	return c, datapathtablestypes.DevicesRequiredConfigOut{Config: c}
 }
 
 // buildConfigFrom creates the [Config] from [UserConfig] and [option.DaemonConfig].
@@ -120,4 +122,8 @@ func (c Config) UseCiliumInternalIP() bool {
 
 func (c Config) DNSProxyInsecureSkipTransparentModeCheckEnabled() bool {
 	return c.DNSProxyInsecureSkipTransparentModeCheck
+}
+
+func (c Config) DevicesRequired() bool {
+	return c.Enabled()
 }

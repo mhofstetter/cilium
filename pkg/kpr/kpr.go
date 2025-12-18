@@ -6,6 +6,8 @@ package kpr
 import (
 	"github.com/cilium/hive/cell"
 	"github.com/spf13/pflag"
+
+	datapathtablestypes "github.com/cilium/cilium/pkg/datapath/tables/types"
 )
 
 var Cell = cell.Module(
@@ -37,7 +39,11 @@ type KPRConfig struct {
 	EnableSocketLB       bool
 }
 
-func NewKPRConfig(flags KPRFlags) (KPRConfig, error) {
+func (r *KPRConfig) DevicesRequired() bool {
+	return r.KubeProxyReplacement
+}
+
+func NewKPRConfig(flags KPRFlags) (KPRConfig, datapathtablestypes.DevicesRequiredConfigOut, error) {
 	//nolint:staticcheck
 	cfg := KPRConfig{
 		KubeProxyReplacement: flags.KubeProxyReplacement,
@@ -48,5 +54,5 @@ func NewKPRConfig(flags KPRFlags) (KPRConfig, error) {
 		cfg.EnableSocketLB = true
 	}
 
-	return cfg, nil
+	return cfg, datapathtablestypes.DevicesRequiredConfigOut{Config: &cfg}, nil
 }

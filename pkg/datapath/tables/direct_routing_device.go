@@ -5,7 +5,10 @@ package tables
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
+	"slices"
 
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/job"
@@ -13,6 +16,7 @@ import (
 	"github.com/spf13/pflag"
 	"go4.org/netipx"
 
+	"github.com/cilium/cilium/pkg/datapath/tables/types"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/node"
 	"github.com/cilium/cilium/pkg/option"
@@ -50,6 +54,8 @@ type DirectRoutingDeviceParams struct {
 	Node      *node.LocalNodeStore `optional:"true"`
 	DB        *statedb.DB
 	Devices   statedb.Table[*Device]
+
+	DevicesRequiredConfigs []types.DevicesRequiredConfig `group:"devicesRequired"`
 }
 
 type DirectRoutingDevice struct {
@@ -66,6 +72,11 @@ func NewDirectRoutingDevice(p DirectRoutingDeviceParams) DirectRoutingDevice {
 			directRoutingDevice, _ := drd.Get(ctx, p.DB.ReadTxn())
 
 			if directRoutingDevice == nil {
+				if slices.ContainsFunc(p.DevicesRequiredConfigs, types.DevicesRequiredConfig.DevicesRequired) {
+					// Fail hard if devices are required to function.
+					return fmt.Errorf("unable to determine direct routing device. Use --%s to specify it", option.DirectRoutingDevice)
+				}
+
 				p.Log.Info("No direct routing device detected")
 				return nil
 			}
@@ -76,13 +87,15 @@ func NewDirectRoutingDevice(p DirectRoutingDeviceParams) DirectRoutingDevice {
 		},
 	})
 
-	p.JobGroup.Add(job.OneShot("direct-routing-device-change", func(ctx context.Context, _ cell.Health) error {
+	p.JobGroup.Add(job.OneShot("direct-routing-device-change", func(ctx context.Context, health cell.Health) error {
 		for {
 			directRoutingDevice, devicesChangedWatch := drd.Get(ctx, p.DB.ReadTxn())
 
 			newDRDName := "n/a"
 			if directRoutingDevice != nil {
 				newDRDName = directRoutingDevice.Name
+			} else if slices.ContainsFunc(p.DevicesRequiredConfigs, types.DevicesRequiredConfig.DevicesRequired) {
+				health.Degraded("Unable to determine direct routing device", errors.New("enabled functionality requires a direct routing device"))
 			}
 
 			if previousDRDName != newDRDName {

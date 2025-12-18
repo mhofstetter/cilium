@@ -176,11 +176,6 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 
 	rxn := params.DB.ReadTxn()
 	directRoutingDevice, _ := params.DirectRoutingDevice.Get(ctx, rxn)
-	if directRoutingDevice == nil && params.DaemonConfig.AreDevicesRequired(params.KPRConfig, params.WGAgent.Enabled(), params.IPsecAgent.Enabled()) {
-		// Fail hard if devices are required to function.
-		return fmt.Errorf("unable to determine direct routing device. Use --%s to specify it", option.DirectRoutingDevice)
-	}
-
 	nativeDevices, _ := datapathTables.SelectedDevices(params.Devices, rxn)
 	if err := params.KPRInitializer.FinishKubeProxyReplacementInit(nativeDevices, directRoutingDevice); err != nil {
 		return fmt.Errorf("failed to finalise LB initialization: %w", err)
