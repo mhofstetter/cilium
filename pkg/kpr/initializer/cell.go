@@ -30,7 +30,7 @@ type KPRInitializer interface {
 
 	// FinishKubeProxyReplacementInit finishes initialization of kube-proxy
 	// replacement after all devices are known.
-	FinishKubeProxyReplacementInit(devices []*tables.Device, directRoutingDevice string) error
+	FinishKubeProxyReplacementInit(devices []*tables.Device, directRoutingDevice *tables.Device) error
 }
 
 type kprInitializerParams struct {

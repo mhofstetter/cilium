@@ -252,7 +252,7 @@ func probeKubeProxyReplacementOptions(logger *slog.Logger, lbConfig loadbalancer
 	return nil
 }
 
-func (r *kprInitializer) FinishKubeProxyReplacementInit(devices []*tables.Device, directRoutingDevice string) error {
+func (r *kprInitializer) FinishKubeProxyReplacementInit(devices []*tables.Device, directRoutingDevice *tables.Device) error {
 	// For MKE, we only need to change/extend the socket LB behavior in case
 	// of kube-proxy replacement. Otherwise, nothing else is needed.
 	if option.Config.EnableMKE && r.kprCfg.EnableSocketLB {
@@ -266,7 +266,7 @@ func (r *kprInitializer) FinishKubeProxyReplacementInit(devices []*tables.Device
 	if option.Config.EnableIPv4 &&
 		!option.Config.TunnelingEnabled() &&
 		r.lbConfig.LoadBalancerUsesDSR() &&
-		directRoutingDevice != "" &&
+		directRoutingDevice != nil && directRoutingDevice.Name != "" &&
 		len(devices) > 1 {
 
 		// In the case of the multi-dev NodePort DSR, if a request from an
@@ -276,16 +276,16 @@ func (r *kprInitializer) FinishKubeProxyReplacementInit(devices []*tables.Device
 		// and the client IP is reachable via other device than the direct
 		// routing one.
 
-		if val, err := r.sysctl.Read([]string{"net", "ipv4", "conf", directRoutingDevice, "rp_filter"}); err != nil {
+		if val, err := r.sysctl.Read([]string{"net", "ipv4", "conf", directRoutingDevice.Name, "rp_filter"}); err != nil {
 			r.logger.Warn(fmt.Sprintf(
 				"Unable to read net.ipv4.conf.%s.rp_filter: %s. Ignoring the check",
-				directRoutingDevice, err),
+				directRoutingDevice.Name, err),
 			)
 		} else {
 			if val == "1" {
 				r.logger.Warn(fmt.Sprintf(`DSR might not work for requests sent to other than %s device. `+
 					`Run 'sysctl -w net.ipv4.conf.%s.rp_filter=2' (or set to '0') on each node to fix`,
-					directRoutingDevice, directRoutingDevice))
+					directRoutingDevice.Name, directRoutingDevice.Name))
 			}
 		}
 	}
