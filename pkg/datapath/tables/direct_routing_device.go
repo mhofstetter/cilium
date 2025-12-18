@@ -8,6 +8,7 @@ import (
 	"log/slog"
 
 	"github.com/cilium/hive/cell"
+	"github.com/cilium/hive/job"
 	"github.com/cilium/statedb"
 	"github.com/spf13/pflag"
 	"go4.org/netipx"
@@ -43,6 +44,7 @@ type DirectRoutingDeviceParams struct {
 	cell.In
 
 	Lifecycle cell.Lifecycle
+	JobGroup  job.Group
 	Log       *slog.Logger
 	Config    DirectRoutingDeviceConfig
 	Node      *node.LocalNodeStore `optional:"true"`
@@ -57,6 +59,8 @@ type DirectRoutingDevice struct {
 func NewDirectRoutingDevice(p DirectRoutingDeviceParams) DirectRoutingDevice {
 	drd := DirectRoutingDevice{&p}
 
+	previousDRDName := "n/a"
+
 	p.Lifecycle.Append(cell.Hook{
 		OnStart: func(ctx cell.HookContext) error {
 			directRoutingDevice, _ := drd.Get(ctx, p.DB.ReadTxn())
@@ -66,10 +70,37 @@ func NewDirectRoutingDevice(p DirectRoutingDeviceParams) DirectRoutingDevice {
 				return nil
 			}
 
+			previousDRDName = directRoutingDevice.Name
 			p.Log.Info("Direct routing device detected", logfields.DirectRoutingDevice, directRoutingDevice.Name)
 			return nil
 		},
 	})
+
+	p.JobGroup.Add(job.OneShot("direct-routing-device-change", func(ctx context.Context, _ cell.Health) error {
+		for {
+			directRoutingDevice, devicesChangedWatch := drd.Get(ctx, p.DB.ReadTxn())
+
+			newDRDName := "n/a"
+			if directRoutingDevice != nil {
+				newDRDName = directRoutingDevice.Name
+			}
+
+			if previousDRDName != newDRDName {
+				p.Log.Info("Changed direct routing device detected",
+					logfields.Previous, previousDRDName,
+					logfields.DirectRoutingDevice, newDRDName,
+				)
+			}
+			previousDRDName = newDRDName
+
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-devicesChangedWatch:
+				// continue and check for changed direct routing device
+			}
+		}
+	}))
 
 	return drd
 }
