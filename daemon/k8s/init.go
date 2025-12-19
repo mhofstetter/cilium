@@ -91,18 +91,16 @@ func useNodeCIDR(n *nodeTypes.Node) {
 // Kubernetes Node resource. This function will block until the information is
 // received.
 func WaitForNodeInformation(ctx context.Context, log *slog.Logger, localNode LocalNodeResource, localCiliumNode LocalCiliumNodeResource) error {
-	requireIPv4CIDR := option.Config.K8sRequireIPv4PodCIDR
-	requireIPv6CIDR := option.Config.K8sRequireIPv6PodCIDR
 	// If no CIDR is required, retrieving the node information is
 	// optional
 	// At this point it's not clear whether the device auto-detection will
 	// happen, as initKubeProxyReplacementOptions() might disable BPF NodePort.
 	// Anyway, to be on the safe side, don't give up waiting for a (Cilium)Node
 	// self object.
-	isNodeInformationOptional := (!requireIPv4CIDR && !requireIPv6CIDR)
+	//
 	// If node information is optional, let's wait 10 seconds only.
 	// It node information is required, wait indefinitely.
-	if isNodeInformationOptional {
+	if !option.Config.K8sRequireIPv4PodCIDR && !option.Config.K8sRequireIPv6PodCIDR {
 		newCtx, cancel := context.WithTimeout(ctx, time.Second*10)
 		ctx = newCtx
 		defer cancel()
@@ -128,7 +126,7 @@ func WaitForNodeInformation(ctx context.Context, log *slog.Logger, localNode Loc
 	} else {
 		// if node resource could not be received, fail if
 		// PodCIDR requirement has been requested
-		if requireIPv4CIDR || requireIPv6CIDR {
+		if option.Config.K8sRequireIPv4PodCIDR || option.Config.K8sRequireIPv6PodCIDR {
 			return fmt.Errorf("unable to derive PodCIDR via Node or CiliumNode resource")
 		}
 	}
