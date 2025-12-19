@@ -6,6 +6,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/cilium/cilium/daemon/infraendpoints"
 	agentK8s "github.com/cilium/cilium/daemon/k8s"
@@ -156,15 +157,14 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 			}
 		}
 
-		if params.DaemonConfig.IPAM == ipamOption.IPAMClusterPool ||
-			params.DaemonConfig.IPAM == ipamOption.IPAMMultiPool {
+		if slices.Contains([]string{ipamOption.IPAMClusterPool, ipamOption.IPAMMultiPool}, option.Config.IPAM) {
 			// Create the CiliumNode custom resource. This call will block until
 			// the custom resource has been created
 			params.NodeDiscovery.UpdateCiliumNodeResource()
 		}
 
-		if err := agentK8s.WaitForNodeInformation(ctx, params.Logger, params.Resources.LocalNode, params.Resources.LocalCiliumNode); err != nil {
-			return fmt.Errorf("unable to connect to get node spec from apiserver: %w", err)
+		if err := agentK8s.WaitForNodeIPAMAllocationCIDR(ctx, params.Logger, params.Resources.LocalNode, params.Resources.LocalCiliumNode); err != nil {
+			return fmt.Errorf("failed to wait for local node IPAM allocation CIDRs: %w", err)
 		}
 
 		bootstrapStats.k8sInit.End(true)
