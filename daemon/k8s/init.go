@@ -76,9 +76,9 @@ func retrieveNodeInformation(ctx context.Context, log *slog.Logger, localNodeRes
 	return n
 }
 
-// useNodeCIDR sets the ipv4-range and ipv6-range values values from the
+// useNodeAllocationCIDR sets the ipv4-range and ipv6-range values values from the
 // addresses defined in the given node.
-func useNodeCIDR(n *nodeTypes.Node) {
+func useNodeAllocationCIDR(n *nodeTypes.Node) {
 	if n.IPv4AllocCIDR != nil && option.Config.EnableIPv4 {
 		node.SetIPv4AllocRange(n.IPv4AllocCIDR)
 	}
@@ -87,10 +87,9 @@ func useNodeCIDR(n *nodeTypes.Node) {
 	}
 }
 
-// WaitForNodeInformation retrieves the node information via the CiliumNode or
-// Kubernetes Node resource. This function will block until the information is
-// received.
-func WaitForNodeInformation(ctx context.Context, log *slog.Logger, localNode LocalNodeResource, localCiliumNode LocalCiliumNodeResource) error {
+// WaitForNodeIPAMAllocationCIDR will block and wait until the nodes IPAM allocation CIDR is available
+// via CiliumNode or Kubernetes Node resource.
+func WaitForNodeIPAMAllocationCIDR(ctx context.Context, log *slog.Logger, localNode LocalNodeResource, localCiliumNode LocalCiliumNodeResource) error {
 	// If no CIDR is required, retrieving the node information is
 	// optional
 	// At this point it's not clear whether the device auto-detection will
@@ -122,7 +121,7 @@ func WaitForNodeInformation(ctx context.Context, log *slog.Logger, localNode Loc
 			logfields.K8sNodeIP, k8sNodeIP,
 		)
 
-		useNodeCIDR(n)
+		useNodeAllocationCIDR(n)
 	} else {
 		// if node resource could not be received, fail if
 		// PodCIDR requirement has been requested
