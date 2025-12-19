@@ -349,6 +349,11 @@ func ValidatePostInit(logger *slog.Logger) error {
 		return fmt.Errorf("BUG: Internal IPv4 node address was not configured")
 	}
 
+	if option.Config.EnableIPv6 && GetIPv6(logger) == nil {
+		logger.Warn("IPv6 is enabled, but Cilium cannot find the IPv6 address for this node. " +
+			"This may cause connectivity disruption for Endpoints that attempt to communicate using IPv6")
+	}
+
 	return nil
 }
 
