@@ -106,21 +106,10 @@ func WaitForNodeIPAMAllocationCIDR(ctx context.Context, log *slog.Logger, localN
 	}
 
 	if n := retrieveNodeInformation(ctx, log, localNode, localCiliumNode); n != nil {
-		nodeIP4 := n.GetNodeIP(false)
-		nodeIP6 := n.GetNodeIP(true)
-		k8sNodeIP := n.GetK8sNodeIP()
-
-		log.Info(
-			"Received own node information from API server",
-			logfields.NodeName, n.Name,
-			logfields.Labels, n.Labels,
-			logfields.IPv4, nodeIP4,
-			logfields.IPv6, nodeIP6,
+		log.Info("Received local node IPAM allocation CIDR",
 			logfields.V4Prefix, n.IPv4AllocCIDR,
 			logfields.V6Prefix, n.IPv6AllocCIDR,
-			logfields.K8sNodeIP, k8sNodeIP,
 		)
-
 		useNodeAllocationCIDR(n)
 	} else {
 		// if node resource could not be received, fail if
