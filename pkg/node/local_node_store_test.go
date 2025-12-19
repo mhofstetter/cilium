@@ -31,6 +31,10 @@ func (ts testSynchronizer) SyncLocalNode(ctx context.Context, lns *LocalNodeStor
 	<-ctx.Done()
 }
 
+func (ts testSynchronizer) WaitForNodeIPAMAllocationCIDR(ctx context.Context, store *LocalNodeStore) error {
+	return nil
+}
+
 func TestLocalNodeStore(t *testing.T) {
 	var waitObserve sync.WaitGroup
 	var observed []uint32

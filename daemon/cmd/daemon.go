@@ -9,7 +9,6 @@ import (
 	"slices"
 
 	"github.com/cilium/cilium/daemon/infraendpoints"
-	agentK8s "github.com/cilium/cilium/daemon/k8s"
 	linuxdatapath "github.com/cilium/cilium/pkg/datapath/linux"
 	"github.com/cilium/cilium/pkg/datapath/linux/ipsec"
 	datapathTables "github.com/cilium/cilium/pkg/datapath/tables"
@@ -163,7 +162,7 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 			params.NodeDiscovery.UpdateCiliumNodeResource()
 		}
 
-		if err := agentK8s.WaitForNodeIPAMAllocationCIDR(ctx, params.Logger, params.Resources.LocalNode, params.Resources.LocalCiliumNode); err != nil {
+		if err := params.LocalNodeStore.WaitForNodeIPAMAllocationCIDR(ctx); err != nil {
 			return fmt.Errorf("failed to wait for local node IPAM allocation CIDRs: %w", err)
 		}
 
