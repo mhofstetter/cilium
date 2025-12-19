@@ -12,7 +12,6 @@ import (
 
 	ipamOption "github.com/cilium/cilium/pkg/ipam/option"
 	"github.com/cilium/cilium/pkg/k8s"
-	k8sConst "github.com/cilium/cilium/pkg/k8s/constants"
 	"github.com/cilium/cilium/pkg/k8s/resource"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/node"
@@ -38,13 +37,13 @@ func retrieveNodeInformation(ctx context.Context, log *slog.Logger, localNodeRes
 		option.Config.IPAM == ipamOption.IPAMMultiPool {
 		for event := range localCiliumNodeResource.Events(ctx) {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				log.Error("Timeout while waiting for CiliumNode resource: API server connection issue", logfields.NodeName, nodeTypes.GetName())
+				log.Error("Timeout while waiting for local CiliumNode resource: API server connection issue")
 				break
 			}
 			if event.Kind == resource.Upsert {
 				no := nodeTypes.ParseCiliumNode(event.Object)
 				n = &no
-				log.Info("Retrieved node information from cilium node", logfields.NodeName, n.Name)
+				log.Info("Retrieved local node information from cilium node")
 				if err := waitForCIDR(); err != nil {
 					log.Warn("Waiting for k8s node information", logfields.Error, err)
 				} else {
@@ -57,12 +56,12 @@ func retrieveNodeInformation(ctx context.Context, log *slog.Logger, localNodeRes
 	} else {
 		for event := range localNodeResource.Events(ctx) {
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-				log.Error("Timeout while waiting for Node resource: API server connection issue", logfields.NodeName, nodeTypes.GetName())
+				log.Error("Timeout while waiting for local K8s Node resource: API server connection issue")
 				break
 			}
 			if event.Kind == resource.Upsert {
 				n = k8s.ParseNode(log, event.Object, source.Unspec)
-				log.Info("Retrieved node information from kubernetes node", logfields.NodeName, n.Name)
+				log.Info("Retrieved local node information from kubernetes Node")
 				if err := waitForCIDR(); err != nil {
 					log.Warn("Waiting for k8s node information", logfields.Error, err)
 				} else {
@@ -92,17 +91,6 @@ func useNodeCIDR(n *nodeTypes.Node) {
 // Kubernetes Node resource. This function will block until the information is
 // received.
 func WaitForNodeInformation(ctx context.Context, log *slog.Logger, localNode LocalNodeResource, localCiliumNode LocalCiliumNodeResource) error {
-	// Use of the environment variable overwrites the node-name
-	// automatically derived
-	nodeName := nodeTypes.GetName()
-	if nodeName == "" {
-		if option.Config.K8sRequireIPv4PodCIDR || option.Config.K8sRequireIPv6PodCIDR {
-			return fmt.Errorf("node name must be specified via environment variable '%s' to retrieve Kubernetes PodCIDR range", k8sConst.EnvNodeNameSpec)
-		}
-		log.Info("K8s node name is empty. BPF NodePort might not be able to auto detect all devices")
-		return nil
-	}
-
 	requireIPv4CIDR := option.Config.K8sRequireIPv4PodCIDR
 	requireIPv6CIDR := option.Config.K8sRequireIPv6PodCIDR
 	// If no CIDR is required, retrieving the node information is
