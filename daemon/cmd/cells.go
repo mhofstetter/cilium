@@ -445,13 +445,13 @@ func kvstoreExtraOptions(in struct {
 
 	Logger *slog.Logger
 
-	NodeManager nodeManager.NodeManager
-	ClientSet   k8sClient.Clientset
-	Resolver    dial.Resolver
+	IntervalCalculator nodeManager.ClusterSizeDependantIntervalCalculator
+	ClientSet          k8sClient.Clientset
+	Resolver           dial.Resolver
 },
 ) kvstore.ExtraOptions {
 	goopts := kvstore.ExtraOptions{
-		ClusterSizeDependantInterval: in.NodeManager.ClusterSizeDependantInterval,
+		ClusterSizeDependantInterval: in.IntervalCalculator.ClusterSizeDependantInterval,
 	}
 
 	// If K8s is enabled we can do the service translation automagically by

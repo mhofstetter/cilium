@@ -9,12 +9,12 @@ import (
 	"github.com/cilium/hive/cell"
 
 	"github.com/cilium/cilium/daemon/cmd/cni"
+	"github.com/cilium/cilium/pkg/backoff"
 	"github.com/cilium/cilium/pkg/clustermesh/common"
 	"github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/clustermesh/wait"
 	"github.com/cilium/cilium/pkg/dial"
 	"github.com/cilium/cilium/pkg/ipcache"
-	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/metrics"
 	nodemanager "github.com/cilium/cilium/pkg/node/manager"
@@ -37,8 +37,8 @@ var Cell = cell.Module(
 
 	// Convert concrete objects into more restricted interfaces used by clustermesh.
 	cell.ProvidePrivate(func(ipcache *ipcache.IPCache) ipcache.IPCacher { return ipcache }),
-	cell.ProvidePrivate(func(mgr nodemanager.NodeManager) (nodeStore.NodeManager, kvstore.ClusterSizeDependantIntervalFunc) {
-		return mgr, mgr.ClusterSizeDependantInterval
+	cell.ProvidePrivate(func(mgr nodemanager.NodeManager, calc nodemanager.ClusterSizeDependantIntervalCalculator) (nodeStore.NodeManager, backoff.CustomIntervalFunc) {
+		return mgr, calc.ClusterSizeDependantInterval
 	}),
 	cell.ProvidePrivate(idsMgrProvider),
 

@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/cilium/cilium/api/v1/models"
+	"github.com/cilium/cilium/pkg/backoff"
 	"github.com/cilium/cilium/pkg/clustermesh/clustercfg"
 	"github.com/cilium/cilium/pkg/clustermesh/types"
 	"github.com/cilium/cilium/pkg/controller"
@@ -54,7 +55,7 @@ type remoteCluster struct {
 	configPath string
 
 	// clusterSizeDependantInterval allows to calculate intervals based on cluster size.
-	clusterSizeDependantInterval kvstore.ClusterSizeDependantIntervalFunc
+	clusterSizeDependantInterval backoff.CustomIntervalFunc
 
 	// resolvers are the set of resolvers used to create the custom dialer.
 	resolvers []dial.Resolver
@@ -406,7 +407,7 @@ func (rc *remoteCluster) status() *models.RemoteCluster {
 
 	// This can happen when the controller in restartRemoteConnection is waiting
 	// for the first connection to succeed.
-	var backendStatus = "Waiting for initial connection to be established"
+	backendStatus := "Waiting for initial connection to be established"
 	if rc.backend != nil {
 		backendStatus = rc.backend.Status().Msg
 		if rc.etcdClusterID != "" {

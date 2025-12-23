@@ -99,7 +99,7 @@ type statusParams struct {
 	MaglevConfig     maglev.Config
 	MonitorAgent     monitoragent.Agent
 	NodeLocalStore   *node.LocalNodeStore
-	NodeManager      nodemanager.NodeManager
+	NodeCalculator   nodemanager.ClusterSizeDependantIntervalCalculator
 	PolicyMapFactory policymap.Factory
 	TunnelConfig     tunnel.Config
 	WireguardAgent   wgTypes.WireguardAgent

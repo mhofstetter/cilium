@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/cilium/cilium/api/v1/models"
+	"github.com/cilium/cilium/pkg/backoff"
 	"github.com/cilium/cilium/pkg/logging"
 	"github.com/cilium/cilium/pkg/logging/logfields"
 	"github.com/cilium/cilium/pkg/time"
@@ -28,8 +29,6 @@ type backendOption struct {
 
 type backendOptions map[string]*backendOption
 
-type ClusterSizeDependantIntervalFunc func(baseInterval time.Duration) time.Duration
-
 // ExtraOptions represents any options that can not be represented in a textual
 // format and need to be set programmatically.
 type ExtraOptions struct {
@@ -37,7 +36,7 @@ type ExtraOptions struct {
 
 	// ClusterSizeDependantInterval defines the function to calculate
 	// intervals based on cluster size
-	ClusterSizeDependantInterval ClusterSizeDependantIntervalFunc
+	ClusterSizeDependantInterval backoff.CustomIntervalFunc
 
 	// NoLockQuorumCheck disables the lock acquisition quorum check
 	NoLockQuorumCheck bool
@@ -102,11 +101,9 @@ type backendModule interface {
 	createInstance() backendModule
 }
 
-var (
-	// registeredBackends is a slice of all backends that have registered
-	// itself via registerBackend()
-	registeredBackends = map[string]backendModule{}
-)
+// registeredBackends is a slice of all backends that have registered
+// itself via registerBackend()
+var registeredBackends = map[string]backendModule{}
 
 // registerBackend must be called by kvstore backends to register themselves
 func registerBackend(name string, module backendModule) {

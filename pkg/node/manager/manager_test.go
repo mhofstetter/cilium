@@ -451,6 +451,8 @@ func TestClusterSizeDependantInterval(t *testing.T) {
 	mngr.Subscribe(dp)
 	defer mngr.Stop(context.TODO())
 
+	calculator, _ := newClusterSizeDependantIntervalCalculator()
+
 	prevInterval := time.Nanosecond
 
 	for i := range 1000 {
@@ -460,8 +462,8 @@ func TestClusterSizeDependantInterval(t *testing.T) {
 				IP:   net.ParseIP("10.0.0.1"),
 			},
 		}}
-		mngr.NodeUpdated(n)
-		newInterval := mngr.ClusterSizeDependantInterval(time.Minute)
+		calculator.NodeAdd(n)
+		newInterval := calculator.ClusterSizeDependantInterval(time.Minute)
 		assert.Greater(t, newInterval, prevInterval)
 	}
 }
