@@ -182,7 +182,7 @@ type NodeManager struct {
 	prefixDelegation   bool
 }
 
-func (n *NodeManager) ClusterSizeDependantInterval(baseInterval time.Duration) time.Duration {
+func (n *NodeManager) clusterSizeDependantInterval(baseInterval time.Duration) time.Duration {
 	n.mutex.RLock()
 	numNodes := len(n.nodes)
 	n.mutex.RUnlock()
@@ -192,7 +192,8 @@ func (n *NodeManager) ClusterSizeDependantInterval(baseInterval time.Duration) t
 
 // NewNodeManager returns a new NodeManager
 func NewNodeManager(logger *slog.Logger, instancesAPI AllocationImplementation, k8sAPI CiliumNodeGetterUpdater, metrics MetricsAPI,
-	parallelWorkers int64, releaseExcessIPs bool, prefixDelegation bool) (*NodeManager, error) {
+	parallelWorkers int64, releaseExcessIPs bool, prefixDelegation bool,
+) (*NodeManager, error) {
 	if parallelWorkers < 1 {
 		parallelWorkers = 1
 	}
@@ -319,12 +320,12 @@ func (n *NodeManager) Upsert(resource *v2.CiliumNode) {
 		node.ops = n.instancesAPI.CreateNode(resource, node)
 
 		backoff := &backoff.Exponential{
-			Logger:      n.logger,
-			Max:         5 * time.Minute,
-			Jitter:      true,
-			NodeManager: n,
-			Name:        fmt.Sprintf("ipam-pool-maintainer-%s", resource.Name),
-			ResetAfter:  10 * time.Minute,
+			Logger:             n.logger,
+			Max:                5 * time.Minute,
+			Jitter:             true,
+			CustomIntervalFunc: n.clusterSizeDependantInterval,
+			Name:               fmt.Sprintf("ipam-pool-maintainer-%s", resource.Name),
+			ResetAfter:         10 * time.Minute,
 		}
 		poolMaintainer, err := trigger.NewTrigger(trigger.Parameters{
 			Name:            fmt.Sprintf("ipam-pool-maintainer-%s", resource.Name),

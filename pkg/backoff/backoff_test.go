@@ -38,11 +38,8 @@ func (f *fakeNodeManager) ClusterSizeDependantInterval(baseInterval time.Duratio
 }
 
 func TestNewNodeManager(t *testing.T) {
-	mgr := NewNodeManager(func(baseInterval time.Duration) time.Duration { return 2 * baseInterval })
-	require.Equal(t, 2*time.Second, mgr.ClusterSizeDependantInterval(1*time.Second))
-
-	mgr = NewNodeManager(nil)
-	require.Equal(t, 1*time.Second, mgr.ClusterSizeDependantInterval(1*time.Second))
+	mgr := func(baseInterval time.Duration) time.Duration { return 2 * baseInterval }
+	require.Equal(t, 2*time.Second, mgr(1*time.Second))
 }
 
 func TestClusterSizeDependantInterval(t *testing.T) {
@@ -54,12 +51,12 @@ func TestClusterSizeDependantInterval(t *testing.T) {
 	)
 
 	nodeBackoff := &Exponential{
-		Logger:      hivetest.Logger(t),
-		Min:         time.Second,
-		Max:         2 * time.Minute,
-		NodeManager: &nodeManager,
-		Jitter:      true,
-		Factor:      2.0,
+		Logger:             hivetest.Logger(t),
+		Min:                time.Second,
+		Max:                2 * time.Minute,
+		CustomIntervalFunc: nodeManager.ClusterSizeDependantInterval,
+		Jitter:             true,
+		Factor:             2.0,
 	}
 
 	fmt.Printf("nodes      4        16       128       512      1024      2048\n")

@@ -100,9 +100,11 @@ func (i *ipcacheMock) Delete(ip string, source source.Source, aux ...ipcache.IPM
 func (i *ipcacheMock) GetMetadataSourceByPrefix(prefix cmtypes.PrefixCluster) source.Source {
 	return source.Unspec
 }
+
 func (i *ipcacheMock) UpsertMetadata(prefix cmtypes.PrefixCluster, src source.Source, resource ipcacheTypes.ResourceID, aux ...ipcache.IPMetadata) {
 	i.Upsert(prefix.String(), nil, 0, nil, ipcache.Identity{}, aux...)
 }
+
 func (i *ipcacheMock) OverrideIdentity(prefix cmtypes.PrefixCluster, identityLabels labels.Labels, src source.Source, resource ipcacheTypes.ResourceID) {
 	i.UpsertMetadata(prefix, src, resource)
 }
@@ -269,12 +271,13 @@ func TestNodeLifecycle(t *testing.T) {
 	mngr.Subscribe(dp)
 	require.NoError(t, err)
 
-	n1 := nodeTypes.Node{Name: "node1", Cluster: "c1", IPAddresses: []nodeTypes.Address{
-		{
-			Type: addressing.NodeInternalIP,
-			IP:   net.ParseIP("10.0.0.1"),
+	n1 := nodeTypes.Node{
+		Name: "node1", Cluster: "c1", IPAddresses: []nodeTypes.Address{
+			{
+				Type: addressing.NodeInternalIP,
+				IP:   net.ParseIP("10.0.0.1"),
+			},
 		},
-	},
 		Source: source.Unspec,
 	}
 	mngr.NodeUpdated(n1)
@@ -290,12 +293,13 @@ func TestNodeLifecycle(t *testing.T) {
 		t.Errorf("timeout while waiting for NodeAdd() event for node1")
 	}
 
-	n2 := nodeTypes.Node{Name: "node2", Cluster: "c1", IPAddresses: []nodeTypes.Address{
-		{
-			Type: addressing.NodeInternalIP,
-			IP:   net.ParseIP("10.0.0.2"),
+	n2 := nodeTypes.Node{
+		Name: "node2", Cluster: "c1", IPAddresses: []nodeTypes.Address{
+			{
+				Type: addressing.NodeInternalIP,
+				IP:   net.ParseIP("10.0.0.2"),
+			},
 		},
-	},
 		Source: source.Unspec,
 	}
 	mngr.NodeUpdated(n2)
@@ -448,15 +452,8 @@ func BenchmarkUpdateAndDeleteCycle(b *testing.B) {
 
 func TestClusterSizeDependantInterval(t *testing.T) {
 	setup(t)
-	logger := hivetest.Logger(t)
 
-	ipcacheMock := newIPcacheMock()
-	dp := fakeTypes.NewNodeHandler()
-	h, _ := cell.NewSimpleHealth()
-	mngr, err := New(logger, &option.DaemonConfig{}, tunnel.Config{}, ipcacheMock, newIPSetMock(), nil, NewNodeMetrics(), h, nil, nil, nil, fakeTypes.WireguardConfig{})
-	require.NoError(t, err)
-	mngr.Subscribe(dp)
-	defer mngr.Stop(context.TODO())
+	calculator, _ := newClusterSizeDependantIntervalCalculator()
 
 	prevInterval := time.Nanosecond
 
@@ -467,8 +464,8 @@ func TestClusterSizeDependantInterval(t *testing.T) {
 				IP:   net.ParseIP("10.0.0.1"),
 			},
 		}}
-		mngr.NodeUpdated(n)
-		newInterval := mngr.ClusterSizeDependantInterval(time.Minute)
+		calculator.NodeAdd(n)
+		newInterval := calculator.ClusterSizeDependantInterval(time.Minute)
 		assert.Greater(t, newInterval, prevInterval)
 	}
 }
@@ -1395,7 +1392,8 @@ func TestNodesStartupPruning(t *testing.T) {
 		})
 		e := json.NewEncoder(nf)
 		require.NoError(t, e.Encode([]nodeTypes.Node{
-			c1Node1, c1Node2, c1StaleNode, c2Node1, c2StaleNode}))
+			c1Node1, c1Node2, c1StaleNode, c2Node1, c2StaleNode,
+		}))
 		require.NoError(t, nf.Sync())
 		require.NoError(t, nf.Close())
 

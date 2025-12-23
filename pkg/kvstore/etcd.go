@@ -611,7 +611,7 @@ func (e *etcdClient) newExpBackoffRateLimiter(name string) backoff.Exponential {
 		Min:    50 * time.Millisecond,
 		Max:    1 * time.Minute,
 
-		NodeManager: backoff.NewNodeManager(e.extraOptions.ClusterSizeDependantInterval),
+		CustomIntervalFunc: e.extraOptions.ClusterSizeDependantInterval,
 	}
 }
 
@@ -1470,7 +1470,6 @@ func (e *etcdClient) CreateOnly(ctx context.Context, key string, value []byte, l
 	cond := client.Compare(client.Version(key), "=", 0)
 
 	txnresp, err := e.client.Txn(ctx).If(cond).Then(req).Commit()
-
 	if err != nil {
 		lr.Error(err, -1)
 		e.leaseManager.CancelIfExpired(err, leaseID)
@@ -1519,7 +1518,6 @@ func (e *etcdClient) ListPrefixIfLocked(ctx context.Context, prefix string, lock
 			Data:        getR.Kvs[i].Value,
 			ModRevision: uint64(getR.Kvs[i].ModRevision),
 		}
-
 	}
 
 	return pairs, nil
@@ -1558,7 +1556,6 @@ func (e *etcdClient) ListPrefix(ctx context.Context, prefix string) (v KeyValueP
 			ModRevision: uint64(getR.Kvs[i].ModRevision),
 			LeaseID:     getR.Kvs[i].Lease,
 		}
-
 	}
 
 	return pairs, nil

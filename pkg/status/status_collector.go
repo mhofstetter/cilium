@@ -681,7 +681,7 @@ func (d *statusCollector) getProbes() []Probe {
 				if !option.Config.EnableCiliumNodeCRD {
 					// When CiliumNode CRD is disabled, just use a constant base interval
 					// to validate connectivity.
-					return backoff.ClusterSizeDependantInterval(2*time.Minute, 0)
+					return 2 * time.Minute
 				}
 
 				// The base interval is dependant on the
@@ -700,7 +700,7 @@ func (d *statusCollector) getProbes() []Probe {
 				// 2048  | 1m15s
 				// 8192  | 1m30s
 				// 16384 | 1m32s
-				return d.statusParams.NodeDiscovery.Manager.ClusterSizeDependantInterval(10 * time.Second)
+				return d.statusParams.NodeCalculator.ClusterSizeDependantInterval(10 * time.Second)
 			},
 			Probe: func(ctx context.Context) (any, error) {
 				return d.getK8sStatus(), nil

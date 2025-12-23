@@ -16,31 +16,8 @@ import (
 	"github.com/cilium/cilium/pkg/time"
 )
 
-// NodeManager is the interface required to implement cluster size dependent
-// intervals
-type NodeManager interface {
-	ClusterSizeDependantInterval(baseInterval time.Duration) time.Duration
-}
-
-// nodeManager is a wrapper to enable using a plain function as NodeManager to implement
-// cluster size dependent intervals
-type nodeManager struct {
-	clusterSizeDependantInterval func(baseInterval time.Duration) time.Duration
-}
-
-// NewNodeManager returns a new NodeManager implementing cluster size dependent intervals
-// based on the given function. If the function is nil, then no tuning is performed.
-func NewNodeManager(clusterSizeDependantInterval func(baseInterval time.Duration) time.Duration) NodeManager {
-	return &nodeManager{clusterSizeDependantInterval: clusterSizeDependantInterval}
-}
-
-func (n *nodeManager) ClusterSizeDependantInterval(baseInterval time.Duration) time.Duration {
-	if n.clusterSizeDependantInterval == nil {
-		return baseInterval
-	}
-
-	return n.clusterSizeDependantInterval(baseInterval)
-}
+// CustomIntervalFunc is the type required to implement cluster size dependent intervals
+type CustomIntervalFunc func(baseInterval time.Duration) time.Duration
 
 // Exponential implements an exponential backoff
 type Exponential struct {
@@ -60,10 +37,9 @@ type Exponential struct {
 	// Jitter, when enabled, adds random jitter to the interval
 	Jitter bool
 
-	// NodeManager enables the use of cluster size dependent backoff
-	// intervals, i.e. the larger the cluster, the longer the backoff
-	// interval
-	NodeManager NodeManager
+	// CustomIntervalFunc enables the use of custom backoff intervals (e.g. cluster size dependent)
+	// i.e. the larger the cluster, the longer the backoff interval
+	CustomIntervalFunc CustomIntervalFunc
 
 	// Name is a free form string describing the operation subject to the
 	// backoff, if unspecified, a UUID is generated. This string is used
@@ -190,8 +166,8 @@ func (b *Exponential) Duration(attempt int) time.Duration {
 
 	t := CalculateDuration(min, b.Max, factor, b.Jitter, attempt)
 
-	if b.NodeManager != nil {
-		t = b.NodeManager.ClusterSizeDependantInterval(t)
+	if b.CustomIntervalFunc != nil {
+		t = b.CustomIntervalFunc(t)
 	}
 
 	if b.Max != time.Duration(0) && t > b.Max {

@@ -15,6 +15,7 @@ import (
 
 	"github.com/cilium/cilium/api/v1/models"
 	"github.com/cilium/cilium/pkg/allocator"
+	"github.com/cilium/cilium/pkg/backoff"
 	"github.com/cilium/cilium/pkg/clustermesh/common"
 	"github.com/cilium/cilium/pkg/clustermesh/observer"
 	serviceStore "github.com/cilium/cilium/pkg/clustermesh/store"
@@ -57,7 +58,7 @@ type Configuration struct {
 	IPCache ipcache.IPCacher
 
 	// ClusterSizeDependantInterval allows to calculate intervals based on cluster size.
-	ClusterSizeDependantInterval kvstore.ClusterSizeDependantIntervalFunc
+	ClusterSizeDependantInterval backoff.CustomIntervalFunc
 
 	// ServiceResolver, if not nil, is used to create a custom dialer for service resolution.
 	ServiceResolver dial.Resolver
