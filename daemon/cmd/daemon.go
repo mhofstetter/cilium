@@ -284,11 +284,8 @@ func configureDaemon(ctx context.Context, params daemonParams) error {
 	// identity allocator to run asynchronously.
 	if params.DaemonConfig.IdentityAllocationMode != option.IdentityAllocationModeCRD ||
 		params.Clientset.IsEnabled() {
-		// **NOTE** The global identity allocator is not yet initialized here; that
-		// happens below via InitIdentityAllocator(). Only the local identity
-		// allocator is initialized up until here.
-		realIdentityAllocator := params.IdentityAllocator
-		realIdentityAllocator.InitIdentityAllocator(params.Clientset, params.KVStoreClient)
+		// Note: Only the local identity allocator is initialized up until here.
+		params.IdentityAllocator.InitGlobalIdentityAllocator()
 	}
 
 	// Start the host IP synchronization. Blocks until the initial synchronization

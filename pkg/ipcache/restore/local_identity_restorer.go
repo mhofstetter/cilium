@@ -46,7 +46,7 @@ type localIdentityRestorerParams struct {
 	Logger *slog.Logger
 
 	// The global identity allocator is not yet initialized here at injection time
-	// That happens in the daemon init via InitIdentityAllocator(). Only the local identity
+	// That happens in the daemon init via InitGlobalIdentityAllocator(). Only the local identity
 	// allocator is initialized here.
 	IdentityAllocator identitycell.CachingIdentityAllocator
 	NodeLocalStore    *node.LocalNodeStore

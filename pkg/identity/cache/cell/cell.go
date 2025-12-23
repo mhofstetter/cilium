@@ -16,7 +16,7 @@ import (
 	"github.com/cilium/cilium/pkg/clustermesh"
 	"github.com/cilium/cilium/pkg/identity"
 	"github.com/cilium/cilium/pkg/identity/cache"
-	"github.com/cilium/cilium/pkg/k8s/client/clientset/versioned"
+	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/logging"
@@ -43,7 +43,7 @@ type CachingIdentityAllocator interface {
 	cache.IdentityAllocator
 	clustermesh.RemoteIdentityWatcher
 
-	InitIdentityAllocator(versioned.Interface, kvstore.Client) <-chan struct{}
+	InitGlobalIdentityAllocator() <-chan struct{}
 
 	// RestoreLocalIdentities reads in the checkpointed local allocator state
 	// from disk and allocates a reference to every previously existing identity.
@@ -67,6 +67,9 @@ type identityAllocatorParams struct {
 	Log       *slog.Logger
 	Lifecycle cell.Lifecycle
 	IDUpdater policycell.IdentityUpdater
+
+	K8sClient     k8sClient.Clientset
+	KVStoreClient kvstore.Client
 
 	IdentityHandlers []identity.UpdateIdentities `group:"identity-handlers"`
 
@@ -123,7 +126,7 @@ func newIdentityAllocator(params identityAllocatorParams) identityAllocatorOut {
 		}
 
 		// Allocator: allocates local and cluster-wide security identities.
-		cacheIDAlloc := cache.NewCachingIdentityAllocator(params.Log, iao, allocatorConfig)
+		cacheIDAlloc := cache.NewCachingIdentityAllocator(params.Log, iao, allocatorConfig, params.K8sClient, params.KVStoreClient)
 
 		if option.Config.RestoreState && !option.Config.DryMode {
 			cacheIDAlloc.EnableCheckpointing()

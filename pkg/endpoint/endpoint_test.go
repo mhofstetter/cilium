@@ -55,10 +55,12 @@ func setupEndpointSuite(tb testing.TB) *EndpointSuite {
 	testutils.IntegrationTest(tb)
 	logger := hivetest.Logger(tb)
 
+	kvstoreClient := kvstore.SetupDummy(tb, "etcd")
+
 	s := &EndpointSuite{
 		orchestrator: &fakeTypes.FakeOrchestrator{},
 		repo:         policy.NewPolicyRepository(logger, nil, nil, nil, nil, testpolicy.NewPolicyMetricsNoop()),
-		mgr:          cache.NewCachingIdentityAllocator(logger, &testidentity.IdentityAllocatorOwnerMock{}, cache.NewTestAllocatorConfig()),
+		mgr:          cache.NewCachingIdentityAllocator(logger, &testidentity.IdentityAllocatorOwnerMock{}, cache.NewTestAllocatorConfig(), nil, kvstoreClient),
 	}
 
 	// GetConfig the default labels prefix filter
@@ -71,9 +73,8 @@ func setupEndpointSuite(tb testing.TB) *EndpointSuite {
 	metrics.NewLegacyMetrics().EndpointStateCount.SetEnabled(true)
 
 	/* Required to test endpoint CEP policy model */
-	client := kvstore.SetupDummy(tb, "etcd")
 	// The nils are only used by k8s CRD identities. We default to kvstore.
-	<-s.mgr.InitIdentityAllocator(nil, client)
+	<-s.mgr.InitGlobalIdentityAllocator()
 	node.SetTestLocalNodeStore()
 
 	tb.Cleanup(func() {

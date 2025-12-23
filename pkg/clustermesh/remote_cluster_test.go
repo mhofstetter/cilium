@@ -58,6 +58,7 @@ func (w *remoteEtcdClientWrapper) ListAndWatch(ctx context.Context, prefix strin
 type fakeIPCache struct{ updates atomic.Int32 }
 
 func (f *fakeIPCache) Delete(string, source.Source) bool { return false }
+
 func (f *fakeIPCache) Upsert(string, net.IP, uint8, *ipcache.K8sMetadata, ipcache.Identity) (bool, error) {
 	f.updates.Add(1)
 	return false, nil
@@ -138,8 +139,8 @@ func TestRemoteClusterRun(t *testing.T) {
 			ctx, cancel := context.WithCancel(context.Background())
 
 			// The nils are only used by k8s CRD identities. We default to kvstore.
-			allocator := cache.NewCachingIdentityAllocator(logger, &testidentity.IdentityAllocatorOwnerMock{}, cache.NewTestAllocatorConfig())
-			<-allocator.InitIdentityAllocator(nil, local)
+			allocator := cache.NewCachingIdentityAllocator(logger, &testidentity.IdentityAllocatorOwnerMock{}, cache.NewTestAllocatorConfig(), nil, local)
+			<-allocator.InitGlobalIdentityAllocator()
 
 			t.Cleanup(func() {
 				cancel()
@@ -225,6 +226,7 @@ func (o *fakeObserver) reset() {
 }
 
 func (o *fakeObserver) NodeUpdated(_ nodeTypes.Node) { o.updates.Add(1) }
+
 func (o *fakeObserver) NodeDeleted(_ nodeTypes.Node) { o.deletes.Add(1) }
 
 func (o *fakeObserver) MergeExternalServiceUpdate(_ *serviceStore.ClusterService) {
@@ -277,8 +279,8 @@ func TestRemoteClusterClusterIDChange(t *testing.T) {
 	ctx := context.Background()
 
 	// The nils are only used by k8s CRD identities. We default to kvstore.
-	allocator := cache.NewCachingIdentityAllocator(logger, &testidentity.IdentityAllocatorOwnerMock{}, cache.NewTestAllocatorConfig())
-	<-allocator.InitIdentityAllocator(nil, local)
+	allocator := cache.NewCachingIdentityAllocator(logger, &testidentity.IdentityAllocatorOwnerMock{}, cache.NewTestAllocatorConfig(), nil, local)
+	<-allocator.InitGlobalIdentityAllocator()
 
 	t.Cleanup(allocator.Close)
 

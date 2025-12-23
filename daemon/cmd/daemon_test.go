@@ -195,7 +195,7 @@ func setupDaemonEtcdSuite(tb testing.TB) *DaemonSuite {
 
 	// Ensure that the identity allocator is synchronized before starting the
 	// actual tests, to prevent flakes caused by the goroutine started by
-	// [(*CachingIdentityAllocator).InitIdentityAllocator] still lingering
+	// [(*CachingIdentityAllocator).InitGlobalIdentityAllocator] still lingering
 	// around when the Hive gets stopped.
 	ds.identityAllocator.WaitForInitialGlobalIdentities(tb.Context())
 

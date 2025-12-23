@@ -88,8 +88,8 @@ func testAllocateIdentityReserved(t *testing.T, testConfig testConfig, client kv
 		labels.IDNameHost: labels.NewLabel(labels.IDNameHost, "", labels.LabelSourceReserved),
 	}
 
-	mgr := NewCachingIdentityAllocator(logger, newDummyOwner(logger), testConfig.allocatorConfig)
-	<-mgr.InitIdentityAllocator(nil, client)
+	mgr := NewCachingIdentityAllocator(logger, newDummyOwner(logger), testConfig.allocatorConfig, nil, client)
+	<-mgr.InitGlobalIdentityAllocator()
 
 	require.True(t, identity.IdentityAllocationIsLocal(lbls))
 	i, isNew, err = mgr.AllocateIdentity(context.Background(), lbls, false, identity.InvalidIdentity)
@@ -274,8 +274,8 @@ func testAllocator(t *testing.T, client kvstore.Client) {
 	owner := newDummyOwner(logger)
 	identity.InitWellKnownIdentities(fakeConfig, cmtypes.ClusterInfo{Name: "default", ID: 5})
 	// The nils are only used by k8s CRD identities. We default to kvstore.
-	mgr := NewCachingIdentityAllocator(logger, owner, NewTestAllocatorConfig())
-	<-mgr.InitIdentityAllocator(nil, client)
+	mgr := NewCachingIdentityAllocator(logger, owner, NewTestAllocatorConfig(), nil, client)
+	<-mgr.InitGlobalIdentityAllocator()
 	defer mgr.Close()
 	defer mgr.IdentityAllocator.DeleteAllKeys()
 
@@ -406,8 +406,8 @@ func testAllocatorOperatorIDManagement(t *testing.T, cl kvstoreClient) {
 
 			owner := newDummyOwner(logger)
 			identity.InitWellKnownIdentities(fakeConfig, cmtypes.ClusterInfo{Name: "default", ID: 5})
-			mgr := NewCachingIdentityAllocator(logger, owner, testAllocatorConfig(true, 2))
-			<-mgr.InitIdentityAllocator(kubeClient, cl)
+			mgr := NewCachingIdentityAllocator(logger, owner, testAllocatorConfig(true, 2), kubeClient, cl)
+			<-mgr.InitGlobalIdentityAllocator()
 			defer mgr.Close()
 			defer mgr.IdentityAllocator.DeleteAllKeys()
 
@@ -483,7 +483,6 @@ func testAllocatorOperatorIDManagement(t *testing.T, cl kvstoreClient) {
 			require.False(t, released)
 		})
 	}
-
 }
 
 type kvstoreClient struct{ kvstore.Client }
@@ -522,8 +521,8 @@ func testLocalAllocation(t *testing.T, testConfig testConfig, client kvstore.Cli
 	owner := newDummyOwner(logger)
 	identity.InitWellKnownIdentities(fakeConfig, cmtypes.ClusterInfo{Name: "default", ID: 5})
 	// The nils are only used by k8s CRD identities. We default to kvstore.
-	mgr := NewCachingIdentityAllocator(logger, owner, testConfig.allocatorConfig)
-	<-mgr.InitIdentityAllocator(nil, client)
+	mgr := NewCachingIdentityAllocator(logger, owner, testConfig.allocatorConfig, nil, client)
+	<-mgr.InitGlobalIdentityAllocator()
 	defer mgr.Close()
 	defer mgr.IdentityAllocator.DeleteAllKeys()
 
@@ -595,7 +594,7 @@ func testAllocatorReset(t *testing.T, testConfig testConfig, client kvstore.Clie
 	labels := labels.NewLabelsFromSortedList("id=bar;user=anna")
 	logger := hivetest.Logger(t)
 	owner := newDummyOwner(logger)
-	mgr := NewCachingIdentityAllocator(logger, owner, testConfig.allocatorConfig)
+	mgr := NewCachingIdentityAllocator(logger, owner, testConfig.allocatorConfig, nil, client)
 	testAlloc := func() {
 		id1a, _, err := mgr.AllocateIdentity(context.Background(), labels, false, identity.InvalidIdentity)
 		require.NotNil(t, id1a)
@@ -606,10 +605,10 @@ func testAllocatorReset(t *testing.T, testConfig testConfig, client kvstore.Clie
 		require.Equal(t, id1a.ID, queued)
 	}
 
-	<-mgr.InitIdentityAllocator(nil, client)
+	<-mgr.InitGlobalIdentityAllocator()
 	testAlloc()
 	mgr.Close()
-	<-mgr.InitIdentityAllocator(nil, client)
+	<-mgr.InitGlobalIdentityAllocator()
 	testAlloc()
 	mgr.Close()
 }
@@ -624,7 +623,7 @@ func TestAllocateLocally(t *testing.T) {
 
 func testAllocateLocally(t *testing.T, testConfig testConfig) {
 	logger := hivetest.Logger(t)
-	mgr := NewCachingIdentityAllocator(logger, newDummyOwner(logger), testConfig.allocatorConfig)
+	mgr := NewCachingIdentityAllocator(logger, newDummyOwner(logger), testConfig.allocatorConfig, nil, nil)
 
 	cidrLbls := labels.NewLabelsFromSortedList("cidr:1.2.3.4/32")
 	podLbls := labels.NewLabelsFromSortedList("k8s:foo=bar")
@@ -662,7 +661,7 @@ func TestCheckpointRestore(t *testing.T) {
 func testCheckpointRestore(t *testing.T, testConfig testConfig) {
 	logger := hivetest.Logger(t)
 	owner := newDummyOwner(logger)
-	mgr := NewCachingIdentityAllocator(logger, owner, testConfig.allocatorConfig)
+	mgr := NewCachingIdentityAllocator(logger, owner, testConfig.allocatorConfig, nil, nil)
 	defer mgr.Close()
 	dir := t.TempDir()
 	mgr.checkpointPath = filepath.Join(dir, CheckpointFile)
@@ -695,7 +694,7 @@ func testCheckpointRestore(t *testing.T, testConfig testConfig) {
 	err := mgr.checkpoint(context.TODO())
 	require.NoError(t, err)
 
-	newMgr := NewCachingIdentityAllocator(logger, owner, NewTestAllocatorConfig())
+	newMgr := NewCachingIdentityAllocator(logger, owner, NewTestAllocatorConfig(), nil, nil)
 	defer newMgr.Close()
 	newMgr.checkpointPath = mgr.checkpointPath
 	newMgr.EnableCheckpointing()
