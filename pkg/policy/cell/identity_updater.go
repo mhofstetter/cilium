@@ -36,7 +36,7 @@ type IdentityUpdater interface {
 	UpdateIdentities(added, deleted identity.IdentityMap) <-chan struct{}
 }
 
-type identityAllocatorParams struct {
+type identityUpdaterParams struct {
 	cell.In
 
 	Log              *slog.Logger
@@ -79,7 +79,7 @@ type batch struct {
 	done chan struct{}
 }
 
-func newIdentityUpdater(params identityAllocatorParams) IdentityUpdater {
+func newIdentityUpdater(params identityUpdaterParams) IdentityUpdater {
 	i := &identityUpdater{
 		logger:    params.Log,
 		policy:    params.PolicyRepository,
