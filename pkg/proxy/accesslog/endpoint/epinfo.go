@@ -29,7 +29,7 @@ type endpointInfoRegistry struct {
 
 func NewEndpointInfoRegistry(ipc *ipcache.IPCache, endpointManager endpointmanager.EndpointsLookup, identityAllocator cache.IdentityAllocator) accesslog.EndpointInfoRegistry {
 	// **NOTE** The global identity allocator is not yet initialized here;
-	// that happens in the daemon init via InitIdentityAllocator().
+	// that happens in the daemon init via InitGlobalIdentityAllocator().
 	// Only the local identity allocator is initialized here.
 
 	return &endpointInfoRegistry{

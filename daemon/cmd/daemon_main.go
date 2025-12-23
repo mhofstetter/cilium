@@ -1209,7 +1209,6 @@ type daemonParams struct {
 	Lifecycle cell.Lifecycle
 
 	Clientset           k8sClient.Clientset
-	KVStoreClient       kvstore.Client
 	WGAgent             wgTypes.WireguardAgent
 	LocalNodeStore      *node.LocalNodeStore
 	K8sWatcher          *watchers.K8sWatcher

@@ -30,8 +30,8 @@ func TestLookupReservedIdentity(t *testing.T) {
 
 func testLookupReservedIdentity(t *testing.T, testConfig testConfig, client kvstore.Client) {
 	logger := hivetest.Logger(t)
-	mgr := NewCachingIdentityAllocator(logger, newDummyOwner(logger), testConfig.allocatorConfig)
-	<-mgr.InitIdentityAllocator(nil, client)
+	mgr := NewCachingIdentityAllocator(logger, newDummyOwner(logger), testConfig.allocatorConfig, nil, client)
+	<-mgr.InitGlobalIdentityAllocator()
 
 	hostID := identity.GetReservedID("host")
 	require.NotNil(t, mgr.LookupIdentityByID(context.TODO(), hostID))

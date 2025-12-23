@@ -12,7 +12,6 @@ import (
 	"github.com/cilium/cilium/pkg/allocator"
 	"github.com/cilium/cilium/pkg/identity"
 	identitymodel "github.com/cilium/cilium/pkg/identity/model"
-	"github.com/cilium/cilium/pkg/k8s/client/clientset/versioned"
 	"github.com/cilium/cilium/pkg/kvstore"
 	"github.com/cilium/cilium/pkg/labels"
 	"github.com/cilium/cilium/pkg/logging/logfields"
@@ -126,7 +125,7 @@ func (n *NoopIdentityAllocator) RemoveRemoteIdentities(name string) {
 	// No-op, because remote identities are not used when network policies are disabled.
 }
 
-func (n *NoopIdentityAllocator) InitIdentityAllocator(versioned.Interface, kvstore.Client) <-chan struct{} {
+func (n *NoopIdentityAllocator) InitGlobalIdentityAllocator() <-chan struct{} {
 	close(n.allocatorInitialized)
 	return n.allocatorInitialized
 }

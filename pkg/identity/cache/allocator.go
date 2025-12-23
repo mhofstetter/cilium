@@ -23,7 +23,7 @@ import (
 	"github.com/cilium/cilium/pkg/identity/key"
 	"github.com/cilium/cilium/pkg/idpool"
 	api "github.com/cilium/cilium/pkg/k8s/apis/cilium.io"
-	clientset "github.com/cilium/cilium/pkg/k8s/client/clientset/versioned"
+	k8sClient "github.com/cilium/cilium/pkg/k8s/client"
 	"github.com/cilium/cilium/pkg/k8s/identitybackend"
 	"github.com/cilium/cilium/pkg/kvstore"
 	kvstoreallocator "github.com/cilium/cilium/pkg/kvstore/allocator"
@@ -53,6 +53,10 @@ const CheckpointFile = "local_allocator_state.json"
 // global and local identities.
 type CachingIdentityAllocator struct {
 	logger *slog.Logger
+
+	k8sClient     k8sClient.Clientset
+	kvStoreClient kvstore.Client
+
 	// IdentityAllocator is an allocator for security identities from the
 	// kvstore.
 	IdentityAllocator *allocator.Allocator
@@ -74,7 +78,7 @@ type CachingIdentityAllocator struct {
 	events  allocator.AllocatorEventChan
 	watcher identityWatcher
 
-	// setupMutex synchronizes InitIdentityAllocator() and Close()
+	// setupMutex synchronizes InitGlobalIdentityAllocator() and Close()
 	setupMutex lock.Mutex
 
 	owner IdentityAllocatorOwner
@@ -195,7 +199,7 @@ type IdentityAllocator interface {
 	UnwithholdLocalIdentities(nids []identity.NumericIdentity)
 }
 
-// InitIdentityAllocator creates the global identity allocator. Only the first
+// InitGlobalIdentityAllocator creates the global identity allocator. Only the first
 // invocation of this function will have an effect. The Caller must have
 // initialized well known identities before calling this (by calling
 // identity.InitWellKnownIdentities()).
@@ -205,12 +209,12 @@ type IdentityAllocator interface {
 // TODO: identity backends are initialized directly in this function, pulling
 // in dependencies on kvstore and k8s. It would be better to decouple this,
 // since the backends are an interface.
-func (m *CachingIdentityAllocator) InitIdentityAllocator(client clientset.Interface, kvstoreClient kvstore.Client) <-chan struct{} {
+func (m *CachingIdentityAllocator) InitGlobalIdentityAllocator() <-chan struct{} {
 	m.setupMutex.Lock()
 	defer m.setupMutex.Unlock()
 
 	if m.IdentityAllocator != nil {
-		logging.Fatal(m.logger, "InitIdentityAllocator() in succession without calling Close()")
+		logging.Fatal(m.logger, "InitGlobalIdentityAllocator() in succession without calling Close()")
 	}
 
 	m.logger.Info("Initializing identity allocator")
@@ -252,7 +256,7 @@ func (m *CachingIdentityAllocator) InitIdentityAllocator(client clientset.Interf
 					BasePath: m.identitiesPath,
 					Suffix:   owner.GetNodeSuffix(),
 					Typ:      &key.GlobalIdentity{},
-					Backend:  kvstoreClient,
+					Backend:  m.kvStoreClient,
 				})
 			if err != nil {
 				logging.Fatal(m.logger, "Unable to initialize kvstore backend for identity allocation", logfields.Error, err)
@@ -263,7 +267,7 @@ func (m *CachingIdentityAllocator) InitIdentityAllocator(client clientset.Interf
 			backend, err = identitybackend.NewCRDBackend(m.logger, identitybackend.CRDBackendConfiguration{
 				Store:    nil,
 				StoreSet: &atomic.Bool{},
-				Client:   client,
+				Client:   m.k8sClient,
 				KeyFunc:  (&key.GlobalIdentity{}).PutKeyFromMap,
 			})
 			if err != nil {
@@ -282,14 +286,14 @@ func (m *CachingIdentityAllocator) InitIdentityAllocator(client clientset.Interf
 					CRDBackendConfiguration: identitybackend.CRDBackendConfiguration{
 						Store:    nil,
 						StoreSet: &atomic.Bool{},
-						Client:   client,
+						Client:   m.k8sClient,
 						KeyFunc:  (&key.GlobalIdentity{}).PutKeyFromMap,
 					},
 					KVStoreBackendConfiguration: kvstoreallocator.KVStoreBackendConfiguration{
 						BasePath: m.identitiesPath,
 						Suffix:   owner.GetNodeSuffix(),
 						Typ:      &key.GlobalIdentity{},
-						Backend:  kvstoreClient,
+						Backend:  m.kvStoreClient,
 					},
 					ReadFromKVStore: readFromKVStore,
 				})
@@ -358,7 +362,7 @@ func (m *CachingIdentityAllocator) EnableCheckpointing() {
 
 const eventsQueueSize = 1024
 
-// InitIdentityAllocator creates the identity allocator. Only the first
+// InitGlobalIdentityAllocator creates the identity allocator. Only the first
 // invocation of this function will have an effect. The Caller must have
 // initialized well known identities before calling this (by calling
 // identity.InitWellKnownIdentities()).
@@ -372,7 +376,7 @@ const eventsQueueSize = 1024
 
 // NewCachingIdentityAllocator creates a new instance of an
 // CachingIdentityAllocator.
-func NewCachingIdentityAllocator(logger *slog.Logger, owner IdentityAllocatorOwner, config AllocatorConfig) *CachingIdentityAllocator {
+func NewCachingIdentityAllocator(logger *slog.Logger, owner IdentityAllocatorOwner, config AllocatorConfig, k8sClient k8sClient.Clientset, kvStoreClient kvstore.Client) *CachingIdentityAllocator {
 	watcher := identityWatcher{
 		owner:  owner,
 		logger: logger,
@@ -380,6 +384,8 @@ func NewCachingIdentityAllocator(logger *slog.Logger, owner IdentityAllocatorOwn
 
 	m := &CachingIdentityAllocator{
 		logger:                             logger,
+		k8sClient:                          k8sClient,
+		kvStoreClient:                      kvStoreClient,
 		globalIdentityAllocatorInitialized: make(chan struct{}),
 		owner:                              owner,
 		identitiesPath:                     IdentitiesPath,
@@ -392,7 +398,6 @@ func NewCachingIdentityAllocator(logger *slog.Logger, owner IdentityAllocatorOwn
 	}
 	if option.Config.RunDir != "" { // disable checkpointing if this is a unit test
 		m.checkpointPath = filepath.Join(option.Config.StateDir, CheckpointFile)
-
 	}
 	m.watcher.watch(m.events)
 
@@ -420,7 +425,7 @@ func (m *CachingIdentityAllocator) Close() {
 		// This means the channel was closed and therefore the IdentityAllocator == nil will never be true
 	default:
 		if m.IdentityAllocator == nil {
-			m.logger.Error("Close() called without calling InitIdentityAllocator() first")
+			m.logger.Error("Close() called without calling InitGlobalIdentityAllocator() first")
 			return
 		}
 	}
@@ -456,7 +461,6 @@ var ErrNonLocalIdentity = fmt.Errorf("labels would result in global identity")
 // identity will be local-only. If the provided set of labels does not map to a local identity scope,
 // this will return an error.
 func (m *CachingIdentityAllocator) AllocateLocalIdentity(lbls labels.Labels, notifyOwner bool, oldNID identity.NumericIdentity) (id *identity.Identity, allocated bool, err error) {
-
 	// If this is a reserved, pre-allocated identity, just return that and be done
 	if reservedIdentity := identity.LookupReservedIdentityByLabels(lbls); reservedIdentity != nil {
 		m.logger.Debug(
