@@ -63,9 +63,7 @@ const (
 	nodeCheckpointMinInterval = time.Minute
 )
 
-var (
-	baseBackgroundSyncInterval = time.Minute
-)
+var baseBackgroundSyncInterval = time.Minute
 
 type nodeEntry struct {
 	// mutex serves two purposes:
@@ -368,15 +366,11 @@ func (m *manager) ClusterSizeDependantInterval(baseInterval time.Duration) time.
 	return backoff.ClusterSizeDependantInterval(baseInterval, numNodes)
 }
 
-func (m *manager) backgroundSyncInterval() time.Duration {
-	return m.ClusterSizeDependantInterval(baseBackgroundSyncInterval)
-}
-
 // backgroundSync ensures that local node has a valid datapath in-place for
 // each node in the cluster. See NodeValidateImplementation().
 func (m *manager) backgroundSync(ctx context.Context, health cell.Health) error {
 	for {
-		syncInterval := m.backgroundSyncInterval()
+		syncInterval := m.ClusterSizeDependantInterval(baseBackgroundSyncInterval)
 		startWaiting := time.After(syncInterval)
 		m.logger.Debug(
 			"Starting new iteration of background sync",
