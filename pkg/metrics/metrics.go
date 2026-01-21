@@ -262,9 +262,6 @@ var (
 
 	BPFMapPressure = true
 
-	// BootstrapTimes is the durations of cilium-agent bootstrap sequence.
-	BootstrapTimes = NoOpGaugeVec
-
 	// APIInteractions is the total time taken to process an API call made
 	// to the cilium-agent
 	APIInteractions = NoOpObserverVec
@@ -617,7 +614,6 @@ var (
 )
 
 type LegacyMetrics struct {
-	BootstrapTimes                   metric.Vec[metric.Gauge]
 	APIInteractions                  metric.Vec[metric.Observer]
 	NodeHealthConnectivityStatus     metric.Vec[metric.Gauge]
 	NodeHealthConnectivityLatency    metric.Vec[metric.Observer]
@@ -695,14 +691,6 @@ type LegacyMetrics struct {
 
 func NewLegacyMetrics() *LegacyMetrics {
 	lm := &LegacyMetrics{
-		BootstrapTimes: metric.NewGaugeVec(metric.GaugeOpts{
-			ConfigName: Namespace + "_" + SubsystemAgent + "_bootstrap_seconds",
-			Namespace:  Namespace,
-			Subsystem:  SubsystemAgent,
-			Name:       "bootstrap_seconds",
-			Help:       "Duration of bootstrap sequence",
-		}, []string{LabelScope, LabelOutcome}),
-
 		APIInteractions: metric.NewHistogramVec(metric.HistogramOpts{
 			ConfigName: Namespace + "_" + SubsystemAgent + "_api_process_time_seconds",
 
@@ -1267,7 +1255,6 @@ func NewLegacyMetrics() *LegacyMetrics {
 	lm.VersionMetric.WithLabelValues(v.Version, v.Revision, v.Arch)
 	lm.BPFMapCapacity.WithLabelValues("default").Set(DefaultMapCapacity)
 
-	BootstrapTimes = lm.BootstrapTimes
 	APIInteractions = lm.APIInteractions
 	NodeHealthConnectivityStatus = lm.NodeHealthConnectivityStatus
 	NodeHealthConnectivityLatency = lm.NodeHealthConnectivityLatency

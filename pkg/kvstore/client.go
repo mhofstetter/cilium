@@ -11,7 +11,8 @@ import (
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/script"
 
-	"github.com/cilium/cilium/pkg/spanstat"
+	"github.com/cilium/cilium/pkg/logging/logfields"
+	"github.com/cilium/cilium/pkg/time"
 )
 
 // Client is the client to interact with the kvstore (i.e., etcd).
@@ -30,8 +31,6 @@ type clientImpl struct {
 	opts   ExtraOptions
 	logger *slog.Logger
 
-	stats *spanstat.SpanStat
-
 	BackendOperations
 }
 
@@ -40,8 +39,7 @@ func (cl *clientImpl) IsEnabled() bool {
 }
 
 func (cl *clientImpl) Start(hctx cell.HookContext) (err error) {
-	cl.stats.Start()
-	defer func() { cl.stats.EndError(err) }()
+	startTime := time.Now()
 
 	cl.logger.Info("Establishing connection to kvstore")
 	client, errCh := NewClient(context.Background(), cl.logger, cl.cfg.KVStore, cl.cfg.KVStoreOpt, cl.opts)
@@ -60,7 +58,7 @@ func (cl *clientImpl) Start(hctx cell.HookContext) (err error) {
 		return fmt.Errorf("failed to establish connection to kvstore: %w", err)
 	}
 
-	cl.logger.Info("Connection to kvstore successfully established")
+	cl.logger.Info("Connection to kvstore successfully established", logfields.Duration, time.Since(startTime))
 	cl.BackendOperations = client
 
 	return nil
