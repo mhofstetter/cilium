@@ -302,7 +302,6 @@ func TestNodeAddress(t *testing.T) {
 
 	for _, tt := range nodeAddressTests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			txn := db.WriteTxn(devices)
 			_, watch := nodeAddrs.AllWatch(txn)
 
@@ -340,7 +339,6 @@ func TestNodeAddress(t *testing.T) {
 			assert.ElementsMatch(t, nodePort, tt.wantNodePort, "NodePort addresses do not match")
 			assert.ElementsMatch(t, primary, tt.wantPrimary, "Primary addresses do not match")
 			assertOnePrimaryPerDevice(t, addrs)
-
 		})
 	}
 
@@ -796,8 +794,7 @@ func fixture(t *testing.T, addressScopeMax int, beforeStart func(*hive.Hive)) (*
 	return db, devices, nodeAddrs, localNodeStore
 }
 
-type testLocalNodeSync struct {
-}
+type testLocalNodeSync struct{}
 
 // InitLocalNode implements node.LocalNodeSynchronizer.
 func (t testLocalNodeSync) InitLocalNode(_ context.Context, n *node.LocalNode) error {
@@ -808,6 +805,11 @@ func (t testLocalNodeSync) InitLocalNode(_ context.Context, n *node.LocalNode) e
 
 // SyncLocalNode implements node.LocalNodeSynchronizer.
 func (t testLocalNodeSync) SyncLocalNode(context.Context, *node.LocalNodeStore) {
+}
+
+// WaitForNodeInformation implements [node.LocalNodeSynchronizer].
+func (t testLocalNodeSync) WaitForNodeInformation(context.Context) error {
+	return nil
 }
 
 var _ node.LocalNodeSynchronizer = testLocalNodeSync{}
@@ -904,7 +906,6 @@ func TestSortedAddresses(t *testing.T) {
 		actual = SortedAddresses(shuffleSlice(slices.Clone(expected)))
 		assert.Equal(t, expected, actual)
 	}
-
 }
 
 func TestFallbackAddresses(t *testing.T) {
