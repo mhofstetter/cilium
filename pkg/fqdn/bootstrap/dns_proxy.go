@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/cilium/hive/cell"
+	"github.com/spf13/pflag"
 
 	"github.com/cilium/cilium/pkg/fqdn/dnsproxy"
 	"github.com/cilium/cilium/pkg/fqdn/lookup"
@@ -22,9 +23,21 @@ var Cell = cell.Module(
 	"dns-proxy",
 	"Starts the DNS proxy",
 
+	cell.Config(config{
+		DNSPolicyUnloadOnShutdown: false,
+	}),
+
 	cell.Provide(newFQDNProxyBootstrapper),
 	cell.Provide(newDNSProxy),
 )
+
+type config struct {
+	DNSPolicyUnloadOnShutdown bool
+}
+
+func (r config) Flags(flags *pflag.FlagSet) {
+	flags.Bool("dns-policy-unload-on-shutdown", r.DNSPolicyUnloadOnShutdown, "Unload DNS policy rules on graceful shutdown")
+}
 
 type dnsProxyParams struct {
 	cell.In

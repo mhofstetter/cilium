@@ -33,7 +33,7 @@ type fqdnProxyBootstrapperParams struct {
 	Lifecycle cell.Lifecycle
 	Logger    *slog.Logger
 
-	DaemonConfig      *option.DaemonConfig
+	Config            config
 	ProxyPorts        *proxyports.ProxyPorts
 	DNSProxy          proxy.DNSProxier
 	Health            cell.Health
@@ -45,7 +45,7 @@ type fqdnProxyBootstrapperParams struct {
 type fqdnProxyBootstrapper struct {
 	logger *slog.Logger
 
-	daemonConfig    *option.DaemonConfig
+	config          config
 	proxy           proxy.DNSProxier
 	proxyPorts      *proxyports.ProxyPorts
 	handler         messagehandler.DNSMessageHandler
@@ -60,7 +60,7 @@ func newFQDNProxyBootstrapper(params fqdnProxyBootstrapperParams) endpointstate.
 	b := &fqdnProxyBootstrapper{
 		logger: params.Logger,
 
-		daemonConfig:    params.DaemonConfig,
+		config:          params.Config,
 		proxy:           params.DNSProxy,
 		proxyPorts:      params.ProxyPorts,
 		handler:         params.DNSRequestHandler,
@@ -177,7 +177,7 @@ func (b *fqdnProxyBootstrapper) startProxy(ctx context.Context, health cell.Heal
 }
 
 func (b *fqdnProxyBootstrapper) unloadDNSPolicies() {
-	if b.daemonConfig.DNSPolicyUnloadOnShutdown {
+	if b.config.DNSPolicyUnloadOnShutdown {
 		b.logger.Info("Unload DNS policies")
 
 		// Iterate over the policy repository and remove L7 DNS part
@@ -223,18 +223,12 @@ func (b *fqdnProxyBootstrapper) unloadDNSPolicies() {
 		})
 
 		if !needsPolicyRegen {
-			b.logger.Info(
-				"No policy recalculation needed to remove DNS rules due to option",
-				logfields.Option, option.DNSPolicyUnloadOnShutdown,
-			)
+			b.logger.Info("No policy recalculation needed to remove DNS rules")
 			return
 		}
 
 		// Bump revision to trigger policy recalculation
-		b.logger.Info(
-			"Triggering policy recalculation to remove DNS rules due to option",
-			logfields.Option, option.DNSPolicyUnloadOnShutdown,
-		)
+		b.logger.Info("Triggering policy recalculation to remove DNS rules")
 		b.policyRepo.BumpRevision()
 		regenerationMetadata := &regeneration.ExternalRegenerationMetadata{
 			Reason:            "unloading DNS rules on graceful shutdown",

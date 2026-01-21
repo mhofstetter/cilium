@@ -357,9 +357,6 @@ const (
 	// CMDRef is the path to cmdref output directory
 	CMDRef = "cmdref"
 
-	// DNSPolicyUnloadOnShutdown is the name of the dns-policy-unload-on-shutdown option.
-	DNSPolicyUnloadOnShutdown = "dns-policy-unload-on-shutdown"
-
 	// ToFQDNsMinTTL is the minimum time, in seconds, to use DNS data for toFQDNs policies.
 	ToFQDNsMinTTL = "tofqdns-min-ttl"
 
@@ -1449,10 +1446,6 @@ type DaemonConfig struct {
 	TracePayloadlen        int
 	TracePayloadlenOverlay int
 	ToFQDNsMinTTL          int
-
-	// DNSPolicyUnloadOnShutdown defines whether DNS policy rules should be unloaded on
-	// graceful shutdown.
-	DNSPolicyUnloadOnShutdown bool
 
 	// ToFQDNsProxyPort is the user-configured global, shared, DNS listen port used
 	// by the DNS Proxy. Both UDP and TCP are handled on the same port. When it
@@ -2637,7 +2630,6 @@ func (c *DaemonConfig) Populate(logger *slog.Logger, vp *viper.Viper) {
 	c.EnableIdentityMark = vp.GetBool(EnableIdentityMark)
 
 	// toFQDNs options
-	c.DNSPolicyUnloadOnShutdown = vp.GetBool(DNSPolicyUnloadOnShutdown)
 	c.FQDNRegexCompileLRUSize = vp.GetUint(FQDNRegexCompileLRUSize)
 	c.ToFQDNsMaxIPsPerHost = vp.GetInt(ToFQDNsMaxIPsPerHost)
 	if maxZombies := vp.GetInt(ToFQDNsMaxDeferredConnectionDeletes); maxZombies >= 0 {
