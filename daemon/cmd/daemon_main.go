@@ -33,7 +33,6 @@ import (
 	datapathTables "github.com/cilium/cilium/pkg/datapath/tables"
 	datapath "github.com/cilium/cilium/pkg/datapath/types"
 	"github.com/cilium/cilium/pkg/defaults"
-	"github.com/cilium/cilium/pkg/endpointmanager"
 	"github.com/cilium/cilium/pkg/envoy"
 	"github.com/cilium/cilium/pkg/flowdebug"
 	"github.com/cilium/cilium/pkg/hive"
@@ -1234,10 +1233,8 @@ type daemonParams struct {
 	LocalCiliumNodeRes  k8s.LocalCiliumNodeResource
 	K8sWatcher          *watchers.K8sWatcher
 	NodeHandler         datapath.NodeHandler
-	EndpointManager     endpointmanager.EndpointManager
 	EndpointRestorer    *endpointRestorer
 	IdentityAllocator   identitycell.CachingIdentityAllocator
-	Policy              policy.PolicyRepository
 	MonitorAgent        monitorAgent.Agent
 	DB                  *statedb.DB
 	Devices             statedb.Table[*datapathTables.Device]
@@ -1321,7 +1318,6 @@ func daemonLegacyInitialization(params daemonParams) legacy.DaemonInitialization
 		},
 		OnStop: func(cell.HookContext) error {
 			cancelDaemonCtx()
-			unloadDNSPolicies(params)
 			pidfile.Clean()
 			return nil
 		},
