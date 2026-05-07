@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/cilium/cilium/operator/pkg/gateway-api/extensions"
 	"github.com/cilium/cilium/operator/pkg/gateway-api/helpers"
 )
 
@@ -188,6 +189,10 @@ func (t *HTTPRouteRule) GetBackendRefs() []gatewayv1.BackendRef {
 		}
 	}
 	return refs
+}
+
+func (t *HTTPRouteRule) GetExtensionRefs() []extensions.ExtensionRef {
+	return extensions.HTTPRouteExtensionRefs(t.Rule)
 }
 
 // Validates the HTTPRoute header

@@ -4,6 +4,7 @@
 package ingestion
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -12,11 +13,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1alpha2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 	gatewayv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 	mcsapiv1beta1 "sigs.k8s.io/mcs-api/pkg/apis/v1beta1"
 
+	"github.com/cilium/cilium/operator/pkg/gateway-api/extensions"
 	"github.com/cilium/cilium/operator/pkg/gateway-api/helpers"
 	"github.com/cilium/cilium/operator/pkg/model"
 	"github.com/cilium/cilium/pkg/annotation"
@@ -33,18 +36,20 @@ type Input struct {
 	GatewayClass       gatewayv1.GatewayClass
 	GatewayClassConfig *v2alpha1.CiliumGatewayClassConfig
 
-	Gateway             gatewayv1.Gateway
-	HTTPRoutes          []gatewayv1.HTTPRoute
-	TLSRoutes           []gatewayv1.TLSRoute
-	GRPCRoutes          []gatewayv1.GRPCRoute
-	ReferenceGrants     []gatewayv1.ReferenceGrant
-	Services            []corev1.Service
-	ServiceImports      []mcsapiv1beta1.ServiceImport
-	BackendTLSPolicyMap helpers.BackendTLSPolicyServiceMap
+	Gateway                              gatewayv1.Gateway
+	HTTPRoutes                           []gatewayv1.HTTPRoute
+	TLSRoutes                            []gatewayv1.TLSRoute
+	GRPCRoutes                           []gatewayv1.GRPCRoute
+	ReferenceGrants                      []gatewayv1.ReferenceGrant
+	Services                             []corev1.Service
+	ServiceImports                       []mcsapiv1beta1.ServiceImport
+	BackendTLSPolicyMap                  helpers.BackendTLSPolicyServiceMap
+	RouteFilterExtRefIngestionExtensions []extensions.RouteFilterExtRefIngestionExtension
+	Client                               client.Client
 }
 
 // GatewayAPI translates Gateway API resources into a model.
-func GatewayAPI(log *slog.Logger, input Input) ([]model.HTTPListener, []model.TLSPassthroughListener) {
+func GatewayAPI(ctx context.Context, log *slog.Logger, input Input) ([]model.HTTPListener, []model.TLSPassthroughListener, error) {
 	var resHTTP []model.HTTPListener
 	var resTLSPassthrough []model.TLSPassthroughListener
 
@@ -94,8 +99,16 @@ func GatewayAPI(log *slog.Logger, input Input) ([]model.HTTPListener, []model.TL
 		}
 
 		var httpRoutes []model.HTTPRoute
-		httpRoutes = append(httpRoutes, toHTTPRoutes(log, l, listenerHostnamesByProtocol, input.HTTPRoutes, input.Services, input.ServiceImports, input.ReferenceGrants, input.BackendTLSPolicyMap)...)
-		httpRoutes = append(httpRoutes, toGRPCRoutes(l, listenerHostnamesByProtocol, input.GRPCRoutes, input.Services, input.ServiceImports, input.ReferenceGrants)...)
+		listenerHTTPRoutes, err := toHTTPRoutes(log, ctx, input.Client, l, listenerHostnamesByProtocol, input.HTTPRoutes, input.Services, input.ServiceImports, input.ReferenceGrants, input.BackendTLSPolicyMap, input.RouteFilterExtRefIngestionExtensions)
+		if err != nil {
+			return nil, nil, err
+		}
+		httpRoutes = append(httpRoutes, listenerHTTPRoutes...)
+		listenerGRPCRoutes, err := toGRPCRoutes(log, ctx, input.Client, l, listenerHostnamesByProtocol, input.GRPCRoutes, input.Services, input.ServiceImports, input.ReferenceGrants, input.RouteFilterExtRefIngestionExtensions)
+		if err != nil {
+			return nil, nil, err
+		}
+		httpRoutes = append(httpRoutes, listenerGRPCRoutes...)
 		resHTTP = append(resHTTP, model.HTTPListener{
 			Name: string(l.Name),
 			Sources: []model.FullyQualifiedResource{
@@ -138,7 +151,7 @@ func GatewayAPI(log *slog.Logger, input Input) ([]model.HTTPListener, []model.TL
 		}
 	}
 
-	return resHTTP, resTLSPassthrough
+	return resHTTP, resTLSPassthrough, nil
 }
 
 func getBackendServiceName(namespace string, services []corev1.Service, serviceImports []mcsapiv1beta1.ServiceImport, backendObjectReference gatewayv1.BackendObjectReference) (string, error) {
@@ -171,6 +184,8 @@ func getBackendServiceName(namespace string, services []corev1.Service, serviceI
 }
 
 func toHTTPRoutes(log *slog.Logger,
+	ctx context.Context,
+	k8sClient client.Client,
 	listener gatewayv1.Listener,
 	listenerHostnamesByProtocol map[gatewayv1.ProtocolType][]string,
 	input []gatewayv1.HTTPRoute,
@@ -178,7 +193,8 @@ func toHTTPRoutes(log *slog.Logger,
 	serviceImports []mcsapiv1beta1.ServiceImport,
 	grants []gatewayv1.ReferenceGrant,
 	btlspMap helpers.BackendTLSPolicyServiceMap,
-) []model.HTTPRoute {
+	routeFilterExtRefIngestionExtensions []extensions.RouteFilterExtRefIngestionExtension,
+) ([]model.HTTPRoute, error) {
 	var httpRoutes []model.HTTPRoute
 	for _, r := range input {
 		listenerIsParent := false
@@ -237,13 +253,19 @@ func toHTTPRoutes(log *slog.Logger,
 			computedHost = nil
 		}
 
-		httpRoutes = append(httpRoutes, extractRoutes(log, int32(listener.Port), computedHost, r, services, serviceImports, grants, btlspMap)...)
+		routes, err := extractRoutes(ctx, k8sClient, log, int32(listener.Port), computedHost, r, services, serviceImports, grants, btlspMap, routeFilterExtRefIngestionExtensions)
+		if err != nil {
+			return nil, err
+		}
+		httpRoutes = append(httpRoutes, routes...)
 
 	}
-	return httpRoutes
+	return httpRoutes, nil
 }
 
-func extractRoutes(logger *slog.Logger,
+func extractRoutes(ctx context.Context,
+	k8sClient client.Client,
+	logger *slog.Logger,
 	listenerPort int32,
 	hostnames []string,
 	hr gatewayv1.HTTPRoute,
@@ -251,7 +273,8 @@ func extractRoutes(logger *slog.Logger,
 	serviceImports []mcsapiv1beta1.ServiceImport,
 	grants []gatewayv1.ReferenceGrant,
 	btlspMap helpers.BackendTLSPolicyServiceMap,
-) []model.HTTPRoute {
+	routeFilterExtRefIngestionExtensions []extensions.RouteFilterExtRefIngestionExtension,
+) ([]model.HTTPRoute, error) {
 	var httpRoutes []model.HTTPRoute
 	for _, rule := range hr.Spec.Rules {
 		var backendHTTPFilters []*model.BackendHTTPFilter
@@ -346,11 +369,12 @@ func extractRoutes(logger *slog.Logger,
 				if svc != nil {
 					requestMirrors = append(requestMirrors, toHTTPRequestMirror(*svc, f.RequestMirror, hr.Namespace))
 				}
+			case gatewayv1.HTTPRouteFilterExtensionRef:
 			}
 		}
 
 		if len(rule.Matches) == 0 {
-			httpRoutes = append(httpRoutes, model.HTTPRoute{
+			route := model.HTTPRoute{
 				Hostnames:              hostnames,
 				Backends:               bes,
 				BackendHTTPFilters:     backendHTTPFilters,
@@ -362,11 +386,15 @@ func extractRoutes(logger *slog.Logger,
 				RequestMirrors:         requestMirrors,
 				Timeout:                toTimeout(rule.Timeouts),
 				Retry:                  toHTTPRetry(rule.Retry),
-			})
+			}
+			if err := applyHTTPRouteFilterExtRefIngestionExtensions(ctx, hr, rule.Filters, routeFilterExtRefIngestionExtensions, &route); err != nil {
+				return nil, err
+			}
+			httpRoutes = append(httpRoutes, route)
 		}
 
 		for _, match := range rule.Matches {
-			httpRoutes = append(httpRoutes, model.HTTPRoute{
+			route := model.HTTPRoute{
 				Hostnames:              hostnames,
 				PathMatch:              toPathMatch(match),
 				HeadersMatch:           toHeaderMatch(match),
@@ -382,10 +410,49 @@ func extractRoutes(logger *slog.Logger,
 				RequestMirrors:         requestMirrors,
 				Timeout:                toTimeout(rule.Timeouts),
 				Retry:                  toHTTPRetry(rule.Retry),
-			})
+			}
+			if err := applyHTTPRouteFilterExtRefIngestionExtensions(ctx, hr, rule.Filters, routeFilterExtRefIngestionExtensions, &route); err != nil {
+				return nil, err
+			}
+			httpRoutes = append(httpRoutes, route)
 		}
 	}
-	return httpRoutes
+	return httpRoutes, nil
+}
+
+func applyHTTPRouteFilterExtRefIngestionExtensions(
+	ctx context.Context,
+	hr gatewayv1.HTTPRoute,
+	routeFilters []gatewayv1.HTTPRouteFilter,
+	routeFilterExtRefIngestionExtensions []extensions.RouteFilterExtRefIngestionExtension,
+	route *model.HTTPRoute,
+) error {
+	for _, filter := range routeFilters {
+		if filter.Type != gatewayv1.HTTPRouteFilterExtensionRef {
+			continue
+		}
+
+		ref, ok := extensions.ExtensionRefFromLocalObjectReference(filter.ExtensionRef)
+		if !ok {
+			continue
+		}
+
+		for _, extension := range routeFilterExtRefIngestionExtensions {
+			if !extension.Supports(extensions.RouteKindHTTP, ref) {
+				continue
+			}
+
+			if err := extension.ApplyToHTTPRoute(ctx, extensions.RouteFilterExtRefIngestionInput{
+				RouteNamespace: hr.Namespace,
+				ExtensionRef:   ref,
+				RouteModel:     route,
+			}); err != nil {
+				return fmt.Errorf("failed to apply HTTPRoute ingestion extension for %s.%s %s: %w", ref.Group, ref.Kind, ref.Name, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func addBackendTLSDetails(log *slog.Logger, be model.Backend, svc *corev1.Service, btlspMap helpers.BackendTLSPolicyServiceMap) (model.Backend, bool) {
@@ -528,13 +595,18 @@ func toHTTPRetry(retry *gatewayv1.HTTPRouteRetry) *model.HTTPRetry {
 	return res
 }
 
-func toGRPCRoutes(listener gatewayv1beta1.Listener,
+func toGRPCRoutes(
+	log *slog.Logger,
+	ctx context.Context,
+	k8sClient client.Client,
+	listener gatewayv1beta1.Listener,
 	listenerHostnamesByProtocol map[gatewayv1.ProtocolType][]string,
 	input []gatewayv1.GRPCRoute,
 	services []corev1.Service,
 	serviceImports []mcsapiv1beta1.ServiceImport,
 	grants []gatewayv1.ReferenceGrant,
-) []model.HTTPRoute {
+	routeFilterExtRefIngestionExtensions []extensions.RouteFilterExtRefIngestionExtension,
+) ([]model.HTTPRoute, error) {
 	var grpcRoutes []model.HTTPRoute
 	for _, r := range input {
 		isListener := false
@@ -559,12 +631,26 @@ func toGRPCRoutes(listener gatewayv1beta1.Listener,
 		if len(computedHost) == 1 && computedHost[0] == allHosts {
 			computedHost = nil
 		}
-		grpcRoutes = append(grpcRoutes, extractGRPCRoutes(computedHost, r, services, serviceImports, grants)...)
+		routes, err := extractGRPCRoutes(ctx, k8sClient, log, computedHost, r, services, serviceImports, grants, routeFilterExtRefIngestionExtensions)
+		if err != nil {
+			return nil, err
+		}
+		grpcRoutes = append(grpcRoutes, routes...)
 	}
-	return grpcRoutes
+	return grpcRoutes, nil
 }
 
-func extractGRPCRoutes(hostnames []string, grpcr gatewayv1.GRPCRoute, services []corev1.Service, serviceImports []mcsapiv1beta1.ServiceImport, grants []gatewayv1.ReferenceGrant) []model.HTTPRoute {
+func extractGRPCRoutes(
+	ctx context.Context,
+	k8sClient client.Client,
+	log *slog.Logger,
+	hostnames []string,
+	grpcr gatewayv1.GRPCRoute,
+	services []corev1.Service,
+	serviceImports []mcsapiv1beta1.ServiceImport,
+	grants []gatewayv1.ReferenceGrant,
+	routeFilterExtRefIngestionExtensions []extensions.RouteFilterExtRefIngestionExtension,
+) ([]model.HTTPRoute, error) {
 	var grpcRoutes []model.HTTPRoute
 	for _, rule := range grpcr.Spec.Rules {
 		bes := make([]model.Backend, 0, len(rule.BackendRefs))
@@ -624,22 +710,27 @@ func extractGRPCRoutes(hostnames []string, grpcr gatewayv1.GRPCRoute, services [
 				if svc != nil {
 					requestMirrors = append(requestMirrors, toHTTPRequestMirror(*svc, f.RequestMirror, grpcr.Namespace))
 				}
+			case gatewayv1.GRPCRouteFilterExtensionRef:
 			}
 		}
 
 		if len(rule.Matches) == 0 {
-			grpcRoutes = append(grpcRoutes, model.HTTPRoute{
+			route := model.HTTPRoute{
 				Hostnames:              hostnames,
 				Backends:               bes,
 				DirectResponse:         dr,
 				RequestHeaderFilter:    requestHeaderFilter,
 				ResponseHeaderModifier: responseHeaderFilter,
 				RequestMirrors:         requestMirrors,
-			})
+			}
+			if err := applyGRPCRouteFilterExtRefIngestionExtensions(ctx, grpcr, rule.Filters, routeFilterExtRefIngestionExtensions, &route); err != nil {
+				return nil, err
+			}
+			grpcRoutes = append(grpcRoutes, route)
 		}
 
 		for _, match := range rule.Matches {
-			grpcRoutes = append(grpcRoutes, model.HTTPRoute{
+			route := model.HTTPRoute{
 				Hostnames:              hostnames,
 				PathMatch:              toGRPCPathMatch(match),
 				HeadersMatch:           toGRPCHeaderMatch(match),
@@ -649,11 +740,50 @@ func extractGRPCRoutes(hostnames []string, grpcr gatewayv1.GRPCRoute, services [
 				ResponseHeaderModifier: responseHeaderFilter,
 				RequestMirrors:         requestMirrors,
 				IsGRPC:                 true,
-			})
+			}
+			if err := applyGRPCRouteFilterExtRefIngestionExtensions(ctx, grpcr, rule.Filters, routeFilterExtRefIngestionExtensions, &route); err != nil {
+				return nil, err
+			}
+			grpcRoutes = append(grpcRoutes, route)
 		}
 	}
 
-	return grpcRoutes
+	return grpcRoutes, nil
+}
+
+func applyGRPCRouteFilterExtRefIngestionExtensions(
+	ctx context.Context,
+	grpcr gatewayv1.GRPCRoute,
+	routeFilters []gatewayv1.GRPCRouteFilter,
+	routeFilterExtRefIngestionExtensions []extensions.RouteFilterExtRefIngestionExtension,
+	route *model.HTTPRoute,
+) error {
+	for _, filter := range routeFilters {
+		if filter.Type != gatewayv1.GRPCRouteFilterExtensionRef {
+			continue
+		}
+
+		ref, ok := extensions.ExtensionRefFromLocalObjectReference(filter.ExtensionRef)
+		if !ok {
+			continue
+		}
+
+		for _, extension := range routeFilterExtRefIngestionExtensions {
+			if !extension.Supports(extensions.RouteKindGRPC, ref) {
+				continue
+			}
+
+			if err := extension.ApplyToGRPCRoute(ctx, extensions.RouteFilterExtRefIngestionInput{
+				RouteNamespace: grpcr.Namespace,
+				ExtensionRef:   ref,
+				RouteModel:     route,
+			}); err != nil {
+				return fmt.Errorf("failed to apply GRPCRoute ingestion extension for %s.%s %s: %w", ref.Group, ref.Kind, ref.Name, err)
+			}
+		}
+	}
+
+	return nil
 }
 
 func toTLSRoutes(listener gatewayv1beta1.Listener, listenerHostnamesByProtocol map[gatewayv1.ProtocolType][]string, input []gatewayv1.TLSRoute, services []corev1.Service, serviceImports []mcsapiv1beta1.ServiceImport, grants []gatewayv1.ReferenceGrant) []model.TLSPassthroughRoute {

@@ -19,6 +19,7 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	"k8s.io/utils/ptr"
 
+	"github.com/cilium/cilium/operator/pkg/gateway-api/extensions"
 	"github.com/cilium/cilium/operator/pkg/model"
 )
 
@@ -131,7 +132,7 @@ func (i *cecTranslator) desiredVirtualHost(httpRoutes []model.HTTPRoute, param V
 	if param.HTTPSRedirect {
 		routes = envoyHTTPSRoutes(httpRoutes, param.HostNames, i.Config.RouteConfig.HostNameSuffixMatch)
 	} else {
-		routes = envoyHTTPRoutes(httpRoutes, param.HostNames, i.Config.RouteConfig.HostNameSuffixMatch, param.ListenerPort)
+		routes = envoyHTTPRoutes(httpRoutes, param.HostNames, i.Config.RouteConfig.HostNameSuffixMatch, param.ListenerPort, i.httpRouteTranslationExtensions...)
 	}
 
 	// This is to make sure that the Exact match is always having higher priority.
@@ -201,7 +202,7 @@ func envoyHTTPSRoutes(httpRoutes []model.HTTPRoute, hostnames []string, hostName
 	return routes
 }
 
-func envoyHTTPRoutes(httpRoutes []model.HTTPRoute, hostnames []string, hostNameSuffixMatch bool, listenerPort uint32) []*envoy_config_route_v3.Route {
+func envoyHTTPRoutes(httpRoutes []model.HTTPRoute, hostnames []string, hostNameSuffixMatch bool, listenerPort uint32, routeMutators ...extensions.HTTPRouteTranslationExtension) []*envoy_config_route_v3.Route {
 	matchBackendMap := make(map[string][]model.HTTPRoute)
 	for _, r := range httpRoutes {
 		matchBackendMap[r.GetMatchKey()] = append(matchBackendMap[r.GetMatchKey()], r)
@@ -219,7 +220,11 @@ func envoyHTTPRoutes(httpRoutes []model.HTTPRoute, hostnames []string, hostNameS
 		}
 
 		if len(backends) == 0 && hRoutes[0].RequestRedirect == nil {
-			routes = append(routes, envoyHTTPRouteNoBackend(hRoutes[0], hostnames, hostNameSuffixMatch))
+			route := envoyHTTPRouteNoBackend(hRoutes[0], hostnames, hostNameSuffixMatch)
+			for _, mutator := range routeMutators {
+				mutator.MutateHTTPRoute(hRoutes[0], route)
+			}
+			routes = append(routes, route)
 			continue
 		}
 
@@ -252,6 +257,9 @@ func envoyHTTPRoutes(httpRoutes []model.HTTPRoute, hostnames []string, hostNameS
 				route.ResponseHeadersToAdd = append(route.ResponseHeadersToAdd, getHeadersToAdd(fn.ResponseHeaderModifier)...)
 				route.ResponseHeadersToRemove = append(route.ResponseHeadersToRemove, getHeadersToRemove(fn.ResponseHeaderModifier)...)
 			}
+		}
+		for _, mutator := range routeMutators {
+			mutator.MutateHTTPRoute(hRoutes[0], &route)
 		}
 		routes = append(routes, &route)
 		delete(matchBackendMap, r.GetMatchKey())

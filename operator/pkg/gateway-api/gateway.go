@@ -19,6 +19,7 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	mcsapiv1beta1 "sigs.k8s.io/mcs-api/pkg/apis/v1beta1"
 
+	"github.com/cilium/cilium/operator/pkg/gateway-api/extensions"
 	"github.com/cilium/cilium/operator/pkg/gateway-api/helpers"
 	"github.com/cilium/cilium/operator/pkg/gateway-api/indexers"
 	"github.com/cilium/cilium/operator/pkg/gateway-api/predicates"
@@ -43,17 +44,33 @@ type gatewayReconciler struct {
 
 	logger        *slog.Logger
 	installedCRDs []schema.GroupVersionKind
+
+	// Registrations contributed by Gateway API extensions.
+	controllerExtensions                 []extensions.ControllerExtension
+	routeValidationExtensions            []extensions.RouteValidationExtension
+	routeFilterExtRefIngestionExtensions []extensions.RouteFilterExtRefIngestionExtension
 }
 
-func newGatewayReconciler(mgr ctrl.Manager, translator translation.Translator, logger *slog.Logger, installedCRDs []schema.GroupVersionKind) *gatewayReconciler {
+func newGatewayReconciler(
+	mgr ctrl.Manager,
+	translator translation.Translator,
+	logger *slog.Logger,
+	installedCRDs []schema.GroupVersionKind,
+	controllerExtensions []extensions.ControllerExtension,
+	routeValidationExtensions []extensions.RouteValidationExtension,
+	routeFilterExtRefIngestionExtensions []extensions.RouteFilterExtRefIngestionExtension,
+) *gatewayReconciler {
 	scopedLog := logger.With(logfields.Controller, gateway)
 
 	return &gatewayReconciler{
-		Client:        mgr.GetClient(),
-		Scheme:        mgr.GetScheme(),
-		translator:    translator,
-		logger:        scopedLog,
-		installedCRDs: installedCRDs,
+		Client:                               mgr.GetClient(),
+		Scheme:                               mgr.GetScheme(),
+		translator:                           translator,
+		logger:                               scopedLog,
+		installedCRDs:                        installedCRDs,
+		controllerExtensions:                 controllerExtensions,
+		routeValidationExtensions:            routeValidationExtensions,
+		routeFilterExtRefIngestionExtensions: routeFilterExtRefIngestionExtensions,
 	}
 }
 
@@ -162,6 +179,12 @@ func (r *gatewayReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if serviceImportEnabled {
 		// Watch for changes to Backend Service Imports
 		gatewayBuilder = gatewayBuilder.Watches(&mcsapiv1beta1.ServiceImport{}, watchhandlers.EnqueueRequestForBackendServiceImport(r.Client, *r.logger))
+	}
+
+	for _, extension := range r.controllerExtensions {
+		if err := extension.RegisterGatewayController(gatewayBuilder); err != nil {
+			return fmt.Errorf("failed to register gateway controller extension: %w", err)
+		}
 	}
 
 	return gatewayBuilder.Complete(r)

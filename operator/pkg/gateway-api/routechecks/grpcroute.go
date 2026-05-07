@@ -18,6 +18,7 @@ import (
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayv1beta1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
+	"github.com/cilium/cilium/operator/pkg/gateway-api/extensions"
 	"github.com/cilium/cilium/operator/pkg/gateway-api/helpers"
 )
 
@@ -58,6 +59,10 @@ func (g *GRPCRouteRule) GetBackendRefs() []gatewayv1.BackendRef {
 	}
 
 	return refs
+}
+
+func (g *GRPCRouteRule) GetExtensionRefs() []extensions.ExtensionRef {
+	return extensions.GRPCRouteExtensionRefs(g.Rule)
 }
 
 func (g *GRPCRouteInput) GetRules() []GenericRule {

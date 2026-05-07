@@ -11,6 +11,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/cilium/cilium/operator/pkg/gateway-api/extensions"
 	"github.com/cilium/cilium/operator/pkg/model"
 	"github.com/cilium/cilium/pkg/annotation"
 	ciliumv2 "github.com/cilium/cilium/pkg/k8s/apis/cilium.io/v2"
@@ -87,13 +88,15 @@ type Config struct {
 //     in-secure).
 //   - no LB service and endpoint
 type cecTranslator struct {
-	Config Config
+	Config                         Config
+	httpRouteTranslationExtensions []extensions.HTTPRouteTranslationExtension
 }
 
 // NewCECTranslator returns a new translator
-func NewCECTranslator(config Config) CECTranslator {
+func NewCECTranslator(config Config, routeTranslationExtensions ...extensions.HTTPRouteTranslationExtension) CECTranslator {
 	return &cecTranslator{
-		Config: config,
+		Config:                         config,
+		httpRouteTranslationExtensions: routeTranslationExtensions,
 	}
 }
 

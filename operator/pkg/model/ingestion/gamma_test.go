@@ -31,7 +31,7 @@ func TestGammaConformance(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			logger := hivetest.Logger(t)
 			input := readGammaInput(t, name)
-			listeners := GammaHTTPRoutes(logger, input)
+			listeners := GammaHTTPRoutes(t.Context(), logger, input)
 
 			expected := []model.HTTPListener{}
 			readOutput(t, fmt.Sprintf("%s/%s/%s", basedGammaTestdataDir, rewriteTestName(name), "output-listeners.yaml"), &expected)

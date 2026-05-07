@@ -4,6 +4,7 @@
 package ingestion
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 
@@ -29,7 +30,7 @@ type GammaInput struct {
 // It does not support TLS Routes because GAMMA is only for cleartext config -
 // it is assumed that any TLS will be performed transparently by the underlying
 // implementation in the spec.
-func GammaHTTPRoutes(log *slog.Logger, input GammaInput) []model.HTTPListener {
+func GammaHTTPRoutes(ctx context.Context, log *slog.Logger, input GammaInput) []model.HTTPListener {
 	// GAMMA processing process:
 	// Process HTTPRoutes
 	var resHTTP []model.HTTPListener
@@ -48,12 +49,13 @@ func GammaHTTPRoutes(log *slog.Logger, input GammaInput) []model.HTTPListener {
 	// Set of services that will be parents for these HTTPRoutes
 	parentServices := make(map[types.NamespacedName]model.FullyQualifiedResource)
 
-	resHTTP = append(resHTTP, toGammaHTTPRoutes(log, parentServices, input.HTTPRoutes, input.Services, input.ReferenceGrants)...)
-	resHTTP = append(resHTTP, toGammaGRPCRoutes(log, parentServices, input.GRPCRoutes, input.Services, input.ReferenceGrants)...)
+	resHTTP = append(resHTTP, toGammaHTTPRoutes(ctx, log, parentServices, input.HTTPRoutes, input.Services, input.ReferenceGrants)...)
+	resHTTP = append(resHTTP, toGammaGRPCRoutes(ctx, log, parentServices, input.GRPCRoutes, input.Services, input.ReferenceGrants)...)
 	return resHTTP
 }
 
 func toGammaHTTPRoutes(
+	ctx context.Context,
 	log *slog.Logger,
 	parentServices map[types.NamespacedName]model.FullyQualifiedResource,
 	input []gatewayv1.HTTPRoute,
@@ -175,7 +177,11 @@ func toGammaHTTPRoutes(
 				}
 				res.Gamma = true
 				emptyBackendTLSPolicyMap := make(helpers.BackendTLSPolicyServiceMap)
-				res.Routes = append(res.Routes, extractRoutes(log, int32(portVal), []string{res.Hostname}, hr, services, []mcsapiv1beta1.ServiceImport{}, grants, emptyBackendTLSPolicyMap)...)
+				routes, err := extractRoutes(ctx, nil, log, int32(portVal), []string{res.Hostname}, hr, services, []mcsapiv1beta1.ServiceImport{}, grants, emptyBackendTLSPolicyMap, nil)
+				if err != nil {
+					return nil
+				}
+				res.Routes = append(res.Routes, routes...)
 				resHTTP = append(resHTTP, res)
 			}
 
@@ -198,6 +204,7 @@ func getMatchingService(name string, parentNamespace string, hrNamespace string,
 }
 
 func toGammaGRPCRoutes(
+	ctx context.Context,
 	log *slog.Logger,
 	parentServices map[types.NamespacedName]model.FullyQualifiedResource,
 	input []gatewayv1.GRPCRoute,
@@ -318,7 +325,11 @@ func toGammaGRPCRoutes(
 					Type: string(corev1.ServiceTypeClusterIP),
 				}
 				res.Gamma = true
-				res.Routes = append(res.Routes, extractGRPCRoutes([]string{res.Hostname}, grpcr, services, []mcsapiv1beta1.ServiceImport{}, grants)...)
+				routes, err := extractGRPCRoutes(ctx, nil, log, []string{res.Hostname}, grpcr, services, []mcsapiv1beta1.ServiceImport{}, grants, nil)
+				if err != nil {
+					return nil
+				}
+				res.Routes = append(res.Routes, routes...)
 				resGRPC = append(resGRPC, res)
 			}
 

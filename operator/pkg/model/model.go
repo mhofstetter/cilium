@@ -18,6 +18,36 @@ import (
 type Model struct {
 	HTTP           []HTTPListener           `json:"http,omitempty"`
 	TLSPassthrough []TLSPassthroughListener `json:"tls_passthrough,omitempty"`
+	Extensions     Extensions               `json:"extensions,omitempty"`
+}
+
+type Extensions map[string]any
+
+func (e *Extensions) Set(key string, value any) {
+	if *e == nil {
+		*e = Extensions{}
+	}
+	(*e)[key] = value
+}
+
+func (e Extensions) Get(key string) (any, bool) {
+	v, ok := e[key]
+	return v, ok
+}
+
+func GetTypedExtension[T any](e Extensions, key string) (T, bool) {
+	var zero T
+	v, ok := e.Get(key)
+	if !ok {
+		return zero, false
+	}
+
+	res, ok := v.(T)
+	if !ok {
+		return zero, false
+	}
+
+	return res, true
 }
 
 func (m *Model) GetListeners() []Listener {
@@ -83,6 +113,8 @@ type HTTPListener struct {
 
 	// Gamma is an indicator if this listener is a gamma listener
 	Gamma bool `json:"gamma,omitempty"`
+
+	Extensions Extensions `json:"extensions,omitempty"`
 }
 
 func (l HTTPListener) GetSources() []FullyQualifiedResource {
@@ -139,6 +171,8 @@ type TLSPassthroughListener struct {
 	Service *Service `json:"service,omitempty"`
 	// Infrastructure configuration
 	Infrastructure *Infrastructure `json:"infrastructure,omitempty"`
+
+	Extensions Extensions `json:"extensions,omitempty"`
 }
 
 func (l TLSPassthroughListener) GetAnnotations() map[string]string {
@@ -327,6 +361,8 @@ type HTTPRoute struct {
 
 	// Retry holds the retry configuration for a route.
 	Retry *HTTPRetry `json:"retry,omitempty"`
+
+	Extensions Extensions `json:"extensions,omitempty"`
 }
 
 type BackendHTTPFilter struct {

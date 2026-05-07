@@ -25,6 +25,7 @@ import (
 
 	operatorOption "github.com/cilium/cilium/operator/option"
 	"github.com/cilium/cilium/operator/pkg/ciliumenvoyconfig"
+	"github.com/cilium/cilium/operator/pkg/gateway-api/extensions"
 	"github.com/cilium/cilium/operator/pkg/gateway-api/helpers"
 	"github.com/cilium/cilium/operator/pkg/model/translation"
 	gatewayApiTranslation "github.com/cilium/cilium/operator/pkg/model/translation/gateway-api"
@@ -219,6 +220,12 @@ type gatewayAPIParams struct {
 	GatewayApiConfig gatewayApiConfig
 	ProxyTimeouts    ciliumenvoyconfig.EnvoyProxyTimeouts
 
+	// Registrations contributed by Gateway API extensions.
+	ControllerExtensions                 []extensions.ControllerExtension                 `group:"gateway-api-controller-extensions"`
+	RouteValidationExtensions            []extensions.RouteValidationExtension            `group:"gateway-api-route-validation-extensions"`
+	RouteFilterExtRefIngestionExtensions []extensions.RouteFilterExtRefIngestionExtension `group:"gateway-api-route-filter-ext-ref-ingestion-extensions"`
+	HTTPRouteTranslationExtensions       []extensions.HTTPRouteTranslationExtension       `group:"gateway-api-http-route-translation-extensions"`
+
 	// Preconditions is injected from private provider
 	Preconditions *gatewayAPIPreconditions
 }
@@ -273,7 +280,7 @@ func initGatewayAPIController(params gatewayAPIParams) error {
 			XFFNumTrustedHops: params.GatewayApiConfig.GatewayAPIXffNumTrustedHops,
 		},
 	}
-	cecTranslator := translation.NewCECTranslator(cfg)
+	cecTranslator := translation.NewCECTranslator(cfg, params.HTTPRouteTranslationExtensions...)
 
 	gatewayAPITranslator := gatewayApiTranslation.NewTranslator(cecTranslator, cfg)
 
@@ -282,6 +289,9 @@ func initGatewayAPIController(params gatewayAPIParams) error {
 		gatewayAPITranslator,
 		params.Logger,
 		installedKinds,
+		params.ControllerExtensions,
+		params.RouteValidationExtensions,
+		params.RouteFilterExtRefIngestionExtensions,
 	); err != nil {
 		return fmt.Errorf("failed to create gateway controller: %w", err)
 	}
@@ -419,12 +429,20 @@ func checkCRDs(ctx context.Context, clientset k8sClient.Clientset, logger *slog.
 
 // registerReconcilers registers Gateway API reconcilers to the controller-runtime library manager.
 // optionalKinds are previously autodetected based on what CRDs are present in the cluster.
-func registerReconcilers(mgr ctrlRuntime.Manager, translator translation.Translator, logger *slog.Logger, installedCRDs []schema.GroupVersionKind) error {
+func registerReconcilers(
+	mgr ctrlRuntime.Manager,
+	translator translation.Translator,
+	logger *slog.Logger,
+	installedCRDs []schema.GroupVersionKind,
+	controllerExtensions []extensions.ControllerExtension,
+	routeValidationExtensions []extensions.RouteValidationExtension,
+	routeFilterExtRefIngestionExtensions []extensions.RouteFilterExtRefIngestionExtension,
+) error {
 	requiredReconcilers := []interface {
 		SetupWithManager(mgr ctrlRuntime.Manager) error
 	}{
 		newGatewayClassReconciler(mgr, logger),
-		newGatewayReconciler(mgr, translator, logger, installedCRDs),
+		newGatewayReconciler(mgr, translator, logger, installedCRDs, controllerExtensions, routeValidationExtensions, routeFilterExtRefIngestionExtensions),
 		newGammaReconciler(mgr, translator, logger),
 		newGatewayClassConfigReconciler(mgr, logger),
 	}

@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/cilium/cilium/operator/pkg/gateway-api/extensions"
 	"github.com/cilium/cilium/operator/pkg/gateway-api/helpers"
 )
 
@@ -107,6 +108,10 @@ type TLSRouteRule struct {
 
 func (t *TLSRouteRule) GetBackendRefs() []gatewayv1.BackendRef {
 	return t.Rule.BackendRefs
+}
+
+func (t *TLSRouteRule) GetExtensionRefs() []extensions.ExtensionRef {
+	return nil
 }
 
 func (t *TLSRouteInput) GetHostnames() []gatewayv1.Hostname {

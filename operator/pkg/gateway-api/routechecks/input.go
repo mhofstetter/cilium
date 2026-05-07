@@ -12,6 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	"github.com/cilium/cilium/operator/pkg/gateway-api/extensions"
 )
 
 const (
@@ -21,6 +23,7 @@ const (
 
 type GenericRule interface {
 	GetBackendRefs() []gatewayv1.BackendRef
+	GetExtensionRefs() []extensions.ExtensionRef
 }
 
 type Input interface {

@@ -127,7 +127,7 @@ func (r *gammaReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	grpcRoutes := r.filterGRPCRoutesByService(ctx, originalSvc, grpcRouteList.Items)
 
 	// TODO(youngnick): GammaHTTPRoutes needs to be updated now that we have a source Service.
-	httpListeners := ingestion.GammaHTTPRoutes(r.logger, ingestion.GammaInput{
+	httpListeners := ingestion.GammaHTTPRoutes(ctx, r.logger, ingestion.GammaInput{
 		HTTPRoutes: httpRoutes,
 		GRPCRoutes: grpcRoutes,
 		Services:   servicesList.Items,

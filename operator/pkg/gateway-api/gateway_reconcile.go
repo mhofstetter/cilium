@@ -26,6 +26,7 @@ import (
 	mcsapiv1beta1 "sigs.k8s.io/mcs-api/pkg/apis/v1beta1"
 
 	controllerruntime "github.com/cilium/cilium/operator/pkg/controller-runtime"
+	"github.com/cilium/cilium/operator/pkg/gateway-api/extensions"
 	"github.com/cilium/cilium/operator/pkg/gateway-api/helpers"
 	"github.com/cilium/cilium/operator/pkg/gateway-api/indexers"
 	"github.com/cilium/cilium/operator/pkg/gateway-api/policychecks"
@@ -188,18 +189,26 @@ func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return controllerruntime.Fail(err)
 	}
 
-	httpListeners, tlsPassthroughListeners := ingestion.GatewayAPI(scopedLog, ingestion.Input{
-		GatewayClass:        *gwc,
-		GatewayClassConfig:  r.getGatewayClassConfig(ctx, gwc),
-		Gateway:             *gw,
-		HTTPRoutes:          httpRoutes,
-		TLSRoutes:           tlsRoutes,
-		GRPCRoutes:          grpcRoutes,
-		Services:            servicesList.Items,
-		ServiceImports:      serviceImportsList.Items,
-		ReferenceGrants:     grants.Items,
-		BackendTLSPolicyMap: btlspMap,
+	httpListeners, tlsPassthroughListeners, err := ingestion.GatewayAPI(ctx, scopedLog, ingestion.Input{
+		GatewayClass:                         *gwc,
+		GatewayClassConfig:                   r.getGatewayClassConfig(ctx, gwc),
+		Gateway:                              *gw,
+		HTTPRoutes:                           httpRoutes,
+		TLSRoutes:                            tlsRoutes,
+		GRPCRoutes:                           grpcRoutes,
+		Services:                             servicesList.Items,
+		ServiceImports:                       serviceImportsList.Items,
+		ReferenceGrants:                      grants.Items,
+		BackendTLSPolicyMap:                  btlspMap,
+		RouteFilterExtRefIngestionExtensions: r.routeFilterExtRefIngestionExtensions,
+		Client:                               r.Client,
 	})
+	if err != nil {
+		scopedLog.ErrorContext(ctx, "Unable to ingest Gateway API resources", logfields.Error, err)
+		setGatewayAccepted(gw, false, "Unable to ingest Gateway API resources", gatewayv1.GatewayReasonNoResources)
+		setGatewayProgrammed(gw, metav1.ConditionFalse, "Unable to ingest Gateway API resources", gatewayv1.GatewayReasonListenersNotValid)
+		return r.handleReconcileErrorWithStatus(ctx, err, original, gw)
+	}
 
 	validListener, err := r.setListenerStatus(ctx, gw, httpRouteList, tlsRouteList, grpcRouteList)
 	if err != nil {
@@ -860,6 +869,51 @@ func (r *gatewayReconciler) runCommonRouteChecks(input routechecks.Input, parent
 			}
 
 			if !continueCheck {
+				break
+			}
+		}
+
+		routeKind := extensions.RouteKind(input.GetGVK().Kind)
+		for _, rule := range input.GetRules() {
+			stop := false
+			for _, ref := range rule.GetExtensionRefs() {
+				claimed := false
+				for _, validator := range r.routeValidationExtensions {
+					if !validator.Supports(routeKind, ref) {
+						continue
+					}
+					claimed = true
+					res, err := validator.Validate(input.GetContext(), extensions.RouteValidationInput{
+						RouteNamespace: input.GetNamespace(),
+						ExtensionRef:   ref,
+					})
+					if err != nil {
+						return fmt.Errorf("failed to apply extension filter check: %w", err)
+					}
+					for _, cond := range res.Conditions {
+						input.SetParentCondition(parent, cond)
+					}
+					if !res.Continue {
+						stop = true
+						break
+					}
+				}
+
+				if !claimed {
+					input.SetParentCondition(parent, metav1.Condition{
+						Type:    string(gatewayv1.RouteConditionResolvedRefs),
+						Status:  metav1.ConditionFalse,
+						Reason:  string(gatewayv1.RouteReasonRefNotPermitted),
+						Message: fmt.Sprintf("Unsupported extension kind %s.%s", ref.Group, ref.Kind),
+					})
+					stop = true
+				}
+
+				if stop {
+					break
+				}
+			}
+			if stop {
 				break
 			}
 		}
