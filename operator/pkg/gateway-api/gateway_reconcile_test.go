@@ -914,12 +914,13 @@ func Test_gatewayReconciler_ensureEnvoyConfig_deletesStaleCEC(t *testing.T) {
 	})
 }
 
-func Test_gatewayReconciler_setListenerStatus(t *testing.T) {
+func Test_gatewayReconciler_updateGatewayAndListenerStatuses(t *testing.T) {
 	tests := []struct {
-		name          string
-		listeners     []gatewayv1.Listener
-		wantStatus    ListenersStatus
-		wantListeners map[gatewayv1.SectionName]metav1.Condition
+		name                  string
+		listeners             []gatewayv1.Listener
+		wantErr               bool
+		wantGatewayConditions map[string]metav1.Condition
+		wantListeners         map[gatewayv1.SectionName]metav1.Condition
 	}{
 		{
 			name: "all listeners valid",
@@ -938,7 +939,13 @@ func Test_gatewayReconciler_setListenerStatus(t *testing.T) {
 					},
 				},
 			},
-			wantStatus: ListenersStatusAllValid,
+			wantGatewayConditions: map[string]metav1.Condition{
+				string(gatewayv1.GatewayConditionAccepted): {
+					Type:   string(gatewayv1.GatewayConditionAccepted),
+					Status: metav1.ConditionTrue,
+					Reason: string(gatewayv1.GatewayReasonAccepted),
+				},
+			},
 			wantListeners: map[gatewayv1.SectionName]metav1.Condition{
 				"http": {
 					Type:   string(gatewayv1.ListenerConditionAccepted),
@@ -959,7 +966,19 @@ func Test_gatewayReconciler_setListenerStatus(t *testing.T) {
 				Port:     1111,
 				Protocol: gatewayv1.ProtocolType("INVALID"),
 			}},
-			wantStatus: ListenersStatusNoneValid,
+			wantErr: true,
+			wantGatewayConditions: map[string]metav1.Condition{
+				string(gatewayv1.GatewayConditionAccepted): {
+					Type:   string(gatewayv1.GatewayConditionAccepted),
+					Status: metav1.ConditionFalse,
+					Reason: string(gatewayv1.GatewayReasonListenersNotValid),
+				},
+				string(gatewayv1.GatewayConditionProgrammed): {
+					Type:   string(gatewayv1.GatewayConditionProgrammed),
+					Status: metav1.ConditionFalse,
+					Reason: string(gatewayv1.GatewayReasonListenersNotValid),
+				},
+			},
 			wantListeners: map[gatewayv1.SectionName]metav1.Condition{
 				"invalid": {
 					Type:   string(gatewayv1.ListenerConditionAccepted),
@@ -982,7 +1001,13 @@ func Test_gatewayReconciler_setListenerStatus(t *testing.T) {
 					Protocol: gatewayv1.ProtocolType("INVALID"),
 				},
 			},
-			wantStatus: ListenersStatusValidWithUnsupportedProtocol,
+			wantGatewayConditions: map[string]metav1.Condition{
+				string(gatewayv1.GatewayConditionAccepted): {
+					Type:   string(gatewayv1.GatewayConditionAccepted),
+					Status: metav1.ConditionTrue,
+					Reason: string(gatewayv1.GatewayReasonListenersNotValid),
+				},
+			},
 			wantListeners: map[gatewayv1.SectionName]metav1.Condition{
 				"http": {
 					Type:   string(gatewayv1.ListenerConditionAccepted),
@@ -1015,7 +1040,13 @@ func Test_gatewayReconciler_setListenerStatus(t *testing.T) {
 					},
 				},
 			},
-			wantStatus: ListenersStatusSomeInvalid,
+			wantGatewayConditions: map[string]metav1.Condition{
+				string(gatewayv1.GatewayConditionAccepted): {
+					Type:   string(gatewayv1.GatewayConditionAccepted),
+					Status: metav1.ConditionTrue,
+					Reason: string(gatewayv1.GatewayReasonAccepted),
+				},
+			},
 			wantListeners: map[gatewayv1.SectionName]metav1.Condition{
 				"http": {
 					Type:   string(gatewayv1.ListenerConditionAccepted),
@@ -1057,7 +1088,7 @@ func Test_gatewayReconciler_setListenerStatus(t *testing.T) {
 					Source:   gatewayFQR(gw),
 				})
 			}
-			gotStatus, err := r.setListenerStatus(
+			err := r.updateGatewayAndListenerStatuses(
 				t.Context(),
 				gw,
 				conflictsAcrossSources(listenerContexts),
@@ -1068,8 +1099,13 @@ func Test_gatewayReconciler_setListenerStatus(t *testing.T) {
 				&gatewayv1.UDPRouteList{},
 				helpers.NewNamespaceLabelIndex(nil),
 			)
-			require.NoError(t, err)
-			require.Equal(t, tt.wantStatus, gotStatus)
+			require.Equal(t, tt.wantErr, err != nil)
+
+			for conditionType, wantCond := range tt.wantGatewayConditions {
+				gotCond := gatewayStatusCondition(t, gw.Status.Conditions, conditionType)
+				require.Equal(t, wantCond.Status, gotCond.Status)
+				require.Equal(t, wantCond.Reason, gotCond.Reason)
+			}
 
 			for name, wantCond := range tt.wantListeners {
 				gotCond := listenerStatusCondition(t, gw.Status.Listeners, name, string(gatewayv1.ListenerConditionAccepted))
@@ -1078,6 +1114,19 @@ func Test_gatewayReconciler_setListenerStatus(t *testing.T) {
 			}
 		})
 	}
+}
+
+func gatewayStatusCondition(t *testing.T, conditions []metav1.Condition, conditionType string) metav1.Condition {
+	t.Helper()
+
+	for _, cond := range conditions {
+		if cond.Type == conditionType {
+			return cond
+		}
+	}
+
+	require.Failf(t, "missing gateway condition", "gateway condition %q not found", conditionType)
+	return metav1.Condition{}
 }
 
 func listenerStatusCondition(t *testing.T, listeners []gatewayv1.ListenerStatus, name gatewayv1.SectionName, conditionType string) metav1.Condition {

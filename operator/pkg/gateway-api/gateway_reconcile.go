@@ -365,7 +365,7 @@ func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		MergedListeners:     mergedListeners,
 	})
 
-	listenersStatus, err := r.setListenerStatus(
+	if err := r.updateGatewayAndListenerStatuses(
 		ctx,
 		gw,
 		conflictedListeners,
@@ -375,25 +375,8 @@ func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		tcpRouteList,
 		udpRouteList,
 		namespaceLabels,
-	)
-	if err != nil {
-		scopedLog.ErrorContext(ctx, "Unable to set listener status", logfields.Error, err)
-		setGatewayAccepted(gw, false, "Unable to set listener status", gatewayv1.GatewayReasonNoResources)
-		setGatewayProgrammed(gw, metav1.ConditionFalse, "Unable to set listener status", gatewayv1.GatewayReasonListenersNotValid)
+	); err != nil {
 		return r.handleReconcileErrorWithStatus(ctx, err, original, gw)
-	}
-
-	switch listenersStatus {
-	case ListenersStatusNoneValid:
-		err := fmt.Errorf("No Accepted Listeners for Gateway")
-		scopedLog.ErrorContext(ctx, "No Accepted Listeners for Gateway", logfields.Error, err)
-		setGatewayAccepted(gw, false, "No Accepted Listeners", gatewayv1.GatewayReasonListenersNotValid)
-		setGatewayProgrammed(gw, metav1.ConditionFalse, "No Accepted Listeners", gatewayv1.GatewayReasonListenersNotValid)
-		return r.handleReconcileErrorWithStatus(ctx, err, original, gw)
-	case ListenersStatusValidWithUnsupportedProtocol:
-		setGatewayAccepted(gw, true, "Gateway has unsupported listeners", gatewayv1.GatewayReasonListenersNotValid)
-	case ListenersStatusSomeInvalid, ListenersStatusAllValid:
-		setGatewayAccepted(gw, true, "Gateway successfully scheduled", gatewayv1.GatewayReasonAccepted)
 	}
 
 	// ListenerSet status is reported independently from the parent Gateway's
@@ -1232,16 +1215,7 @@ func (r *gatewayReconciler) setStaticAddressStatus(ctx context.Context, gw *gate
 	return nil
 }
 
-type ListenersStatus string
-
-const (
-	ListenersStatusNoneValid                    ListenersStatus = "NoneValid"
-	ListenersStatusValidWithUnsupportedProtocol ListenersStatus = "SomeValidWithUnsupported"
-	ListenersStatusSomeInvalid                  ListenersStatus = "SomeInvalid"
-	ListenersStatusAllValid                     ListenersStatus = "AllValid"
-)
-
-func (r *gatewayReconciler) setListenerStatus(
+func (r *gatewayReconciler) updateGatewayAndListenerStatuses(
 	ctx context.Context,
 	gw *gatewayv1.Gateway,
 	conflictedListeners listenerConflictsBySource,
@@ -1251,10 +1225,12 @@ func (r *gatewayReconciler) setListenerStatus(
 	tcpRoutes *gatewayv1.TCPRouteList,
 	udpRoutes *gatewayv1.UDPRouteList,
 	namespaceLabels helpers.NamespaceLabelIndex,
-) (ListenersStatus, error) {
+) error {
 	grants := &gatewayv1.ReferenceGrantList{}
 	if err := r.Client.List(ctx, grants); err != nil {
-		return "", fmt.Errorf("failed to retrieve reference grants: %w", err)
+		setGatewayAccepted(gw, false, "Unable to set listener status", gatewayv1.GatewayReasonNoResources)
+		setGatewayProgrammed(gw, metav1.ConditionFalse, "Unable to set listener status", gatewayv1.GatewayReasonListenersNotValid)
+		return fmt.Errorf("failed to retrieve reference grants: %w", err)
 	}
 
 	conflictedGatewayListeners := conflictedListeners[gatewayFQR(gw)]
@@ -1353,16 +1329,21 @@ func (r *gatewayReconciler) setListenerStatus(
 	}
 	gw.Status.Listeners = newListenersStatus
 
+	// Set the Gateway-level listener status from the aggregate listener results.
 	switch {
 	case validListeners == 0:
-		return ListenersStatusNoneValid, nil
+		setGatewayAccepted(gw, false, "No Accepted Listeners", gatewayv1.GatewayReasonListenersNotValid)
+		setGatewayProgrammed(gw, metav1.ConditionFalse, "No Accepted Listeners", gatewayv1.GatewayReasonListenersNotValid)
+		return fmt.Errorf("no accepted listeners for Gateway")
 	case unsupportedProtocolListeners > 0:
-		return ListenersStatusValidWithUnsupportedProtocol, nil
+		setGatewayAccepted(gw, true, "Gateway has unsupported listeners", gatewayv1.GatewayReasonListenersNotValid)
 	case invalidListeners > 0:
-		return ListenersStatusSomeInvalid, nil
+		setGatewayAccepted(gw, true, "Gateway successfully scheduled", gatewayv1.GatewayReasonAccepted)
 	default:
-		return ListenersStatusAllValid, nil
+		setGatewayAccepted(gw, true, "Gateway successfully scheduled", gatewayv1.GatewayReasonAccepted)
 	}
+
+	return nil
 }
 
 type listenerConflict struct {
