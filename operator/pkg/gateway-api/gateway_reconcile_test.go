@@ -130,7 +130,7 @@ func Test_Conformance(t *testing.T) {
 		{
 			name: "gateway-invalid-route-kind",
 			gateway: []gwDetails{
-				{FullName: types.NamespacedName{Name: "gateway-only-invalid-route-kind", Namespace: "gateway-conformance-infra"}, wantErr: true},
+				{FullName: types.NamespacedName{Name: "gateway-only-invalid-route-kind", Namespace: "gateway-conformance-infra"}, skipCEC: true},
 				{FullName: types.NamespacedName{Name: "gateway-supported-and-invalid-route-kind", Namespace: "gateway-conformance-infra"}},
 			},
 		},
@@ -374,9 +374,9 @@ func Test_Conformance(t *testing.T) {
 		{name: "listenerset-route-hostname-independence", gateway: []gwDetails{
 			{FullName: types.NamespacedName{Name: "route-hostname-independence", Namespace: "gateway-conformance-infra"}},
 		}},
-		{name: "listenerset-valid-with-invalid-gateway-listener", skipCEC: true, gateway: []gwDetails{
-			{FullName: types.NamespacedName{Name: "valid-listenerset-only", Namespace: "gateway-conformance-infra"}, wantErr: true},
-		}},
+			{name: "listenerset-valid-with-invalid-gateway-listener", skipCEC: true, gateway: []gwDetails{
+				{FullName: types.NamespacedName{Name: "valid-listenerset-only", Namespace: "gateway-conformance-infra"}},
+			}},
 		// A Route that targets the Gateway must not leak into a ListenerSet's
 		// L4 listeners, even when the Route lives in a namespace the ListenerSet
 		// listener would otherwise allow.
@@ -918,6 +918,7 @@ func Test_gatewayReconciler_updateGatewayAndListenerStatuses(t *testing.T) {
 	tests := []struct {
 		name                  string
 		listeners             []gatewayv1.Listener
+		wantAction            listenerStatusAction
 		wantErr               bool
 		wantGatewayConditions map[string]metav1.Condition
 		wantListeners         map[gatewayv1.SectionName]metav1.Condition
@@ -939,6 +940,7 @@ func Test_gatewayReconciler_updateGatewayAndListenerStatuses(t *testing.T) {
 					},
 				},
 			},
+			wantAction: listenerStatusActionContinue,
 			wantGatewayConditions: map[string]metav1.Condition{
 				string(gatewayv1.GatewayConditionAccepted): {
 					Type:   string(gatewayv1.GatewayConditionAccepted),
@@ -966,7 +968,7 @@ func Test_gatewayReconciler_updateGatewayAndListenerStatuses(t *testing.T) {
 				Port:     1111,
 				Protocol: gatewayv1.ProtocolType("INVALID"),
 			}},
-			wantErr: true,
+			wantAction: listenerStatusActionStop,
 			wantGatewayConditions: map[string]metav1.Condition{
 				string(gatewayv1.GatewayConditionAccepted): {
 					Type:   string(gatewayv1.GatewayConditionAccepted),
@@ -1001,6 +1003,7 @@ func Test_gatewayReconciler_updateGatewayAndListenerStatuses(t *testing.T) {
 					Protocol: gatewayv1.ProtocolType("INVALID"),
 				},
 			},
+			wantAction: listenerStatusActionContinue,
 			wantGatewayConditions: map[string]metav1.Condition{
 				string(gatewayv1.GatewayConditionAccepted): {
 					Type:   string(gatewayv1.GatewayConditionAccepted),
@@ -1040,6 +1043,7 @@ func Test_gatewayReconciler_updateGatewayAndListenerStatuses(t *testing.T) {
 					},
 				},
 			},
+			wantAction: listenerStatusActionContinue,
 			wantGatewayConditions: map[string]metav1.Condition{
 				string(gatewayv1.GatewayConditionAccepted): {
 					Type:   string(gatewayv1.GatewayConditionAccepted),
@@ -1088,7 +1092,7 @@ func Test_gatewayReconciler_updateGatewayAndListenerStatuses(t *testing.T) {
 					Source:   gatewayFQR(gw),
 				})
 			}
-			err := r.updateGatewayAndListenerStatuses(
+			action, err := r.updateGatewayAndListenerStatuses(
 				t.Context(),
 				gw,
 				conflictsAcrossSources(listenerContexts),
@@ -1099,6 +1103,7 @@ func Test_gatewayReconciler_updateGatewayAndListenerStatuses(t *testing.T) {
 				&gatewayv1.UDPRouteList{},
 				helpers.NewNamespaceLabelIndex(nil),
 			)
+			require.Equal(t, tt.wantAction, action)
 			require.Equal(t, tt.wantErr, err != nil)
 
 			for conditionType, wantCond := range tt.wantGatewayConditions {

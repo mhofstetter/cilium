@@ -365,7 +365,7 @@ func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		MergedListeners:     mergedListeners,
 	})
 
-	if err := r.updateGatewayAndListenerStatuses(
+	action, err := r.updateGatewayAndListenerStatuses(
 		ctx,
 		gw,
 		conflictedListeners,
@@ -375,8 +375,17 @@ func (r *gatewayReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		tcpRouteList,
 		udpRouteList,
 		namespaceLabels,
-	); err != nil {
+	)
+	if err != nil {
 		return r.handleReconcileErrorWithStatus(ctx, err, original, gw)
+	}
+
+	if action == listenerStatusActionStop {
+		if err := r.updateStatus(ctx, original, gw); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update Gateway status: %w", err)
+		}
+
+		return controllerruntime.Success()
 	}
 
 	// ListenerSet status is reported independently from the parent Gateway's
@@ -1215,6 +1224,13 @@ func (r *gatewayReconciler) setStaticAddressStatus(ctx context.Context, gw *gate
 	return nil
 }
 
+type listenerStatusAction int
+
+const (
+	listenerStatusActionContinue listenerStatusAction = iota
+	listenerStatusActionStop
+)
+
 func (r *gatewayReconciler) updateGatewayAndListenerStatuses(
 	ctx context.Context,
 	gw *gatewayv1.Gateway,
@@ -1225,12 +1241,12 @@ func (r *gatewayReconciler) updateGatewayAndListenerStatuses(
 	tcpRoutes *gatewayv1.TCPRouteList,
 	udpRoutes *gatewayv1.UDPRouteList,
 	namespaceLabels helpers.NamespaceLabelIndex,
-) error {
+) (listenerStatusAction, error) {
 	grants := &gatewayv1.ReferenceGrantList{}
 	if err := r.Client.List(ctx, grants); err != nil {
 		setGatewayAccepted(gw, false, "Unable to set listener status", gatewayv1.GatewayReasonNoResources)
 		setGatewayProgrammed(gw, metav1.ConditionFalse, "Unable to set listener status", gatewayv1.GatewayReasonListenersNotValid)
-		return fmt.Errorf("failed to retrieve reference grants: %w", err)
+		return listenerStatusActionStop, fmt.Errorf("failed to retrieve reference grants: %w", err)
 	}
 
 	conflictedGatewayListeners := conflictedListeners[gatewayFQR(gw)]
@@ -1334,7 +1350,7 @@ func (r *gatewayReconciler) updateGatewayAndListenerStatuses(
 	case validListeners == 0:
 		setGatewayAccepted(gw, false, "No Accepted Listeners", gatewayv1.GatewayReasonListenersNotValid)
 		setGatewayProgrammed(gw, metav1.ConditionFalse, "No Accepted Listeners", gatewayv1.GatewayReasonListenersNotValid)
-		return fmt.Errorf("no accepted listeners for Gateway")
+		return listenerStatusActionStop, nil
 	case unsupportedProtocolListeners > 0:
 		setGatewayAccepted(gw, true, "Gateway has unsupported listeners", gatewayv1.GatewayReasonListenersNotValid)
 	case invalidListeners > 0:
@@ -1343,7 +1359,7 @@ func (r *gatewayReconciler) updateGatewayAndListenerStatuses(
 		setGatewayAccepted(gw, true, "Gateway successfully scheduled", gatewayv1.GatewayReasonAccepted)
 	}
 
-	return nil
+	return listenerStatusActionContinue, nil
 }
 
 type listenerConflict struct {
