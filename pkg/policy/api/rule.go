@@ -16,10 +16,13 @@ const (
 	AuthenticationModeAlwaysFail AuthenticationMode = "test-always-fail"
 )
 
-// Authentication specifies the kind of cryptographic authentication required for the traffic to
-// be allowed.
+// Authentication specifies the kind of cryptographic authentication configured on policy.
+//
+// Deprecated: Authentication is accepted for compatibility but is currently unused.
 type Authentication struct {
-	// Mode is the required authentication mode for the allowed traffic, if any.
+	// Mode is the configured authentication mode.
+	//
+	// Deprecated: Authentication is accepted for compatibility but is currently unused.
 	//
 	// +kubebuilder:validation:Enum=disabled;required;test-always-fail
 	// +kubebuilder:validation:Required
