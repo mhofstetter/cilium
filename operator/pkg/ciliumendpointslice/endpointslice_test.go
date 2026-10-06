@@ -4,6 +4,7 @@
 package ciliumendpointslice
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/cilium/hive/cell"
 	"github.com/cilium/hive/hivetest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/controller/priorityqueue"
 
 	"github.com/cilium/cilium/operator/k8s"
@@ -654,6 +656,12 @@ func TestCESManagement(t *testing.T) {
 		ciliumIdentity: ciliumIdentity,
 	}
 	cesController.initializeQueue()
+	t.Cleanup(func() {
+		cesController.queue.ShutDown()
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), time.Second)
+		defer cancel()
+		hive.Stop(tlog, stopCtx)
+	})
 	var ns = "ns"
 
 	node1 := tu.CreateStoreNode("node1")
@@ -665,23 +673,31 @@ func TestCESManagement(t *testing.T) {
 	cesController.onNamespaceUpsert(nsObj)
 
 	pod1 := cidtest.NewPod("pod1", ns, tu.TestLbsA, "node1")
+	podStore.CacheStore().Add(pod1)
 
-	cid := cidtest.NewCIDWithNamespace("cid1", pod1, nsObj)
+	cid := cidtest.NewCIDWithNamespace("1", pod1, nsObj)
 	cidStore.CacheStore().Add(cid)
 	cesController.onIdentityUpdate(cid)
 
-	cesController.onPodUpdate(pod1)
+	require.NoError(t, cesController.onPodUpdate(pod1))
 	if err := testutils.WaitUntil(func() bool {
 		return cesController.queue.Len() == 1
 	}, time.Second); err != nil {
-		assert.Equal(t, 1, cesController.queue.Len())
+		require.Equal(t, 1, cesController.queue.Len())
 	}
 	cesController.processNextWorkItem(t.Context())
 	//A CEP is enqueued and processed. Then, the same CEP (and CES) is enqueued
 	//to test if the CESStore works properly and if the associated CES can be found in the store
-	cesController.onPodUpdate(pod1)
+	require.NoError(t, cesController.onPodUpdate(pod1))
+	if err := testutils.WaitUntil(func() bool {
+		return cesController.queue.Len() == 1
+	}, time.Second); err != nil {
+		require.Equal(t, 1, cesController.queue.Len())
+	}
 
-	key, _, _ := cesController.queue.GetWithPriority()
+	key, _, shutdown := cesController.queue.GetWithPriority()
+	require.False(t, shutdown)
+	cesController.queue.Done(key)
 	if err := testutils.WaitUntil(func() bool {
 		_, exists, _ := r.cesStore.GetByKey(NewCESKey(key.Name, "").key())
 		return exists == true
@@ -690,9 +706,6 @@ func TestCESManagement(t *testing.T) {
 		assert.True(t, exists)
 	}
 	cesController.onNamespaceDelete(nsObj)
-
-	cesController.queue.ShutDown()
-	hive.Stop(tlog, t.Context())
 }
 
 // TestSyncCESsInLocalCacheOperatorDowntime covers three scenarios that can
