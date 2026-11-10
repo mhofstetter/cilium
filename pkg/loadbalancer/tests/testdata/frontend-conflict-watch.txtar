@@ -1,0 +1,73 @@
+#! --lb-test-fault-probability=0.0
+# A frontend released outside the Kubernetes reflector must wake a blocked
+# Service without any further Service or EndpointSlice event. When multiple
+# frontends conflict, the retry must watch the next blocker.
+
+hive start
+k8s/add old.yaml
+db/cmp frontends old.table
+k8s/add new.yaml
+sleep 200ms
+db/cmp frontends old.table
+
+# Release the first blocker directly in StateDB, not via a Kubernetes event.
+db/list --delete -i address frontends 10.96.50.104:80/TCP
+sleep 200ms
+db/cmp frontends second-blocker.table
+
+# The retry must now be watching port 81. Releasing it completes the upsert.
+db/list --delete -i address frontends 10.96.50.104:81/TCP
+db/cmp frontends new.table
+
+k8s/delete old.yaml new.yaml
+
+# Wait for cleanup.
+* db/empty services frontends
+
+-- old.table --
+Address              ServiceName
+10.96.50.104:80/TCP  test/old
+10.96.50.104:81/TCP  test/old
+
+-- second-blocker.table --
+Address              ServiceName
+10.96.50.104:81/TCP  test/old
+
+-- new.table --
+Address              ServiceName
+10.96.50.104:80/TCP  test/new
+10.96.50.104:81/TCP  test/new
+
+-- old.yaml --
+apiVersion: v1
+kind: Service
+metadata:
+  name: old
+  namespace: test
+spec:
+  clusterIP: 10.96.50.104
+  ports:
+  - name: first
+    port: 80
+    protocol: TCP
+  - name: second
+    port: 81
+    protocol: TCP
+  type: ClusterIP
+
+-- new.yaml --
+apiVersion: v1
+kind: Service
+metadata:
+  name: new
+  namespace: test
+spec:
+  clusterIP: 10.96.50.104
+  ports:
+  - name: first
+    port: 80
+    protocol: TCP
+  - name: second
+    port: 81
+    protocol: TCP
+  type: ClusterIP
