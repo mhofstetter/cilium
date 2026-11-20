@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
+// This file was not reviewed by a human before submission
 
 package translation
 
@@ -425,10 +426,11 @@ func Test_tlsPassthroughFilterChains_Backends(t *testing.T) {
 	}
 }
 
-func Test_tlsPassthroughFilterChains_AccessLogs(t *testing.T) {
-	filterChains := tlsPassthroughFilterChains(&model.Model{
+func TestDesiredEnvoyListenerTLSPassthroughAccessLogs(t *testing.T) {
+	m := &model.Model{
 		TLSPassthrough: []model.TLSPassthroughListener{
 			{
+				Port: 443,
 				Routes: []model.TLSPassthroughRoute{
 					{
 						Hostnames: []string{"test.example.com"},
@@ -449,12 +451,49 @@ func Test_tlsPassthroughFilterChains_AccessLogs(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
 
-	require.Len(t, filterChains, 1)
-	tcpProxy := getTCPProxy(t, filterChains[0])
-	require.Len(t, tcpProxy.GetAccessLog(), 1)
-	require.Equal(t, "envoy.access_loggers.stdout", tcpProxy.GetAccessLog()[0].GetName())
+	for _, tt := range []struct {
+		name      string
+		httpPorts []uint32
+		tlsPorts  []uint32
+	}{
+		{name: "combined", httpPorts: []uint32{80}, tlsPorts: []uint32{443}},
+		{name: "multiple HTTP ports", httpPorts: []uint32{80, 8080}, tlsPorts: []uint32{443}},
+		{name: "multiple TLS ports", httpPorts: []uint32{80}, tlsPorts: []uint32{443, 8443}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			input := *m
+			for _, port := range tt.httpPorts {
+				input.HTTP = append(input.HTTP, model.HTTPListener{Port: port, Hostname: "*"})
+			}
+			input.TLSPassthrough = nil
+			for _, port := range tt.tlsPorts {
+				listener := m.TLSPassthrough[0]
+				listener.Port = port
+				input.TLSPassthrough = append(input.TLSPassthrough, listener)
+			}
+
+			i := &cecTranslator{}
+			resources, err := i.desiredEnvoyListener(&input)
+			require.NoError(t, err)
+			proxies := 0
+			for _, resource := range resources {
+				listener := &envoy_config_listener.Listener{}
+				require.NoError(t, proto.Unmarshal(resource.Value, listener))
+				for _, fc := range listener.FilterChains {
+					if fc.Filters[0].Name != tcpProxyType {
+						continue
+					}
+					proxies++
+					tcpProxy := getTCPProxy(t, fc)
+					require.Len(t, tcpProxy.GetAccessLog(), 1)
+					require.Equal(t, "envoy.access_loggers.stdout", tcpProxy.GetAccessLog()[0].GetName())
+				}
+			}
+			require.Equal(t, len(tt.tlsPorts), proxies)
+		})
+	}
 }
 
 func Test_tlsPassthroughFilterChains_DuplicateSNIRoutesPreserveCurrentBehavior(t *testing.T) {

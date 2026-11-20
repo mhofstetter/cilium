@@ -1,3 +1,4 @@
+
 .. _next_release_required_changes:
 
 |NEXT_RELEASE| Upgrade Notes
@@ -10,6 +11,9 @@ If you are using the following features in your environment, then you may need
 to take action because of changes to the behavior of these features. Read the
 notes carefully below to understand what to do during upgrade.
 
+* Plaintext HTTP routes attached to different Gateway or ListenerSet ports no
+  longer share backends when their hostnames and paths match. Ensure each route
+  is attached to every listener on which it should be served.
 * The ``clustermesh.apiserver.tls.authMode`` option is now set by default to
   ``cluster``. If you are using ``clustermesh.useAPIServer=true`` and
   ``clustermesh.apiserver.tls.auto.enabled=false``, you should replace the remote

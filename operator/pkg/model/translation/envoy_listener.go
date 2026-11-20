@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright Authors of Cilium
+// This file was not reviewed by a human before submission
 
 package translation
 
@@ -288,8 +289,8 @@ func withSocketOption(tcpKeepAlive, tcpKeepIdleInSeconds, tcpKeepAliveProbeInter
 }
 
 // desiredEnvoyListener returns the desired Envoy listeners for the given model.
-// When the model has multiple distinct HTTPS ports, one Listener is emitted per
-// HTTPS port; otherwise a single combined Listener is returned.
+// Multiple plaintext HTTP ports require separate listeners and route configurations.
+// HTTPS and TLS passthrough may also require splitting to preserve port boundaries.
 func (i *cecTranslator) desiredEnvoyListener(m *model.Model) ([]ciliumv2.XDSResource, error) {
 	if m.IsEmpty() {
 		return nil, nil
@@ -431,9 +432,12 @@ func (i *cecTranslator) httpsFilterChains(name string, m *model.Model) ([]*envoy
 	return filterChains, nil
 }
 
-// desiredEnvoyListenerPerPort returns one Listener per distinct HTTPS port
-// and, when applicable, per TLS passthrough port.
+// desiredEnvoyListenerPerPort preserves port boundaries for HTTP, HTTPS and
+// TLS passthrough when a combined listener cannot safely share configuration.
 func (i *cecTranslator) desiredEnvoyListenerPerPort(m *model.Model) ([]ciliumv2.XDSResource, error) {
+	if m.NeedsPerPortHTTPListeners() {
+		return i.desiredEnvoyListenerHTTPPerPort(m)
+	}
 	var allResources []ciliumv2.XDSResource
 
 	needsPerPortTLS := m.NeedsPerPortTLSPassthroughListeners()
@@ -572,6 +576,55 @@ func (i *cecTranslator) desiredEnvoyListenerPerPort(m *model.Model) ([]ciliumv2.
 	}
 
 	return allResources, nil
+}
+
+// Multiple plaintext HTTP ports need separate route configurations. Keep all
+// protocols sharing a port on one socket so HTTP, HTTPS and TLS passthrough can
+// still coexist without duplicate binds.
+func (i *cecTranslator) desiredEnvoyListenerHTTPPerPort(m *model.Model) ([]ciliumv2.XDSResource, error) {
+	var resources []ciliumv2.XDSResource
+	for _, port := range slices.SortedUnique(append(m.HTTPPorts(), m.TLSPassthroughPorts()...)) {
+		name := listenerNameForPort(port)
+		var chains []*envoy_config_listener.FilterChain
+		for _, l := range m.HTTP {
+			if l.Port != port || len(l.TLS) > 0 {
+				continue
+			}
+			fc, err := i.httpFilterChain(name, m)
+			if err != nil {
+				return nil, err
+			}
+			chains = append(chains, fc)
+			break
+		}
+		https, err := i.httpsFilterChainsForPort(name, port, m)
+		if err != nil {
+			return nil, err
+		}
+		chains = append(chains, https...)
+		chains = append(chains, tlsPassthroughFilterChainsForPort(port, m)...)
+		listener := &envoy_config_listener.Listener{
+			Name:         name,
+			FilterChains: chains,
+			ListenerFilters: []*envoy_config_listener.ListenerFilter{
+				{
+					Name: tlsInspectorType,
+					ConfigType: &envoy_config_listener.ListenerFilter_TypedConfig{
+						TypedConfig: toAny(&envoy_extensions_listener_tls_inspector_v3.TlsInspector{}),
+					},
+				},
+			},
+		}
+		for _, mutate := range i.listenerMutatorsForPorts(m, []uint32{port}) {
+			listener = mutate(listener)
+		}
+		resource, err := toXdsResource(listener, envoy.ListenerTypeURL)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, resource)
+	}
+	return resources, nil
 }
 
 // listenerMutators returns a list of listener mutators to apply to the listener.
@@ -773,13 +826,15 @@ func tlsPassthroughFilterChainsForPort(port uint32, m *model.Model) []*envoy_con
 				continue
 			}
 
+			tcpProxy := tcpProxyForTLSPassthroughRoute(route, backends)
+			tcpProxy.AccessLog = getTCPAccessLogs(m)
 			filterChains = append(filterChains, &envoy_config_listener.FilterChain{
 				FilterChainMatch: toFilterChainMatch(route.Hostnames),
 				Filters: []*envoy_config_listener.Filter{
 					{
 						Name: tcpProxyType,
 						ConfigType: &envoy_config_listener.Filter_TypedConfig{
-							TypedConfig: toAny(tcpProxyForTLSPassthroughRoute(route, backends)),
+							TypedConfig: toAny(tcpProxy),
 						},
 					},
 				},
