@@ -489,6 +489,8 @@ func TestUpdateEnvoyResourcesRestoresListenerAfterAddressChangeFailure(t *testin
 					require.Eventually(t, func() bool { return cache.GetResource(localNodeID, typeurl.Listener, "listener1") != nil }, time.Second, time.Millisecond)
 				}
 				if tc.canceled {
+					response := createADSWatchResponse(t, cache, ListenerTypeURL, accepted)
+					deliverADSResponse(t, cache, 1, response)
 					cancel()
 				} else {
 					response := createADSWatchResponse(t, cache, ListenerTypeURL, accepted)
@@ -508,6 +510,14 @@ func TestUpdateEnvoyResourcesRestoresListenerAfterAddressChangeFailure(t *testin
 					}
 				}
 			}
+			if tc.replacement {
+				require.Eventually(t, func() bool { return cache.GetResource(localNodeID, typeurl.Listener, "listener1") == nil }, time.Second, time.Millisecond)
+				withdrawal := createADSWatchResponse(t, cache, ListenerTypeURL, accepted)
+				withdrawn := deliverADSResponse(t, cache, 1, withdrawal)
+				require.Empty(t, withdrawn.GetResources())
+				replyADSResponse(t, cache, 1, withdrawal, withdrawn, "")
+				ackADSResourceVersionFrom(t, cache, 1, ListenerTypeURL, withdrawn.GetVersionInfo())
+			}
 			select {
 			case err := <-result:
 				switch {
@@ -526,12 +536,77 @@ func TestUpdateEnvoyResourcesRestoresListenerAfterAddressChangeFailure(t *testin
 	}
 }
 
+func TestADSRestoresOriginalAfterPartialListenerReplacement(t *testing.T) {
+	server, cache := newADSServerFixture(t)
+	original := adsTestListener(8080, 8443)
+	old := adsTestResources(original)
+	require.NoError(t, server.UpsertEnvoyResources(t.Context(), old, nil))
+	accepted := ackADSResourceVersionFrom(t, cache, 1, ListenerTypeURL, "")
+	first := adsTestListener(8080)
+	first.Name = "listener-8080"
+	second := adsTestListener(8443)
+	second.Name = "listener-8443"
+	next := adsTestResources(first)
+	next.Listeners[second.Name] = second
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { result <- server.UpdateEnvoyResources(ctx, old, next, nil) }()
+	require.Eventually(t, func() bool {
+		return cache.GetResource(localNodeID, typeurl.Listener, original.Name) == nil
+	}, time.Second, time.Millisecond)
+	accepted = ackADSResourceVersionFrom(t, cache, 1, ListenerTypeURL, accepted)
+	require.Eventually(t, func() bool {
+		return cache.GetResource(localNodeID, typeurl.Listener, first.Name) != nil &&
+			cache.GetResource(localNodeID, typeurl.Listener, second.Name) != nil
+	}, time.Second, time.Millisecond)
+	replacement := createADSWatchResponse(t, cache, ListenerTypeURL, accepted)
+	split := deliverADSResponse(t, cache, 1, replacement)
+	require.Len(t, split.GetResources(), 2)
+	// An LDS NACK can leave the first replacement active.
+	replyADSResponse(t, cache, 1, replacement, split, "rejected second listener")
+
+	for _, rejection := range []string{"cannot bind: Address already in use", ""} {
+		withdrawal := createADSWatchResponse(t, cache, ListenerTypeURL, accepted)
+		withdrawn := deliverADSResponse(t, cache, 1, withdrawal)
+		require.Empty(t, withdrawn.GetResources())
+		require.Nil(t, cache.GetResource(localNodeID, typeurl.Listener, original.Name))
+		replyADSResponse(t, cache, 1, withdrawal, withdrawn, "")
+		accepted = withdrawn.GetVersionInfo()
+
+		restore := createADSWatchResponse(t, cache, ListenerTypeURL, accepted)
+		restored := deliverADSResponse(t, cache, 1, restore)
+		require.Len(t, restored.GetResources(), 1)
+		require.True(t, proto.Equal(original, cachedListener(t, cache, localNodeID, original.Name)))
+		requireADSCompletionPending(t, result)
+		replyADSResponse(t, cache, 1, restore, restored, rejection)
+	}
+
+	require.ErrorContains(t, <-result, "rejected second listener")
+	require.Nil(t, cache.GetResource(localNodeID, typeurl.Listener, first.Name))
+	require.Nil(t, cache.GetResource(localNodeID, typeurl.Listener, second.Name))
+	require.True(t, proto.Equal(original, cachedListener(t, cache, localNodeID, original.Name)))
+}
+
 func TestUpdateEnvoyResourcesRetriesReplacementBindFailure(t *testing.T) {
+	t.Run("address change", func(t *testing.T) {
+		testADSReplacementBindRetry(t, adsTestListener(80, 8443), adsTestListener(80, 8444))
+	})
+	t.Run("rename with overlapping address", func(t *testing.T) {
+		replacement := adsTestListener(8443)
+		replacement.Name = "listener-8443"
+		testADSReplacementBindRetry(t, adsTestListener(80, 8443), replacement)
+	})
+}
+
+func testADSReplacementBindRetry(t *testing.T, oldListener, newListener *envoy_config_listener.Listener) {
+	t.Helper()
 	server, cache := newADSServerFixture(t)
 
-	oldResources := adsTestResources(adsTestListener(80, 8443))
+	oldResources := adsTestResources(oldListener)
 	require.NoError(t, server.UpsertEnvoyResources(t.Context(), oldResources, nil))
-	newResources := adsTestResources(adsTestListener(80, 8444))
+	newResources := adsTestResources(newListener)
 
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
@@ -541,12 +616,13 @@ func TestUpdateEnvoyResourcesRetriesReplacementBindFailure(t *testing.T) {
 	}()
 
 	require.Eventually(t, func() bool {
-		return cache.GetResource(localNodeID, typeurl.Listener, "listener1") == nil
+		return cache.GetResource(localNodeID, typeurl.Listener, oldListener.Name) == nil &&
+			cache.GetResource(localNodeID, typeurl.Listener, newListener.Name) == nil
 	}, time.Second, 10*time.Millisecond)
 	deleteVersion := ackADSResourceVersionFrom(t, cache, 1, ListenerTypeURL, "")
 
 	require.Eventually(t, func() bool {
-		return cache.GetResource(localNodeID, typeurl.Listener, "listener1") != nil
+		return cache.GetResource(localNodeID, typeurl.Listener, newListener.Name) != nil
 	}, time.Second, 10*time.Millisecond)
 	nackADSResourceVersion(t, cache, 1, ListenerTypeURL, deleteVersion, "cannot bind: Address already in use")
 
@@ -554,7 +630,7 @@ func TestUpdateEnvoyResourcesRetriesReplacementBindFailure(t *testing.T) {
 	// contents under a new generation version. ACK that rollback response before
 	// opening the watch which consumes the retried replacement.
 	require.Eventually(t, func() bool {
-		return cache.GetResource(localNodeID, typeurl.Listener, "listener1") == nil
+		return cache.GetResource(localNodeID, typeurl.Listener, newListener.Name) == nil
 	}, time.Second, 10*time.Millisecond)
 	rollbackVersion := ackADSResourceVersionFrom(t, cache, 1, ListenerTypeURL, deleteVersion)
 	require.NotEqual(t, deleteVersion, rollbackVersion)
@@ -564,9 +640,8 @@ func TestUpdateEnvoyResourcesRetriesReplacementBindFailure(t *testing.T) {
 	replyADSResponse(t, cache, 1, retryResponse, retry, "")
 
 	require.NoError(t, <-result)
-	listener := cachedListener(t, cache, localNodeID, "listener1")
-	require.True(t, listenerAddressesEqual(listener, newResources.Listeners["listener1"]))
-
+	listener := cachedListener(t, cache, localNodeID, newListener.Name)
+	require.True(t, listenerAddressesEqual(listener, newListener))
 }
 
 func TestUpdateEnvoyResourcesWaitScope(t *testing.T) {

@@ -4,11 +4,13 @@
 package envoy
 
 import (
+	"context"
 	"errors"
 	"regexp"
 	"strings"
 
 	cilium "github.com/cilium/proxy/go/cilium/api"
+	envoy_config_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoy_config_listener "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	"google.golang.org/protobuf/proto"
 
@@ -22,6 +24,7 @@ const (
 
 	listenerAddressChangeMaxAttempts = 5
 	listenerAddressChangeRetryDelay  = 100 * time.Millisecond
+	listenerRestoreTimeout           = 5 * time.Second
 )
 
 var (
@@ -109,6 +112,36 @@ func listenerAddressesEqual(oldListener, newListener *envoy_config_listener.List
 		listenerAdditionalAddressesEqual(oldListener, newListener)
 }
 
+func listenerSocketAddresses(listener *envoy_config_listener.Listener) []*envoy_config_core.SocketAddress {
+	addresses := make([]*envoy_config_core.SocketAddress, 0, 1+len(listener.GetAdditionalAddresses()))
+	addresses = append(addresses, listener.GetAddress().GetSocketAddress())
+	for _, additional := range listener.GetAdditionalAddresses() {
+		addresses = append(addresses, additional.GetAddress().GetSocketAddress())
+	}
+	return addresses
+}
+
+// listenerSharesBindAddress checks whether two listeners use the same fixed
+// socket address, including addresses configured as additional addresses.
+func listenerSharesBindAddress(oldListener, newListener *envoy_config_listener.Listener) bool {
+	newAddresses := listenerSocketAddresses(newListener)
+	for _, oldAddress := range listenerSocketAddresses(oldListener) {
+		port := oldAddress.GetPortValue()
+		if port == 0 {
+			continue
+		}
+		for _, newAddress := range newAddresses {
+			if newAddress.GetPortValue() == port &&
+				newAddress.GetAddress() == oldAddress.GetAddress() &&
+				newAddress.GetProtocol() == oldAddress.GetProtocol() &&
+				newAddress.GetNetworkNamespaceFilepath() == oldAddress.GetNetworkNamespaceFilepath() {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func isAddressAlreadyInUseError(err error) bool {
 	if err == nil {
 		return false
@@ -119,6 +152,26 @@ func isAddressAlreadyInUseError(err error) bool {
 		detail = proxyErr.Detail
 	}
 	return strings.Contains(strings.ToLower(detail), "address already in use")
+}
+
+// retryListenerRestore allows recovery to finish after the update deadline.
+func retryListenerRestore(ctx context.Context, restore func(context.Context) error) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), listenerRestoreTimeout)
+	defer cancel()
+
+	for attempt := 1; ; attempt++ {
+		err := restore(ctx)
+		if !isAddressAlreadyInUseError(err) || attempt >= listenerAddressChangeMaxAttempts {
+			return err
+		}
+		timer := time.NewTimer(listenerAddressChangeRetryDelay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
 }
 
 // listenerRequiresNPDS returns true if the listener carries a cilium.bpf_metadata

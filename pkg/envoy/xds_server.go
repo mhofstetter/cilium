@@ -897,22 +897,33 @@ func (s *xdsServer) UpdateEnvoyResources(ctx context.Context, old, new xds.Resou
 				break
 			}
 		}
-		if !found {
-			deleteListeners = append(deleteListeners, oldListener)
+		if found {
+			continue
+		}
+		deleteListeners = append(deleteListeners, oldListener)
+		if waitForDelete {
+			continue
+		}
+		for _, newListener := range new.Listeners {
+			if listenerSharesBindAddress(oldListener, newListener) {
+				waitForDelete = true
+				break
+			}
 		}
 	}
 	s.logger.Debug("UpdateEnvoyResources: listeners",
 		logfields.ResourcesDeleted, len(deleteListeners),
 		logfields.ResourcesUpserted, len(new.Listeners),
 	)
-	// Wait for new listener dependencies if there are new listeners and a listener's address
-	// configuration changed or there are new clusters.
+	// Wait for listener deletions when replacing addresses or reusing sockets,
+	// and wait for any new cluster dependencies.
 	var dependencyWG *completion.WaitGroup
 	if len(new.Listeners) > 0 && (waitForDelete || len(new.Clusters) > 0) {
 		dependencyWG = completion.NewWaitGroup(ctx)
 	}
+	var listenerDeleteReverts xds.AckingResourceMutatorRevertFuncList
 	for _, listener := range deleteListeners {
-		revertFuncs = append(revertFuncs, s.deleteListener(listener.Name, dependencyWG))
+		listenerDeleteReverts = append(listenerDeleteReverts, s.deleteListener(listener.Name, dependencyWG))
 	}
 
 	// Do not wait for the deletion of routes, clusters, endpoints, or
@@ -1040,6 +1051,7 @@ func (s *xdsServer) UpdateEnvoyResources(ctx context.Context, old, new xds.Resou
 		// revert all changes in case of failure
 		if err != nil {
 			revertFuncs.Revert()
+			listenerDeleteReverts.Revert()
 			s.logger.Debug("UpdateEnvoyResources: Finished reverting failed xDS transactions")
 			return err
 		}
@@ -1049,10 +1061,22 @@ func (s *xdsServer) UpdateEnvoyResources(ctx context.Context, old, new xds.Resou
 		return nil
 	}
 
-	// Add new Listeners
+	restore := func(err error) error {
+		revertFuncs.Revert()
+		if waitForDelete {
+			if restoreErr := s.restoreListeners(ctx, deleteListeners); restoreErr == nil {
+				return err
+			} else {
+				err = errors.Join(err, restoreErr)
+			}
+		}
+		// Keep the original configuration desired even if the ACK wait failed.
+		listenerDeleteReverts.Revert()
+		return err
+	}
 
 	// Envoy ACKs a listener deletion before its worker event loops have closed the
-	// listening sockets. If an address-changing replacement overlaps the old address
+	// listening sockets. If a replacement overlaps the old address
 	// set and SO_REUSEPORT is disabled, the first add can therefore race with socket
 	// closure and be NACKed with EADDRINUSE. Retry that transient NACK after reverting
 	// only the failed listener upserts. Other failures still revert the transaction.
@@ -1081,24 +1105,43 @@ func (s *xdsServer) UpdateEnvoyResources(ctx context.Context, old, new xds.Resou
 
 		listenerRevertFuncs.Revert()
 		if !waitForDelete || !isAddressAlreadyInUseError(err) || attempt >= listenerAddressChangeMaxAttempts {
-			revertFuncs.Revert()
-			s.logger.Debug("UpdateEnvoyResources: Finished reverting failed xDS transactions")
-			return err
+			return restore(err)
 		}
 
-		s.logger.Debug("UpdateEnvoyResources: Retrying listener address change after bind failure",
+		s.logger.Debug("UpdateEnvoyResources: Retrying listener replacement after bind failure",
 			logfields.Attempt, attempt+1,
 			logfields.Error, err)
 		timer := time.NewTimer(listenerAddressChangeRetryDelay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			revertFuncs.Revert()
-			s.logger.Debug("UpdateEnvoyResources: Finished reverting failed xDS transactions")
-			return ctx.Err()
+			return restore(ctx.Err())
 		case <-timer.C:
 		}
 	}
+}
+
+func (s *xdsServer) restoreListeners(ctx context.Context, listeners []*envoy_config_listener.Listener) error {
+	return retryListenerRestore(ctx, func(ctx context.Context) error {
+		deleteWG := completion.NewWaitGroup(ctx)
+		// The original listener is still absent. A no-op delete waits for
+		// the LDS version that withdrew the replacements.
+		s.listenerMutator.Delete(ListenerTypeURL, listeners[0].Name, []string{LegacyFormatLocalNodeID}, deleteWG)
+		if err := deleteWG.Wait(); err != nil {
+			return fmt.Errorf("waiting for replacement listener withdrawal ACK: %w", err)
+		}
+
+		restoreWG := completion.NewWaitGroup(ctx)
+		var restoreReverts xds.AckingResourceMutatorRevertFuncList
+		for _, listener := range listeners {
+			restoreReverts = append(restoreReverts, s.upsertListener(listener.Name, listener, restoreWG))
+		}
+		if err := restoreWG.Wait(); err != nil {
+			restoreReverts.Revert()
+			return fmt.Errorf("restoring original listeners: %w", err)
+		}
+		return nil
+	})
 }
 
 // DeleteEnvoyResources uses 'ctx' in Wait for Envoy N/ACK if resources contains listeners. If

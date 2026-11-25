@@ -5,6 +5,7 @@ package envoy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -576,10 +577,11 @@ func (s *adsServer) RemoveNetworkPolicy(ctx context.Context, ep endpoint.Endpoin
 	_ = s.cache.ApplyResource(ctx, localNodeID, typeurl.NetworkPolicy, resourceName, nil, nil)
 }
 
-func revertRollback(rollback xdsnew.Rollback) {
+func revertRollback(rollback xdsnew.Rollback) error {
 	if rollback != nil {
-		rollback.Revert()
+		return rollback.Revert()
 	}
+	return nil
 }
 
 func finalizeRollback(rollback xdsnew.Rollback) {
@@ -597,9 +599,19 @@ func adsListenersRequiringRecreate(oldListeners, newListeners map[string]*envoy_
 	var names []string
 	for name, oldListener := range oldListeners {
 		newListener, found := newListeners[name]
-		if found && !listenerAddressesEqual(oldListener, newListener) &&
-			(adsListenerReusePortDisabled(oldListener) || adsListenerReusePortDisabled(newListener)) {
-			names = append(names, name)
+		if found {
+			if !listenerAddressesEqual(oldListener, newListener) &&
+				(adsListenerReusePortDisabled(oldListener) || adsListenerReusePortDisabled(newListener)) {
+				names = append(names, name)
+			}
+			continue
+		}
+		for _, candidate := range newListeners {
+			if (adsListenerReusePortDisabled(oldListener) || adsListenerReusePortDisabled(candidate)) &&
+				listenerSharesBindAddress(oldListener, candidate) {
+				names = append(names, name)
+				break
+			}
 		}
 	}
 	slices.Sort(names)
@@ -607,14 +619,15 @@ func adsListenersRequiringRecreate(oldListeners, newListeners map[string]*envoy_
 }
 
 // listenerDeletionMutations builds the intermediate accepted state without the
-// listeners whose addresses are changing. The cache remains the owner of
-// desired resources; only the sparse entries touched by this CEC update are
-// materialized.
+// listeners whose addresses are changing or being reused. The cache still owns
+// the desired resources. Only entries touched by this CEC update are materialized.
 func (s *adsServer) listenerDeletionMutations(oldResources, newResources xds.Resources, listenerNames []string) (staged xdsnew.ResourceMutations) {
 	staged.Removed = newResources
+	staged.Removed.Listeners = maps.Clone(newResources.Listeners)
 	staged.Upserted = oldResources
 	staged.Upserted.Listeners = maps.Clone(oldResources.Listeners)
 	for _, name := range listenerNames {
+		staged.Removed.Listeners[name] = oldResources.Listeners[name]
 		delete(staged.Upserted.Listeners, name)
 	}
 
@@ -656,15 +669,14 @@ func (s *adsServer) UpdateEnvoyResources(ctx context.Context, oldResources, newR
 		return s.cache.ApplyResources(ctx, localNodeID, xdsnew.ResourceMutations{Removed: oldResources, Upserted: newResources}, waitGroup, waitTypeURLs)
 	}
 
-	// Envoy cannot replace a listener's address set in place when SO_REUSEPORT
-	// is disabled, because the replacement overlaps sockets still owned by the
-	// active listener. Publish and ACK a snapshot without the listener first so
-	// Envoy closes those sockets before the replacement is sent.
+	// With SO_REUSEPORT disabled, a replacement can overlap sockets still owned
+	// by an active listener. Publish and ACK a snapshot without the old listener
+	// before sending the replacement.
 	stagedMutations := s.listenerDeletionMutations(oldResources, newResources, listenersToRecreate)
 	// ACK waits observe the caller's deadline, but cache mutations and their
 	// caller-owned rollback operations must remain usable after that deadline.
 	mutationCtx := context.WithoutCancel(ctx)
-	s.logger.Debug("UpdateEnvoyResources: deleting listeners before address change",
+	s.logger.Debug("UpdateEnvoyResources: deleting listeners before replacement",
 		logfields.ResourcesDeleted, len(listenersToRecreate))
 	deleteWG := completion.NewWaitGroup(ctx)
 	listenerWait := typeurl.NewSet(typeurl.Listener)
@@ -676,8 +688,20 @@ func (s *adsServer) UpdateEnvoyResources(ctx context.Context, oldResources, newR
 		return err
 	}
 	if err := deleteWG.Wait(); err != nil {
-		revertRollback(deleteRollback)
-		return fmt.Errorf("waiting for listener deletion ACK: %w", err)
+		return errors.Join(fmt.Errorf("waiting for listener deletion ACK: %w", err), revertRollback(deleteRollback))
+	}
+
+	restore := func(updateErr error) error {
+		original := xds.Resources{Listeners: make(map[string]*envoy_config_listener.Listener, len(listenersToRecreate))}
+		for _, name := range listenersToRecreate {
+			original.Listeners[name] = oldResources.Listeners[name]
+		}
+		if err := s.restoreListeners(ctx, original); err != nil {
+			// Keep the original configuration desired even if the ACK wait failed.
+			return errors.Join(updateErr, err, revertRollback(deleteRollback))
+		}
+		finalizeRollback(deleteRollback)
+		return updateErr
 	}
 
 	// Always wait for the replacement LDS ACK, even when the caller did not
@@ -702,28 +726,58 @@ func (s *adsServer) UpdateEnvoyResources(ctx context.Context, oldResources, newR
 		// restored this phase. On timeout, the caller-owned rollback does it now.
 		// Either way, the transaction fence makes this operation safe and leaves
 		// the restored listener-deletion state ready for a retry or full rollback.
-		revertRollback(replaceRollback)
+		if rollbackErr := revertRollback(replaceRollback); rollbackErr != nil {
+			return errors.Join(err, fmt.Errorf("withdrawing replacement listeners: %w", rollbackErr), revertRollback(deleteRollback))
+		}
 
 		if !isAddressAlreadyInUseError(err) || attempt >= listenerAddressChangeMaxAttempts {
-			revertRollback(deleteRollback)
-			return fmt.Errorf("waiting for replacement listener ACK: %w", err)
+			return restore(fmt.Errorf("waiting for replacement listener ACK: %w", err))
 		}
 
 		// Cache-owned NACK rollback has restored the deletion state with a fresh
 		// corrective version. Give Envoy time to close the sockets before
 		// publishing another replacement.
-		s.logger.Debug("UpdateEnvoyResources: Retrying ADS listener address change after bind failure",
+		s.logger.Debug("UpdateEnvoyResources: Retrying ADS listener replacement after bind failure",
 			logfields.Attempt, attempt+1,
 			logfields.Error, err)
 		timer := time.NewTimer(listenerAddressChangeRetryDelay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			revertRollback(deleteRollback)
-			return ctx.Err()
+			return restore(ctx.Err())
 		case <-timer.C:
 		}
 	}
+}
+
+func (s *adsServer) restoreListeners(ctx context.Context, original xds.Resources) error {
+	mutationCtx := context.WithoutCancel(ctx)
+	listenerWait := typeurl.NewSet(typeurl.Listener)
+	return retryListenerRestore(ctx, func(ctx context.Context) error {
+		deleteWG := completion.NewWaitGroup(ctx)
+		// An empty mutation waits for the current LDS snapshot, which excludes
+		// the replacements after their cache transaction was reverted.
+		if err := s.cache.ApplyResources(mutationCtx, localNodeID, xdsnew.ResourceMutations{}, deleteWG, listenerWait); err != nil {
+			deleteWG.Cancel()
+			return fmt.Errorf("waiting for replacement listener withdrawal ACK: %w", err)
+		}
+		if err := deleteWG.Wait(); err != nil {
+			return fmt.Errorf("waiting for replacement listener withdrawal ACK: %w", err)
+		}
+
+		restoreWG := completion.NewWaitGroup(ctx)
+		rollback, err := s.cache.ApplyResourcesWithRollback(mutationCtx, localNodeID, xdsnew.ResourceMutations{Upserted: original}, restoreWG, listenerWait)
+		if err != nil {
+			restoreWG.Cancel()
+		} else {
+			err = restoreWG.Wait()
+		}
+		if err != nil {
+			return fmt.Errorf("restoring original listeners: %w", errors.Join(err, revertRollback(rollback)))
+		}
+		finalizeRollback(rollback)
+		return nil
+	})
 }
 
 func (s *adsServer) DeleteEnvoyResources(ctx context.Context, resources xds.Resources, waitGroup *completion.WaitGroup) error {

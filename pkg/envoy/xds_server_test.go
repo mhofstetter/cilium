@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 
 	cmtypes "github.com/cilium/cilium/pkg/clustermesh/types"
@@ -2664,10 +2665,12 @@ func (*recordingAckingResourceMutator) CancelCompletions(string) {}
 
 func TestUpdateEnvoyResourcesRecreatesListenerOnAddressChange(t *testing.T) {
 	rejection := &xds.ProxyError{Err: xds.ErrNackReceived, Detail: "invalid listener"}
+	bindFailure := &xds.ProxyError{Err: xds.ErrNackReceived, Detail: "cannot bind: Address already in use"}
 	tests := []struct {
 		name          string
 		oldPorts      []uint32
 		newPorts      []uint32
+		newName       string
 		operations    []string
 		upsertErrs    []error
 		extraListener bool
@@ -2696,9 +2699,32 @@ func TestUpdateEnvoyResourcesRecreatesListenerOnAddressChange(t *testing.T) {
 			oldPorts:   []uint32{80, 443},
 			newPorts:   []uint32{80, 8443},
 			operations: []string{"delete listener", "upsert listener", "revert upsert listener", "upsert listener"},
-			upsertErrs: []error{&xds.ProxyError{
-				Err: xds.ErrNackReceived, Detail: "cannot bind '0.0.0.0:80': Address already in use",
-			}},
+			upsertErrs: []error{bindFailure},
+		},
+		{
+			name:       "renamed listener retries on the same primary address",
+			oldPorts:   []uint32{8080},
+			newPorts:   []uint32{8080},
+			newName:    "listener-8080",
+			operations: []string{"delete listener", "upsert listener-8080", "revert upsert listener-8080", "upsert listener-8080"},
+			upsertErrs: []error{bindFailure},
+		},
+		{
+			name:       "renamed listener retries on a former additional address",
+			oldPorts:   []uint32{80, 8080},
+			newPorts:   []uint32{8080},
+			newName:    "listener-8080",
+			operations: []string{"delete listener", "upsert listener-8080", "revert upsert listener-8080", "upsert listener-8080"},
+			upsertErrs: []error{bindFailure},
+		},
+		{
+			name:       "renamed listener with a different socket does not retry",
+			oldPorts:   []uint32{80},
+			newPorts:   []uint32{8080},
+			newName:    "listener-8080",
+			operations: []string{"delete listener", "upsert listener-8080", "revert upsert listener-8080"},
+			upsertErrs: []error{bindFailure},
+			wantErr:    bindFailure,
 		},
 		{
 			name:          "partial listener success still reverts the whole update",
@@ -2707,7 +2733,7 @@ func TestUpdateEnvoyResourcesRecreatesListenerOnAddressChange(t *testing.T) {
 			extraListener: true,
 			upsertErrs:    []error{nil, rejection},
 			wantErr:       rejection,
-			operations:    []string{"delete listener", "upsert listener", "upsert listener2", "revert upsert listener", "revert upsert listener2"},
+			operations:    []string{"delete listener", "upsert listener", "upsert listener2", "revert upsert listener", "revert upsert listener2", "delete listener", "upsert listener"},
 		},
 	}
 
@@ -2723,7 +2749,11 @@ func TestUpdateEnvoyResourcesRecreatesListenerOnAddressChange(t *testing.T) {
 			oldResources := xds.NewResources()
 			oldResources.Listeners["listener"] = testListenerWithPorts(tt.oldPorts...)
 			newResources := xds.NewResources()
-			newResources.Listeners["listener"] = testListenerWithPorts(tt.newPorts...)
+			listener := testListenerWithPorts(tt.newPorts...)
+			if tt.newName != "" {
+				listener.Name = tt.newName
+			}
+			newResources.Listeners[listener.Name] = listener
 			if tt.extraListener {
 				listener := testListenerWithPorts(8081)
 				listener.Name = "listener2"
@@ -2741,6 +2771,70 @@ func TestUpdateEnvoyResourcesRecreatesListenerOnAddressChange(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSplitXDSRestoresOriginalAfterPartialListenerReplacement(t *testing.T) {
+	server := newTestXDSServer(t)
+	acker := server.listenerMutator.(*xds.AckingResourceMutatorWrapper)
+	source := server.resourceConfig[ListenerTypeURL].Source
+	original := testListenerWithPorts(8080, 8443)
+	original.EnableReusePort = wrapperspb.Bool(false)
+	old := xds.NewResources()
+	old.Listeners[original.Name] = original
+	server.upsertListener(original.Name, original, nil)
+	accepted := source.GetResources(ListenerTypeURL, 0, nil).Version
+	acker.HandleResourceVersionAck(LegacyFormatLocalNodeID, accepted, accepted, false, "", ListenerTypeURL, []string{original.Name})
+
+	next := xds.NewResources()
+	for _, port := range []uint32{8080, 8443} {
+		listener := testListenerWithPorts(port)
+		listener.Name += "-" + strconv.FormatUint(uint64(port), 10)
+		listener.EnableReusePort = wrapperspb.Bool(false)
+		next.Listeners[listener.Name] = listener
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { result <- server.UpdateEnvoyResources(ctx, old, next, nil) }()
+
+	awaitSnapshot := func(size int) *xds.VersionedResources {
+		t.Helper()
+		var snapshot *xds.VersionedResources
+		require.Eventually(t, func() bool {
+			current := source.GetResources(ListenerTypeURL, 0, nil)
+			if current.Version <= accepted || len(current.VersionedResources) != size {
+				return false
+			}
+			snapshot = current
+			return true
+		}, time.Second, time.Millisecond)
+		return snapshot
+	}
+	ack := func(snapshot *xds.VersionedResources, rejection string) {
+		var names []string
+		for _, resource := range snapshot.VersionedResources {
+			names = append(names, resource.Name)
+		}
+		if rejection == "" {
+			accepted = snapshot.Version
+		}
+		acker.HandleResourceVersionAck(LegacyFormatLocalNodeID, accepted, snapshot.Version, rejection != "", rejection, ListenerTypeURL, names)
+	}
+
+	ack(awaitSnapshot(0), "")
+	ack(awaitSnapshot(2), "rejected second listener")
+	for _, rejection := range []string{"cannot bind: Address already in use", ""} {
+		ack(awaitSnapshot(0), "")
+		restored := awaitSnapshot(1)
+		require.True(t, proto.Equal(original, restored.VersionedResources[0].Resource))
+		select {
+		case err := <-result:
+			t.Fatalf("update completed before original listener was ACKed: %v", err)
+		default:
+		}
+		ack(restored, rejection)
+	}
+	require.ErrorContains(t, <-result, "rejected second listener")
 }
 
 func testXdsServer(t *testing.T) *xdsServer {
